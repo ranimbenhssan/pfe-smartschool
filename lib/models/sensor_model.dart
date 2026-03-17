@@ -54,20 +54,32 @@ class SensorModel {
     double score = 100;
 
     // Temperature: ideal 20-25°C
-    if (temperature < 18 || temperature > 28) score -= 30;
-    else if (temperature < 20 || temperature > 25) score -= 10;
+    if (temperature < 18 || temperature > 28) {
+      score -= 30;
+    } else if (temperature < 20 || temperature > 25) {
+      score -= 10;
+    }
 
     // Humidity: ideal 40-60%
-    if (humidity < 30 || humidity > 70) score -= 25;
-    else if (humidity < 40 || humidity > 60) score -= 10;
+    if (humidity < 30 || humidity > 70) {
+      score -= 25;
+    } else if (humidity < 40 || humidity > 60) {
+      score -= 10;
+    }
 
     // Light: ideal above 300 lux
-    if (lightLevel < 100) score -= 25;
-    else if (lightLevel < 300) score -= 10;
+    if (lightLevel < 100) {
+      score -= 25;
+    } else if (lightLevel < 300) {
+      score -= 10;
+    }
 
     // Noise: ideal below 50dB
-    if (noiseLevel > 80) score -= 20;
-    else if (noiseLevel > 60) score -= 10;
+    if (noiseLevel > 80) {
+      score -= 20;
+    } else if (noiseLevel > 60) {
+      score -= 10;
+    }
 
     return score.clamp(0, 100);
   }
@@ -81,13 +93,27 @@ class SensorModel {
 
   String get comfortRecommendation {
     final List<String> tips = [];
-    if (temperature > 25) tips.add('Room is too hot — open windows or turn on AC');
-    if (temperature < 20) tips.add('Room is too cold — consider heating');
-    if (humidity > 60) tips.add('High humidity — improve ventilation');
-    if (humidity < 40) tips.add('Low humidity — consider a humidifier');
-    if (lightLevel < 300) tips.add('Poor lighting — turn on more lights');
-    if (noiseLevel > 60) tips.add('High noise level — ask for quiet');
-    if (tips.isEmpty) return 'Classroom environment is comfortable';
+    if (temperature > 25) {
+      tips.add('Room is too hot — open windows or turn on AC');
+    }
+    if (temperature < 20) {
+      tips.add('Room is too cold — consider heating');
+    }
+    if (humidity > 60) {
+      tips.add('High humidity — improve ventilation');
+    }
+    if (humidity < 40) {
+      tips.add('Low humidity — consider a humidifier');
+    }
+    if (lightLevel < 300) {
+      tips.add('Poor lighting — turn on more lights');
+    }
+    if (noiseLevel > 60) {
+      tips.add('High noise level — ask for quiet');
+    }
+    if (tips.isEmpty) {
+      return 'Classroom environment is comfortable';
+    }
     return tips.join(' • ');
   }
 
