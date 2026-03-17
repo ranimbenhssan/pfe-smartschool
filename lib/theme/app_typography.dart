@@ -139,6 +139,11 @@ class AppTypography {
     height: 1,
   );
 
+  // ── Heading Aliases ────────────────────────────────────────
+  static const TextStyle headingLarge = headlineLarge;
+  static const TextStyle headingMedium = headlineMedium;
+  static const TextStyle headingSmall = headlineSmall;
+
   static const TextStyle buttonText = TextStyle(
     fontFamily: fontFamily,
     fontSize: 15,
@@ -166,38 +171,38 @@ class AppTypography {
 
   // ── Text Theme ─────────────────────────────────────────────
   static TextTheme get lightTextTheme => TextTheme(
-        displayLarge: displayLarge.copyWith(color: AppColors.lightTextPrimary),
-        displayMedium: displayMedium.copyWith(color: AppColors.lightTextPrimary),
-        displaySmall: displaySmall.copyWith(color: AppColors.lightTextPrimary),
-        headlineLarge: headlineLarge.copyWith(color: AppColors.lightTextPrimary),
-        headlineMedium: headlineMedium.copyWith(color: AppColors.lightTextPrimary),
-        headlineSmall: headlineSmall.copyWith(color: AppColors.lightTextPrimary),
-        titleLarge: titleLarge.copyWith(color: AppColors.lightTextPrimary),
-        titleMedium: titleMedium.copyWith(color: AppColors.lightTextSecondary),
-        titleSmall: titleSmall.copyWith(color: AppColors.lightTextSecondary),
-        bodyLarge: bodyLarge.copyWith(color: AppColors.lightTextPrimary),
-        bodyMedium: bodyMedium.copyWith(color: AppColors.lightTextSecondary),
-        bodySmall: bodySmall.copyWith(color: AppColors.lightTextHint),
-        labelLarge: labelLarge.copyWith(color: AppColors.lightTextPrimary),
-        labelMedium: labelMedium.copyWith(color: AppColors.lightTextSecondary),
-        labelSmall: labelSmall.copyWith(color: AppColors.lightTextHint),
-      );
+    displayLarge: displayLarge.copyWith(color: AppColors.lightTextPrimary),
+    displayMedium: displayMedium.copyWith(color: AppColors.lightTextPrimary),
+    displaySmall: displaySmall.copyWith(color: AppColors.lightTextPrimary),
+    headlineLarge: headlineLarge.copyWith(color: AppColors.lightTextPrimary),
+    headlineMedium: headlineMedium.copyWith(color: AppColors.lightTextPrimary),
+    headlineSmall: headlineSmall.copyWith(color: AppColors.lightTextPrimary),
+    titleLarge: titleLarge.copyWith(color: AppColors.lightTextPrimary),
+    titleMedium: titleMedium.copyWith(color: AppColors.lightTextSecondary),
+    titleSmall: titleSmall.copyWith(color: AppColors.lightTextSecondary),
+    bodyLarge: bodyLarge.copyWith(color: AppColors.lightTextPrimary),
+    bodyMedium: bodyMedium.copyWith(color: AppColors.lightTextSecondary),
+    bodySmall: bodySmall.copyWith(color: AppColors.lightTextHint),
+    labelLarge: labelLarge.copyWith(color: AppColors.lightTextPrimary),
+    labelMedium: labelMedium.copyWith(color: AppColors.lightTextSecondary),
+    labelSmall: labelSmall.copyWith(color: AppColors.lightTextHint),
+  );
 
   static TextTheme get darkTextTheme => TextTheme(
-        displayLarge: displayLarge.copyWith(color: AppColors.darkTextPrimary),
-        displayMedium: displayMedium.copyWith(color: AppColors.darkTextPrimary),
-        displaySmall: displaySmall.copyWith(color: AppColors.darkTextPrimary),
-        headlineLarge: headlineLarge.copyWith(color: AppColors.darkTextPrimary),
-        headlineMedium: headlineMedium.copyWith(color: AppColors.darkTextPrimary),
-        headlineSmall: headlineSmall.copyWith(color: AppColors.darkTextPrimary),
-        titleLarge: titleLarge.copyWith(color: AppColors.darkTextPrimary),
-        titleMedium: titleMedium.copyWith(color: AppColors.darkTextSecondary),
-        titleSmall: titleSmall.copyWith(color: AppColors.darkTextSecondary),
-        bodyLarge: bodyLarge.copyWith(color: AppColors.darkTextPrimary),
-        bodyMedium: bodyMedium.copyWith(color: AppColors.darkTextSecondary),
-        bodySmall: bodySmall.copyWith(color: AppColors.darkTextHint),
-        labelLarge: labelLarge.copyWith(color: AppColors.darkTextPrimary),
-        labelMedium: labelMedium.copyWith(color: AppColors.darkTextSecondary),
-        labelSmall: labelSmall.copyWith(color: AppColors.darkTextHint),
-      );
+    displayLarge: displayLarge.copyWith(color: AppColors.darkTextPrimary),
+    displayMedium: displayMedium.copyWith(color: AppColors.darkTextPrimary),
+    displaySmall: displaySmall.copyWith(color: AppColors.darkTextPrimary),
+    headlineLarge: headlineLarge.copyWith(color: AppColors.darkTextPrimary),
+    headlineMedium: headlineMedium.copyWith(color: AppColors.darkTextPrimary),
+    headlineSmall: headlineSmall.copyWith(color: AppColors.darkTextPrimary),
+    titleLarge: titleLarge.copyWith(color: AppColors.darkTextPrimary),
+    titleMedium: titleMedium.copyWith(color: AppColors.darkTextSecondary),
+    titleSmall: titleSmall.copyWith(color: AppColors.darkTextSecondary),
+    bodyLarge: bodyLarge.copyWith(color: AppColors.darkTextPrimary),
+    bodyMedium: bodyMedium.copyWith(color: AppColors.darkTextSecondary),
+    bodySmall: bodySmall.copyWith(color: AppColors.darkTextHint),
+    labelLarge: labelLarge.copyWith(color: AppColors.darkTextPrimary),
+    labelMedium: labelMedium.copyWith(color: AppColors.darkTextSecondary),
+    labelSmall: labelSmall.copyWith(color: AppColors.darkTextHint),
+  );
 }
