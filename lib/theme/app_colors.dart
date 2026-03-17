@@ -56,6 +56,14 @@ class AppColors {
   static const Color teacherColor = Color(0xFF0096C7);
   static const Color studentColor = Color(0xFF2DC653);
 
+  // ── Card Colors ───────────────────────────────────────────
+  static const Color lightCard = lightSurface;
+  static const Color darkCard = darkSurface;
+
+  // ── Text Colors ───────────────────────────────────────────
+  static const Color lightText = lightTextPrimary;
+  static const Color darkText = darkTextPrimary;
+
   // ── Gradient Definitions ───────────────────────────────────
   static const LinearGradient primaryGradient = LinearGradient(
     colors: [primary, primaryLight],
