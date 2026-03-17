@@ -44,7 +44,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.splash,
         name: 'splash',
-        builder: (context, state) => const SplashScreen(),
+        builder: (context, state) => const PlaceholderScreen(title: 'Splash Screen'),
       ),
       GoRoute(
         path: AppRoutes.login,
