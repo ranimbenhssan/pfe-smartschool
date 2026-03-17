@@ -18,11 +18,13 @@ class AppTheme {
       secondaryContainer: AppColors.accentLight,
       tertiary: AppColors.secondary,
       surface: AppColors.lightSurface,
+      // ignore: deprecated_member_use
       background: AppColors.lightBackground,
       error: AppColors.error,
       onPrimary: Colors.white,
       onSecondary: AppColors.primaryDark,
       onSurface: AppColors.lightTextPrimary,
+      // ignore: deprecated_member_use
       onBackground: AppColors.lightTextPrimary,
       onError: Colors.white,
       outline: AppColors.lightBorder,
@@ -140,14 +142,14 @@ class AppTheme {
       behavior: SnackBarBehavior.floating,
     ),
     switchTheme: SwitchThemeData(
-      thumbColor: MaterialStateProperty.resolveWith((states) {
-        if (states.contains(MaterialState.selected)) {
+      thumbColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) {
           return AppColors.accent;
         }
         return AppColors.lightTextHint;
       }),
-      trackColor: MaterialStateProperty.resolveWith((states) {
-        if (states.contains(MaterialState.selected)) {
+      trackColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) {
           return AppColors.primary;
         }
         return AppColors.lightBorder;
@@ -178,11 +180,13 @@ class AppTheme {
       secondaryContainer: AppColors.secondaryDark,
       tertiary: AppColors.accentLight,
       surface: AppColors.darkSurface,
+      // ignore: deprecated_member_use
       background: AppColors.darkBackground,
       error: AppColors.error,
       onPrimary: AppColors.primaryDark,
       onSecondary: Colors.white,
       onSurface: AppColors.darkTextPrimary,
+      // ignore: deprecated_member_use
       onBackground: AppColors.darkTextPrimary,
       onError: Colors.white,
       outline: AppColors.darkBorder,
@@ -304,14 +308,14 @@ class AppTheme {
       behavior: SnackBarBehavior.floating,
     ),
     switchTheme: SwitchThemeData(
-      thumbColor: MaterialStateProperty.resolveWith((states) {
-        if (states.contains(MaterialState.selected)) {
+      thumbColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) {
           return AppColors.accent;
         }
         return AppColors.darkTextHint;
       }),
-      trackColor: MaterialStateProperty.resolveWith((states) {
-        if (states.contains(MaterialState.selected)) {
+      trackColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) {
           return AppColors.primaryLight;
         }
         return AppColors.darkBorder;
