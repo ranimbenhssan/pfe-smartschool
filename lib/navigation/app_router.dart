@@ -4,6 +4,9 @@ import 'package:go_router/go_router.dart';
 import '../services/auth_service.dart';
 import '../models/user_model.dart';
 import 'app_routes.dart';
+import '../screens/shared/splash_screen.dart';
+import '../screens/shared/login_screen.dart';
+import '../screens/shared/forgot_password_screen.dart';
 
 class PlaceholderScreen extends StatelessWidget {
   final String title;
@@ -41,20 +44,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.splash,
         name: 'splash',
-        builder: (context, state) => const SplashRedirect(),
+        builder: (context, state) => const SplashScreen(),
       ),
       GoRoute(
         path: AppRoutes.login,
         name: 'login',
         builder:
-            (context, state) => const PlaceholderScreen(title: 'Login Screen'),
+            (context, state) => const LoginScreen(),
       ),
       GoRoute(
         path: AppRoutes.forgotPassword,
         name: 'forgot-password',
         builder:
             (context, state) =>
-                const PlaceholderScreen(title: 'Forgot Password'),
+                const ForgotPasswordScreen(),
       ),
 
       // ─── Admin ───

@@ -144,6 +144,9 @@ class AppTypography {
   static const TextStyle headingMedium = headlineMedium;
   static const TextStyle headingSmall = headlineSmall;
 
+  // ── Font Family Constants ──────────────────────────────────
+  static const String displayFont = displayFamily;
+
   static const TextStyle buttonText = TextStyle(
     fontFamily: fontFamily,
     fontSize: 15,
