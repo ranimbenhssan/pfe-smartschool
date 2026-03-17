@@ -225,7 +225,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
             child: FadeTransition(
               opacity: _fadeAnimation,
               child: Text(
-                'v1.0.0 • PFE 2024',
+                'v1.0.0 • PFE 2026',
                 textAlign: TextAlign.center,
                 style: AppTypography.caption.copyWith(
                   color: AppColors.darkTextHint,
