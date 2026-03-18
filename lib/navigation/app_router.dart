@@ -24,6 +24,16 @@ import '../screens/admin/attendance/admin_attendance_by_date_screen.dart';
 import '../screens/admin/attendance/admin_attendance_by_class_screen.dart';
 import '../screens/admin/attendance/admin_attendance_edit_screen.dart';
 import '../screens/admin/attendance/admin_attendance_stats_screen.dart';
+import '../screens/admin/iot_monitor/admin_iot_screen.dart';
+import '../screens/admin/iot_monitor/admin_room_detail_screen.dart';
+import '../screens/admin/ai_alerts/admin_ai_alerts_screen.dart';
+import '../screens/admin/ai_alerts/admin_alert_detail_screen.dart';
+import '../screens/admin/ai_alerts/admin_alert_resolved_screen.dart';
+import '../screens/admin/notifications/admin_notifications_screen.dart';
+import '../screens/admin/notifications/admin_notification_send_screen.dart';
+import '../screens/admin/timetable/admin_timetable_screen.dart';
+import '../screens/admin/timetable/admin_timetable_form_screen.dart';
+import '../screens/admin/settings/admin_settings_screen.dart';
 
 class PlaceholderScreen extends StatelessWidget {
   final String title;
@@ -195,91 +205,79 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.adminIot,
         name: 'admin-iot',
-        builder:
-            (context, state) => const PlaceholderScreen(title: 'All Rooms IoT'),
+        builder: (context, state) => const AdminIotScreen(),
       ),
       GoRoute(
         path: '${AppRoutes.adminRoomDetail}/:id',
         name: 'admin-room-detail',
         builder:
-            (context, state) => const PlaceholderScreen(title: 'Room Detail'),
+            (context, state) =>
+                AdminRoomDetailScreen(roomId: state.pathParameters['id']!),
       ),
       GoRoute(
         path: AppRoutes.adminAiAlerts,
         name: 'admin-ai-alerts',
-        builder:
-            (context, state) => const PlaceholderScreen(title: 'AI Alerts'),
+        builder: (context, state) => const AdminAiAlertsScreen(),
       ),
       GoRoute(
         path: '${AppRoutes.adminAlertDetail}/:id',
         name: 'admin-alert-detail',
         builder:
-            (context, state) => const PlaceholderScreen(title: 'Alert Detail'),
+            (context, state) =>
+                AdminAlertDetailScreen(flagId: state.pathParameters['id']!),
       ),
       GoRoute(
         path: AppRoutes.adminAlertResolved,
         name: 'admin-alert-resolved',
-        builder:
-            (context, state) =>
-                const PlaceholderScreen(title: 'Resolved Alerts'),
+        builder: (context, state) => const AdminAlertResolvedScreen(),
       ),
       GoRoute(
         path: AppRoutes.adminNotifications,
         name: 'admin-notifications',
-        builder:
-            (context, state) => const PlaceholderScreen(title: 'Notifications'),
+        builder: (context, state) => const AdminNotificationsScreen(),
       ),
       GoRoute(
         path: AppRoutes.adminNotificationSend,
         name: 'admin-notification-send',
-        builder:
-            (context, state) =>
-                const PlaceholderScreen(title: 'Send Notification'),
+        builder: (context, state) => const AdminNotificationSendScreen(),
       ),
       GoRoute(
         path: AppRoutes.adminTimetable,
         name: 'admin-timetable',
-        builder:
-            (context, state) => const PlaceholderScreen(title: 'Timetable'),
+        builder: (context, state) => const AdminTimetableScreen(),
       ),
       GoRoute(
         path: AppRoutes.adminTimetableAdd,
         name: 'admin-timetable-add',
-        builder:
-            (context, state) =>
-                const PlaceholderScreen(title: 'Add Timetable Entry'),
+        builder: (context, state) => const AdminTimetableFormScreen(),
       ),
       GoRoute(
         path: '${AppRoutes.adminTimetableEdit}/:id',
         name: 'admin-timetable-edit',
         builder:
             (context, state) =>
-                const PlaceholderScreen(title: 'Edit Timetable Entry'),
+                AdminTimetableFormScreen(entryId: state.pathParameters['id']),
       ),
       GoRoute(
         path: AppRoutes.adminSettings,
         name: 'admin-settings',
-        builder: (context, state) => const PlaceholderScreen(title: 'Settings'),
+        builder: (context, state) => const AdminSettingsScreen(),
       ),
       GoRoute(
         path: AppRoutes.adminSettingsRfid,
         name: 'admin-settings-rfid',
-        builder:
-            (context, state) => const PlaceholderScreen(title: 'RFID Devices'),
+        builder: (context, state) => const AdminSettingsRfidScreen(),
       ),
 
       GoRoute(
         path: AppRoutes.adminSettingsSensors,
         name: 'admin-settings-sensors',
-        builder:
-            (context, state) =>
-                const PlaceholderScreen(title: 'Sensor Devices'),
+        builder: (context, state) => const AdminSettingsSensorsScreen(),
       ),
       GoRoute(
         path: AppRoutes.adminSettingsAi,
         name: 'admin-settings-ai',
-        builder:
-            (context, state) => const PlaceholderScreen(title: 'AI Thresholds'),
+        builder: (context, state) => const AdminSettingsAiScreen(),
       ),
 
       // ─── Teacher ───
