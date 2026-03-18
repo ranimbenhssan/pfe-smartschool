@@ -236,7 +236,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              'Welcome back',
+                              'Welcome',
                               style: AppTypography.displaySmall.copyWith(
                                 color:
                                     isDark
