@@ -7,6 +7,10 @@ import 'app_routes.dart';
 import '../screens/shared/splash_screen.dart';
 import '../screens/shared/login_screen.dart';
 import '../screens/shared/forgot_password_screen.dart';
+import '../screens/admin/dashboard/admin_dashboard_screen.dart';
+import '../screens/admin/students/admin_students_screen.dart';
+import '../screens/admin/students/admin_student_form_screen.dart';
+import '../screens/admin/students/admin_student_profile_screen.dart';
 
 class PlaceholderScreen extends StatelessWidget {
   final String title;
@@ -49,49 +53,43 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.login,
         name: 'login',
-        builder:
-            (context, state) => const LoginScreen(),
+        builder: (context, state) => const LoginScreen(),
       ),
       GoRoute(
         path: AppRoutes.forgotPassword,
         name: 'forgot-password',
-        builder:
-            (context, state) =>
-                const ForgotPasswordScreen(),
+        builder: (context, state) => const ForgotPasswordScreen(),
       ),
 
       // ─── Admin ───
       GoRoute(
         path: AppRoutes.adminDashboard,
         name: 'admin-dashboard',
-        builder:
-            (context, state) =>
-                const PlaceholderScreen(title: 'Admin Dashboard'),
+        builder: (context, state) => const AdminDashboardScreen(),
       ),
       GoRoute(
         path: AppRoutes.adminStudents,
         name: 'admin-students',
-        builder:
-            (context, state) => const PlaceholderScreen(title: 'Students List'),
+        builder: (context, state) => const AdminStudentsScreen(),
       ),
       GoRoute(
         path: AppRoutes.adminStudentAdd,
         name: 'admin-student-add',
-        builder:
-            (context, state) => const PlaceholderScreen(title: 'Add Student'),
+        builder: (context, state) => const AdminStudentFormScreen(),
       ),
       GoRoute(
         path: '${AppRoutes.adminStudentEdit}/:id',
         name: 'admin-student-edit',
-        builder:
-            (context, state) => const PlaceholderScreen(title: 'Edit Student'),
+        builder: (context, state) => AdminStudentFormScreen(
+          studentId: state.pathParameters['id'],
+        ),
       ),
       GoRoute(
         path: '${AppRoutes.adminStudentProfile}/:id',
         name: 'admin-student-profile',
-        builder:
-            (context, state) =>
-                const PlaceholderScreen(title: 'Student Profile'),
+        builder: (context, state) => AdminStudentProfileScreen(
+          studentId: state.pathParameters['id']!,
+        ),
       ),
       GoRoute(
         path: AppRoutes.adminTeachers,
@@ -265,6 +263,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder:
             (context, state) => const PlaceholderScreen(title: 'RFID Devices'),
       ),
+
       GoRoute(
         path: AppRoutes.adminSettingsSensors,
         name: 'admin-settings-sensors',
