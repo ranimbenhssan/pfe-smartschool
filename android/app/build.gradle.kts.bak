@@ -3,23 +3,22 @@ plugins {
     // START: FlutterFire Configuration
     id("com.google.gms.google-services")
     // END: FlutterFire Configuration
-    id("org.jetbrains.kotlin.android") version "2.1.0"
+    id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
 android {
     namespace = "com.example.pfe_smartschool"
-    compileSdk = 36  // Updated to match plugin requirements
+    compileSdk = 34  // Updated to match Flutter 3.41 recommendation
     ndkVersion = "27.0.12077973"
 
     defaultConfig {
         applicationId = "com.example.pfe_smartschool"
         minSdk = flutter.minSdkVersion
-        targetSdk = 36  // Updated
+        targetSdk = 34  // Updated
         versionCode = 1
         versionName = "1.0"
-        manifestPlaceholders += "applicationName" to "io.flutter.app.FlutterApplication"
     }
 
     compileOptions {
