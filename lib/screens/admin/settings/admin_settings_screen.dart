@@ -60,8 +60,7 @@ class AdminSettingsScreen extends ConsumerWidget {
                   icon: Icons.nfc_rounded,
                   label: 'RFID Devices',
                   color: AppColors.info,
-                  onTap: () =>
-                      context.push(AppRoutes.adminSettingsRfid),
+                  onTap: () => context.push(AppRoutes.adminSettingsRfid),
                 ),
                 const Divider(height: 1),
                 _NavigationTile(
@@ -69,8 +68,7 @@ class AdminSettingsScreen extends ConsumerWidget {
                   icon: Icons.sensors_rounded,
                   label: 'Sensor Devices',
                   color: AppColors.success,
-                  onTap: () =>
-                      context.push(AppRoutes.adminSettingsSensors),
+                  onTap: () => context.push(AppRoutes.adminSettingsSensors),
                 ),
               ],
             ),
@@ -87,8 +85,7 @@ class AdminSettingsScreen extends ConsumerWidget {
                   icon: Icons.tune_rounded,
                   label: 'AI Alert Thresholds',
                   color: AppColors.warning,
-                  onTap: () =>
-                      context.push(AppRoutes.adminSettingsAi),
+                  onTap: () => context.push(AppRoutes.adminSettingsAi),
                 ),
               ],
             ),
@@ -111,7 +108,7 @@ class AdminSettingsScreen extends ConsumerWidget {
                   isDark: isDark,
                   icon: Icons.school_rounded,
                   label: 'Project',
-                  value: 'PFE 2024',
+                  value: 'PFE 2026',
                 ),
               ],
             ),
@@ -177,8 +174,7 @@ class AdminSettingsAiScreen extends ConsumerStatefulWidget {
       _AdminSettingsAiScreenState();
 }
 
-class _AdminSettingsAiScreenState
-    extends ConsumerState<AdminSettingsAiScreen> {
+class _AdminSettingsAiScreenState extends ConsumerState<AdminSettingsAiScreen> {
   double _absenceThreshold = 3;
   double _lateThreshold = 4;
 
@@ -208,9 +204,10 @@ class _AdminSettingsAiScreenState
             Text(
               'Flag student after ${_absenceThreshold.toInt()} absences in 30 days',
               style: AppTypography.bodySmall.copyWith(
-                color: isDark
-                    ? AppColors.darkTextSecondary
-                    : AppColors.lightTextSecondary,
+                color:
+                    isDark
+                        ? AppColors.darkTextSecondary
+                        : AppColors.lightTextSecondary,
               ),
             ),
             Slider(
@@ -220,8 +217,7 @@ class _AdminSettingsAiScreenState
               divisions: 9,
               activeColor: AppColors.error,
               label: _absenceThreshold.toInt().toString(),
-              onChanged: (val) =>
-                  setState(() => _absenceThreshold = val),
+              onChanged: (val) => setState(() => _absenceThreshold = val),
             ),
             const SizedBox(height: 24),
             Text(
@@ -233,9 +229,10 @@ class _AdminSettingsAiScreenState
             Text(
               'Flag student after ${_lateThreshold.toInt()} late arrivals in 30 days',
               style: AppTypography.bodySmall.copyWith(
-                color: isDark
-                    ? AppColors.darkTextSecondary
-                    : AppColors.lightTextSecondary,
+                color:
+                    isDark
+                        ? AppColors.darkTextSecondary
+                        : AppColors.lightTextSecondary,
               ),
             ),
             Slider(
@@ -245,8 +242,7 @@ class _AdminSettingsAiScreenState
               divisions: 9,
               activeColor: AppColors.warning,
               label: _lateThreshold.toInt().toString(),
-              onChanged: (val) =>
-                  setState(() => _lateThreshold = val),
+              onChanged: (val) => setState(() => _lateThreshold = val),
             ),
             const SizedBox(height: 32),
             AppButton(
@@ -280,9 +276,8 @@ class _SectionHeader extends StatelessWidget {
     return Text(
       title.toUpperCase(),
       style: AppTypography.labelSmall.copyWith(
-        color: isDark
-            ? AppColors.darkTextSecondary
-            : AppColors.lightTextSecondary,
+        color:
+            isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
         letterSpacing: 1.2,
       ),
     );
@@ -331,11 +326,7 @@ class _ToggleTile extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Row(
         children: [
-          Icon(
-            icon,
-            color: AppColors.accent,
-            size: 20,
-          ),
+          Icon(icon, color: AppColors.accent, size: 20),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
@@ -345,10 +336,7 @@ class _ToggleTile extends StatelessWidget {
               ),
             ),
           ),
-          Switch(
-            value: value,
-            onChanged: onChanged,
-          ),
+          Switch(value: value, onChanged: onChanged),
         ],
       ),
     );
@@ -431,9 +419,10 @@ class _InfoTile extends StatelessWidget {
       trailing: Text(
         value,
         style: AppTypography.bodySmall.copyWith(
-          color: isDark
-              ? AppColors.darkTextSecondary
-              : AppColors.lightTextSecondary,
+          color:
+              isDark
+                  ? AppColors.darkTextSecondary
+                  : AppColors.lightTextSecondary,
         ),
       ),
     );
