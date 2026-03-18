@@ -11,6 +11,12 @@ import '../screens/admin/dashboard/admin_dashboard_screen.dart';
 import '../screens/admin/students/admin_students_screen.dart';
 import '../screens/admin/students/admin_student_form_screen.dart';
 import '../screens/admin/students/admin_student_profile_screen.dart';
+import '../screens/admin/teachers/admin_teachers_screen.dart';
+import '../screens/admin/teachers/admin_teacher_form_screen.dart';
+import '../screens/admin/teachers/admin_teacher_profile_screen.dart';
+import '../screens/admin/classes/admin_classes_screen.dart';
+import '../screens/admin/classes/admin_class_form_screen.dart';
+import '../screens/admin/classes/admin_class_detail_screen.dart';
 
 class PlaceholderScreen extends StatelessWidget {
   final String title;
@@ -80,65 +86,66 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '${AppRoutes.adminStudentEdit}/:id',
         name: 'admin-student-edit',
-        builder: (context, state) => AdminStudentFormScreen(
-          studentId: state.pathParameters['id'],
-        ),
+        builder:
+            (context, state) =>
+                AdminStudentFormScreen(studentId: state.pathParameters['id']),
       ),
       GoRoute(
         path: '${AppRoutes.adminStudentProfile}/:id',
         name: 'admin-student-profile',
-        builder: (context, state) => AdminStudentProfileScreen(
-          studentId: state.pathParameters['id']!,
-        ),
+        builder:
+            (context, state) => AdminStudentProfileScreen(
+              studentId: state.pathParameters['id']!,
+            ),
       ),
       GoRoute(
         path: AppRoutes.adminTeachers,
         name: 'admin-teachers',
-        builder:
-            (context, state) => const PlaceholderScreen(title: 'Teachers List'),
+        builder: (context, state) => const AdminTeachersScreen(),
       ),
       GoRoute(
         path: AppRoutes.adminTeacherAdd,
         name: 'admin-teacher-add',
-        builder:
-            (context, state) => const PlaceholderScreen(title: 'Add Teacher'),
+        builder: (context, state) => const AdminTeacherFormScreen(),
       ),
       GoRoute(
         path: '${AppRoutes.adminTeacherEdit}/:id',
         name: 'admin-teacher-edit',
         builder:
-            (context, state) => const PlaceholderScreen(title: 'Edit Teacher'),
+            (context, state) =>
+                AdminTeacherFormScreen(teacherId: state.pathParameters['id']),
       ),
       GoRoute(
         path: '${AppRoutes.adminTeacherProfile}/:id',
         name: 'admin-teacher-profile',
         builder:
-            (context, state) =>
-                const PlaceholderScreen(title: 'Teacher Profile'),
+            (context, state) => AdminTeacherProfileScreen(
+              teacherId: state.pathParameters['id']!,
+            ),
       ),
       GoRoute(
         path: AppRoutes.adminClasses,
         name: 'admin-classes',
-        builder:
-            (context, state) => const PlaceholderScreen(title: 'Classes List'),
+        builder: (context, state) => const AdminClassesScreen(),
       ),
       GoRoute(
         path: AppRoutes.adminClassAdd,
         name: 'admin-class-add',
-        builder:
-            (context, state) => const PlaceholderScreen(title: 'Add Class'),
+        builder: (context, state) => const AdminClassFormScreen(),
       ),
       GoRoute(
         path: '${AppRoutes.adminClassEdit}/:id',
         name: 'admin-class-edit',
         builder:
-            (context, state) => const PlaceholderScreen(title: 'Edit Class'),
+            (context, state) =>
+                AdminClassFormScreen(classId: state.pathParameters['id']),
       ),
       GoRoute(
         path: '${AppRoutes.adminClassDetail}/:id',
         name: 'admin-class-detail',
         builder:
-            (context, state) => const PlaceholderScreen(title: 'Class Detail'),
+            (context, state) =>
+                AdminClassDetailScreen(classId: state.pathParameters['id']!),
       ),
       GoRoute(
         path: AppRoutes.adminRfid,
