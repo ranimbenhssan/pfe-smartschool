@@ -32,10 +32,10 @@ dependencies:
     sdk: flutter
 
   # Firebase
-  firebase_core: ^2.24.2
+  firebase_core: ^2.25.0
   firebase_auth: ^4.16.0
   cloud_firestore: ^4.14.0
-  firebase_messaging: ^14.7.10
+  firebase_messaging: ^14.8.0
   firebase_storage: ^11.6.0
 
   # State Management
@@ -54,6 +54,7 @@ dependencies:
   flutter_animate: ^4.5.0
   gap: ^3.0.1
   iconsax: ^0.0.8
+  cupertino_icons: ^1.0.0
 
   # Utils
   intl: ^0.19.0
