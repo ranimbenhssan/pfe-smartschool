@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../services/auth_service.dart';
-import '../models/user_model.dart';
 import 'app_routes.dart';
+import '../../../models/models.dart';
 import '../screens/shared/splash_screen.dart';
 import '../screens/shared/login_screen.dart';
 import '../screens/shared/forgot_password_screen.dart';
@@ -17,6 +17,13 @@ import '../screens/admin/teachers/admin_teacher_profile_screen.dart';
 import '../screens/admin/classes/admin_classes_screen.dart';
 import '../screens/admin/classes/admin_class_form_screen.dart';
 import '../screens/admin/classes/admin_class_detail_screen.dart';
+import '../screens/admin/rfid/admin_rfid_screen.dart';
+import '../screens/admin/rfid/admin_rfid_unrecognized_screen.dart';
+import '../screens/admin/attendance/admin_attendance_screen.dart';
+import '../screens/admin/attendance/admin_attendance_by_date_screen.dart';
+import '../screens/admin/attendance/admin_attendance_by_class_screen.dart';
+import '../screens/admin/attendance/admin_attendance_edit_screen.dart';
+import '../screens/admin/attendance/admin_attendance_stats_screen.dart';
 
 class PlaceholderScreen extends StatelessWidget {
   final String title;
@@ -150,50 +157,40 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.adminRfid,
         name: 'admin-rfid',
-        builder:
-            (context, state) => const PlaceholderScreen(title: 'RFID Logs'),
+        builder: (context, state) => const AdminRfidScreen(),
       ),
       GoRoute(
         path: AppRoutes.adminRfidUnrecognized,
         name: 'admin-rfid-unrecognized',
-        builder:
-            (context, state) =>
-                const PlaceholderScreen(title: 'Unrecognized Tags'),
+        builder: (context, state) => const AdminRfidUnrecognizedScreen(),
       ),
       GoRoute(
         path: AppRoutes.adminAttendance,
         name: 'admin-attendance',
-        builder:
-            (context, state) =>
-                const PlaceholderScreen(title: 'Attendance Overview'),
+        builder: (context, state) => const AdminAttendanceScreen(),
       ),
       GoRoute(
         path: AppRoutes.adminAttendanceByDate,
         name: 'admin-attendance-by-date',
-        builder:
-            (context, state) =>
-                const PlaceholderScreen(title: 'Attendance by Date'),
+        builder: (context, state) => const AdminAttendanceByDateScreen(),
       ),
       GoRoute(
         path: AppRoutes.adminAttendanceByClass,
         name: 'admin-attendance-by-class',
-        builder:
-            (context, state) =>
-                const PlaceholderScreen(title: 'Attendance by Class'),
+        builder: (context, state) => const AdminAttendanceByClassScreen(),
       ),
       GoRoute(
         path: AppRoutes.adminAttendanceEdit,
         name: 'admin-attendance-edit',
         builder:
-            (context, state) =>
-                const PlaceholderScreen(title: 'Edit Attendance'),
+            (context, state) => AdminAttendanceEditScreen(
+              attendance: state.extra as AttendanceModel,
+            ),
       ),
       GoRoute(
         path: AppRoutes.adminAttendanceStats,
         name: 'admin-attendance-stats',
-        builder:
-            (context, state) =>
-                const PlaceholderScreen(title: 'Attendance Stats'),
+        builder: (context, state) => const AdminAttendanceStatsScreen(),
       ),
       GoRoute(
         path: AppRoutes.adminIot,
