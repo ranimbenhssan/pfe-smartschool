@@ -34,6 +34,21 @@ import '../screens/admin/notifications/admin_notification_send_screen.dart';
 import '../screens/admin/timetable/admin_timetable_screen.dart';
 import '../screens/admin/timetable/admin_timetable_form_screen.dart';
 import '../screens/admin/settings/admin_settings_screen.dart';
+import '../screens/teacher/dashboard/teacher_dashboard_screen.dart';
+import '../screens/teacher/dashboard/teacher_dashboard_screen.dart';
+import '../screens/teacher/attendance/teacher_attendance_screen.dart';
+import '../screens/teacher/attendance/teacher_attendance_today_screen.dart';
+import '../screens/teacher/attendance/teacher_attendance_by_date_screen.dart';
+import '../screens/teacher/attendance/teacher_attendance_edit_screen.dart';
+import '../screens/teacher/attendance/teacher_attendance_stats_screen.dart';
+import '../screens/teacher/iot_monitor/teacher_iot_screen.dart';
+import '../screens/teacher/iot_monitor/teacher_iot_history_screen.dart';
+import '../screens/teacher/students/teacher_students_screen.dart';
+import '../screens/teacher/students/teacher_student_profile_screen.dart';
+import '../screens/teacher/ai_alerts/teacher_ai_alerts_screen.dart';
+import '../screens/teacher/ai_alerts/teacher_alert_detail_screen.dart';
+import '../screens/teacher/timetable/teacher_timetable_screen.dart';
+import '../screens/teacher/notifications/teacher_notifications_screen.dart';
 
 class PlaceholderScreen extends StatelessWidget {
   final String title;
@@ -284,100 +299,85 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.teacherDashboard,
         name: 'teacher-dashboard',
-        builder:
-            (context, state) =>
-                const PlaceholderScreen(title: 'Teacher Dashboard'),
+        builder: (context, state) => const TeacherDashboardScreen(),
       ),
       GoRoute(
         path: AppRoutes.teacherAttendance,
         name: 'teacher-attendance',
-        builder:
-            (context, state) =>
-                const PlaceholderScreen(title: 'Attendance Overview'),
+        builder: (context, state) => const TeacherAttendanceScreen(),
       ),
       GoRoute(
         path: AppRoutes.teacherAttendanceToday,
         name: 'teacher-attendance-today',
-        builder:
-            (context, state) =>
-                const PlaceholderScreen(title: "Today's Attendance"),
+        builder: (context, state) => const TeacherAttendanceTodayScreen(),
       ),
       GoRoute(
         path: AppRoutes.teacherAttendanceByDate,
         name: 'teacher-attendance-by-date',
-        builder:
-            (context, state) =>
-                const PlaceholderScreen(title: 'Attendance by Date'),
+        builder: (context, state) => const TeacherAttendanceByDateScreen(),
       ),
       GoRoute(
         path: AppRoutes.teacherAttendanceEdit,
         name: 'teacher-attendance-edit',
         builder:
-            (context, state) =>
-                const PlaceholderScreen(title: 'Edit Attendance'),
+            (context, state) => TeacherAttendanceEditScreen(
+              attendance: state.extra as AttendanceModel,
+            ),
       ),
       GoRoute(
         path: AppRoutes.teacherAttendanceStats,
         name: 'teacher-attendance-stats',
-        builder:
-            (context, state) =>
-                const PlaceholderScreen(title: 'Attendance Stats'),
+        builder: (context, state) => const TeacherAttendanceStatsScreen(),
       ),
       GoRoute(
         path: AppRoutes.teacherIot,
         name: 'teacher-iot',
-        builder:
-            (context, state) => const PlaceholderScreen(title: 'Classroom IoT'),
+        builder: (context, state) => const TeacherIotScreen(),
       ),
       GoRoute(
         path: AppRoutes.teacherIotHistory,
         name: 'teacher-iot-history',
-        builder:
-            (context, state) => const PlaceholderScreen(title: 'IoT History'),
+        builder: (context, state) => const TeacherIotHistoryScreen(),
       ),
       GoRoute(
         path: AppRoutes.teacherStudents,
         name: 'teacher-students',
-        builder:
-            (context, state) => const PlaceholderScreen(title: 'My Students'),
+        builder: (context, state) => const TeacherStudentsScreen(),
       ),
       GoRoute(
         path: '${AppRoutes.teacherStudentProfile}/:id',
         name: 'teacher-student-profile',
         builder:
-            (context, state) =>
-                const PlaceholderScreen(title: 'Student Profile'),
+            (context, state) => TeacherStudentProfileScreen(
+              studentId: state.pathParameters['id']!,
+            ),
       ),
       GoRoute(
         path: AppRoutes.teacherAiAlerts,
         name: 'teacher-ai-alerts',
-        builder:
-            (context, state) => const PlaceholderScreen(title: 'AI Alerts'),
+        builder: (context, state) => const TeacherAiAlertsScreen(),
       ),
       GoRoute(
         path: '${AppRoutes.teacherAlertDetail}/:id',
         name: 'teacher-alert-detail',
         builder:
-            (context, state) => const PlaceholderScreen(title: 'Alert Detail'),
+            (context, state) =>
+                TeacherAlertDetailScreen(flagId: state.pathParameters['id']!),
       ),
       GoRoute(
         path: AppRoutes.teacherTimetable,
         name: 'teacher-timetable',
-        builder:
-            (context, state) => const PlaceholderScreen(title: 'My Timetable'),
+        builder: (context, state) => const TeacherTimetableScreen(),
       ),
       GoRoute(
         path: '${AppRoutes.teacherTimetableDetail}/:id',
         name: 'teacher-timetable-detail',
-        builder:
-            (context, state) =>
-                const PlaceholderScreen(title: 'Timetable Detail'),
+        builder: (context, state) => const TeacherTimetableScreen(),
       ),
       GoRoute(
         path: AppRoutes.teacherNotifications,
         name: 'teacher-notifications',
-        builder:
-            (context, state) => const PlaceholderScreen(title: 'Notifications'),
+        builder: (context, state) => const TeacherNotificationsScreen(),
       ),
 
       // ─── Student ───
