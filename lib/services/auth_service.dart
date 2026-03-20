@@ -1,7 +1,10 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/user_model.dart';
+import '../firebase_options.dart';
 
 // ─── Providers ───
 final firebaseAuthProvider = Provider<FirebaseAuth>(
@@ -17,29 +20,46 @@ final authStateProvider = StreamProvider<User?>((ref) {
 });
 
 final userRoleProvider = FutureProvider<UserRole>((ref) async {
-  final authState = await ref.watch(authStateProvider.future);
-  if (authState == null) return UserRole.unknown;
-
-  final doc =
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(authState.uid)
-          .get();
-
-  if (!doc.exists) return UserRole.unknown;
-  return UserModel.fromFirestore(doc).role;
+  try {
+    final authState = await ref.watch(authStateProvider.future);
+    debugPrint('🔐 AUTH STATE: ${authState?.uid}');
+    if (authState == null) {
+      debugPrint('❌ Auth state is null');
+      return UserRole.unknown;
+    }
+    debugPrint('📡 Fetching Firestore for: ${authState.uid}');
+    final doc =
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(authState.uid)
+            .get();
+    debugPrint('📄 Document exists: ${doc.exists}');
+    debugPrint('📄 Document data: ${doc.data()}');
+    if (!doc.exists) {
+      debugPrint('❌ Document does not exist');
+      return UserRole.unknown;
+    }
+    final data = doc.data() as Map<String, dynamic>;
+    final roleString = data['role'] as String?;
+    debugPrint('🎭 Role string: $roleString');
+    final role = UserModel.fromFirestore(doc).role;
+    debugPrint('✅ Parsed role: ${role.name}');
+    return role;
+  } catch (e, stack) {
+    debugPrint('💥 Error: $e');
+    debugPrint('💥 Stack: $stack');
+    return UserRole.unknown;
+  }
 });
 
 final currentUserProvider = FutureProvider<UserModel?>((ref) async {
   final authState = await ref.watch(authStateProvider.future);
   if (authState == null) return null;
-
   final doc =
       await FirebaseFirestore.instance
           .collection('users')
           .doc(authState.uid)
           .get();
-
   if (!doc.exists) return null;
   return UserModel.fromFirestore(doc);
 });
@@ -51,7 +71,9 @@ final authServiceProvider = Provider<AuthService>((ref) {
   );
 });
 
-// ─── Auth Service ───
+// ─────────────────────────────────────────
+//  AUTH SERVICE CLASS
+// ─────────────────────────────────────────
 class AuthService {
   final FirebaseAuth _auth;
   final FirebaseFirestore _firestore;
@@ -62,6 +84,7 @@ class AuthService {
   }) : _auth = auth,
        _firestore = firestore;
 
+  // ─── Login ───
   Future<AuthResult> login({
     required String email,
     required String password,
@@ -82,10 +105,12 @@ class AuthService {
     }
   }
 
+  // ─── Logout ───
   Future<void> logout() async {
     await _auth.signOut();
   }
 
+  // ─── Forgot Password ───
   Future<AuthResult> sendPasswordReset(String email) async {
     try {
       await _auth.sendPasswordResetEmail(email: email.trim());
@@ -97,16 +122,24 @@ class AuthService {
     }
   }
 
+  // ─── Get User Role ───
   Future<UserRole> getUserRole(String uid) async {
     try {
+      debugPrint('🔍 getUserRole called for: $uid');
       final doc = await _firestore.collection('users').doc(uid).get();
+      debugPrint('📄 getUserRole doc exists: ${doc.exists}');
+      debugPrint('📄 getUserRole doc data: ${doc.data()}');
       if (!doc.exists) return UserRole.unknown;
-      return UserModel.fromFirestore(doc).role;
+      final role = UserModel.fromFirestore(doc).role;
+      debugPrint('✅ getUserRole result: ${role.name}');
+      return role;
     } catch (e) {
+      debugPrint('💥 getUserRole error: $e');
       return UserRole.unknown;
     }
   }
 
+  // ─── Create User (without logging out admin) ───
   Future<AuthResult> createUser({
     required String email,
     required String password,
@@ -114,13 +147,29 @@ class AuthService {
     required UserRole role,
   }) async {
     try {
-      final credential = await _auth.createUserWithEmailAndPassword(
+      // ─── Create secondary Firebase app ───
+      FirebaseApp secondaryApp;
+      try {
+        secondaryApp = Firebase.app('secondary');
+      } catch (e) {
+        secondaryApp = await Firebase.initializeApp(
+          name: 'secondary',
+          options: DefaultFirebaseOptions.currentPlatform,
+        );
+      }
+
+      // ─── Create user in secondary app ───
+      final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
+      final credential = await secondaryAuth.createUserWithEmailAndPassword(
         email: email.trim(),
         password: password,
       );
+
       if (credential.user == null) {
         return AuthResult.error('Failed to create user.');
       }
+
+      // ─── Save to Firestore ───
       final user = UserModel(
         id: credential.user!.uid,
         name: name,
@@ -128,18 +177,26 @@ class AuthService {
         role: role,
         createdAt: DateTime.now(),
       );
+
       await _firestore
           .collection('users')
           .doc(credential.user!.uid)
           .set(user.toFirestore());
-      return AuthResult.success(userId: credential.user!.uid);
+
+      final newUserId = credential.user!.uid;
+
+      // ─── Sign out from secondary app ───
+      await secondaryAuth.signOut();
+
+      return AuthResult.success(userId: newUserId);
     } on FirebaseAuthException catch (e) {
       return AuthResult.error(_mapFirebaseError(e.code));
     } catch (e) {
-      return AuthResult.error('An unexpected error occurred.');
+      return AuthResult.error('An unexpected error occurred: $e');
     }
   }
 
+  // ─── Update Password ───
   Future<AuthResult> updatePassword(String newPassword) async {
     try {
       await _auth.currentUser?.updatePassword(newPassword);
@@ -149,6 +206,7 @@ class AuthService {
     }
   }
 
+  // ─── Map Firebase Error Codes ───
   String _mapFirebaseError(String code) {
     switch (code) {
       case 'user-not-found':
@@ -173,7 +231,9 @@ class AuthService {
   }
 }
 
-// ─── Auth Result ───
+// ─────────────────────────────────────────
+//  AUTH RESULT
+// ─────────────────────────────────────────
 class AuthResult {
   final bool isSuccess;
   final String? errorMessage;
