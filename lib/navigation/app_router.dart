@@ -49,6 +49,13 @@ import '../screens/teacher/ai_alerts/teacher_ai_alerts_screen.dart';
 import '../screens/teacher/ai_alerts/teacher_alert_detail_screen.dart';
 import '../screens/teacher/timetable/teacher_timetable_screen.dart';
 import '../screens/teacher/notifications/teacher_notifications_screen.dart';
+import '../screens/student/dashboard/student_dashboard_screen.dart';
+import '../screens/student/attendance/student_attendance_screen.dart';
+import '../screens/student/attendance/student_attendance_stats_screen.dart';
+import '../screens/student/timetable/student_timetable_screen.dart';
+import '../screens/student/iot_monitor/student_iot_screen.dart';
+import '../screens/student/iot_monitor/student_iot_history_screen.dart';
+import '../screens/student/notifications/student_notifications_screen.dart';
 
 class PlaceholderScreen extends StatelessWidget {
   final String title;
@@ -384,55 +391,42 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.studentDashboard,
         name: 'student-dashboard',
-        builder:
-            (context, state) =>
-                const PlaceholderScreen(title: 'Student Dashboard'),
+        builder: (context, state) => const StudentDashboardScreen(),
       ),
       GoRoute(
         path: AppRoutes.studentAttendance,
         name: 'student-attendance',
-        builder:
-            (context, state) => const PlaceholderScreen(title: 'My Attendance'),
+        builder: (context, state) => const StudentAttendanceScreen(),
       ),
       GoRoute(
         path: AppRoutes.studentAttendanceStats,
         name: 'student-attendance-stats',
-        builder:
-            (context, state) =>
-                const PlaceholderScreen(title: 'Attendance Stats'),
+        builder: (context, state) => const StudentAttendanceStatsScreen(),
       ),
       GoRoute(
         path: AppRoutes.studentTimetable,
         name: 'student-timetable',
-        builder:
-            (context, state) => const PlaceholderScreen(title: 'My Timetable'),
+        builder: (context, state) => const StudentTimetableScreen(),
       ),
       GoRoute(
         path: '${AppRoutes.studentTimetableDetail}/:id',
         name: 'student-timetable-detail',
-        builder:
-            (context, state) =>
-                const PlaceholderScreen(title: 'Timetable Detail'),
+        builder: (context, state) => const StudentTimetableScreen(),
       ),
       GoRoute(
         path: AppRoutes.studentIot,
         name: 'student-iot',
-        builder:
-            (context, state) =>
-                const PlaceholderScreen(title: 'Classroom Environment'),
+        builder: (context, state) => const StudentIotScreen(),
       ),
       GoRoute(
         path: AppRoutes.studentIotHistory,
         name: 'student-iot-history',
-        builder:
-            (context, state) =>
-                const PlaceholderScreen(title: 'Environment History'),
+        builder: (context, state) => const StudentIotHistoryScreen(),
       ),
       GoRoute(
         path: AppRoutes.studentNotifications,
         name: 'student-notifications',
-        builder:
-            (context, state) => const PlaceholderScreen(title: 'Notifications'),
+        builder: (context, state) => const StudentNotificationsScreen(),
       ),
     ],
 
