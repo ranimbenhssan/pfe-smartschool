@@ -64,6 +64,7 @@ class _AdminTeacherFormScreenState
 
     try {
       if (_isEditing) {
+        // ─── Update teacher ───
         await ref
             .read(firestoreServiceProvider)
             .updateTeacher(widget.teacherId!, {
@@ -71,7 +72,27 @@ class _AdminTeacherFormScreenState
               'assignedClassIds': _selectedClassIds,
               'assignedClassNames': _selectedClassNames,
             });
+
+        // ─── Update each assigned class ───
+        for (int i = 0; i < _selectedClassIds.length; i++) {
+          final cls = await ref
+              .read(firestoreServiceProvider)
+              .getClass(_selectedClassIds[i]);
+          if (cls != null) {
+            final teacherId = widget.teacherId!;
+            final teacherName = _nameController.text.trim();
+            if (!cls.teacherIds.contains(teacherId)) {
+              final updatedIds = [...cls.teacherIds, teacherId];
+              final updatedNames = [...cls.teacherNames, teacherName];
+              await ref.read(firestoreServiceProvider).updateClass(cls.id, {
+                'teacherIds': updatedIds,
+                'teacherNames': updatedNames,
+              });
+            }
+          }
+        }
       } else {
+        // ─── Create auth user ───
         final result = await ref
             .read(authServiceProvider)
             .createUser(
@@ -93,6 +114,7 @@ class _AdminTeacherFormScreenState
           return;
         }
 
+        // ─── Create teacher document ───
         final teacher = TeacherModel(
           id: result.userId!,
           userId: result.userId!,
@@ -104,6 +126,25 @@ class _AdminTeacherFormScreenState
         );
 
         await ref.read(firestoreServiceProvider).addTeacher(teacher);
+
+        // ─── Update each assigned class ───
+        for (int i = 0; i < _selectedClassIds.length; i++) {
+          final cls = await ref
+              .read(firestoreServiceProvider)
+              .getClass(_selectedClassIds[i]);
+          if (cls != null) {
+            final teacherId = result.userId!;
+            final teacherName = _nameController.text.trim();
+            if (!cls.teacherIds.contains(teacherId)) {
+              final updatedIds = [...cls.teacherIds, teacherId];
+              final updatedNames = [...cls.teacherNames, teacherName];
+              await ref.read(firestoreServiceProvider).updateClass(cls.id, {
+                'teacherIds': updatedIds,
+                'teacherNames': updatedNames,
+              });
+            }
+          }
+        }
       }
 
       if (mounted) {
