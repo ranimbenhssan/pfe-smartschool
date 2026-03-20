@@ -113,7 +113,7 @@ class AdminClassDetailScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 20),
 
-                // ─── Teacher Info ───
+                // ─── Teachers Info ───
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -124,56 +124,92 @@ class AdminClassDetailScreen extends ConsumerWidget {
                           isDark ? AppColors.darkBorder : AppColors.lightBorder,
                     ),
                   ),
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: AppColors.teacherColor.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(
-                          Icons.person_rounded,
-                          color: AppColors.teacherColor,
-                          size: 20,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Teacher', style: AppTypography.caption),
-                            Text(
-                              c.teacherName.isEmpty
-                                  ? 'Not assigned'
-                                  : c.teacherName,
-                              style: AppTypography.labelLarge.copyWith(
-                                color:
-                                    isDark
-                                        ? AppColors.darkText
-                                        : AppColors.lightText,
+                      Row(
+                        children: [
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: AppColors.teacherColor.withValues(
+                                alpha: 0.12,
                               ),
+                              borderRadius: BorderRadius.circular(10),
                             ),
-                          ],
-                        ),
-                      ),
-                      if (c.teacherId.isNotEmpty)
-                        IconButton(
-                          icon: const Icon(
-                            Icons.arrow_forward_ios_rounded,
-                            size: 14,
+                            child: const Icon(
+                              Icons.people_rounded,
+                              color: AppColors.teacherColor,
+                              size: 20,
+                            ),
                           ),
-                          onPressed:
-                              () => context.push(
-                                '${AppRoutes.adminTeacherProfile}/${c.teacherId}',
-                              ),
-                        ),
+                          const SizedBox(width: 12),
+                          Text('Teachers', style: AppTypography.caption),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      c.teacherNames.isEmpty
+                          ? Text(
+                            'No teachers assigned',
+                            style: AppTypography.bodySmall.copyWith(
+                              color:
+                                  isDark
+                                      ? AppColors.darkTextSecondary
+                                      : AppColors.lightTextSecondary,
+                            ),
+                          )
+                          : Column(
+                            children:
+                                c.teacherNames
+                                    .asMap()
+                                    .entries
+                                    .map(
+                                      (entry) => Padding(
+                                        padding: const EdgeInsets.only(
+                                          bottom: 8,
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            CircleAvatar(
+                                              radius: 14,
+                                              backgroundColor: AppColors
+                                                  .teacherColor
+                                                  .withValues(alpha: 0.15),
+                                              child: Text(
+                                                entry.value.isNotEmpty
+                                                    ? entry.value[0]
+                                                        .toUpperCase()
+                                                    : '?',
+                                                style: AppTypography.caption
+                                                    .copyWith(
+                                                      color:
+                                                          AppColors
+                                                              .teacherColor,
+                                                    ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              entry.value,
+                                              style: AppTypography.labelLarge
+                                                  .copyWith(
+                                                    color:
+                                                        isDark
+                                                            ? AppColors.darkText
+                                                            : AppColors
+                                                                .lightText,
+                                                  ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    )
+                                    .toList(),
+                          ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 24),
 
                 // ─── Students List ───
                 Row(

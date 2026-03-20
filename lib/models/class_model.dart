@@ -4,8 +4,8 @@ class ClassModel {
   final String id;
   final String name;
   final String grade;
-  final String teacherId;
-  final String teacherName;
+  final List<String> teacherIds;
+  final List<String> teacherNames;
   final String roomId;
   final String roomName;
   final int studentCount;
@@ -15,8 +15,8 @@ class ClassModel {
     required this.id,
     required this.name,
     required this.grade,
-    required this.teacherId,
-    required this.teacherName,
+    required this.teacherIds,
+    required this.teacherNames,
     required this.roomId,
     required this.roomName,
     required this.studentCount,
@@ -29,8 +29,8 @@ class ClassModel {
       id: doc.id,
       name: data['name'] ?? '',
       grade: data['grade'] ?? '',
-      teacherId: data['teacherId'] ?? '',
-      teacherName: data['teacherName'] ?? '',
+      teacherIds: List<String>.from(data['teacherIds'] ?? []),
+      teacherNames: List<String>.from(data['teacherNames'] ?? []),
       roomId: data['roomId'] ?? '',
       roomName: data['roomName'] ?? '',
       studentCount: data['studentCount'] ?? 0,
@@ -42,8 +42,8 @@ class ClassModel {
     return {
       'name': name,
       'grade': grade,
-      'teacherId': teacherId,
-      'teacherName': teacherName,
+      'teacherIds': teacherIds,
+      'teacherNames': teacherNames,
       'roomId': roomId,
       'roomName': roomName,
       'studentCount': studentCount,
@@ -51,11 +51,15 @@ class ClassModel {
     };
   }
 
+  // ─── Keep backward compatibility ───
+  String get teacherId => teacherIds.isNotEmpty ? teacherIds.first : '';
+  String get teacherName => teacherNames.isNotEmpty ? teacherNames.first : '';
+
   ClassModel copyWith({
     String? name,
     String? grade,
-    String? teacherId,
-    String? teacherName,
+    List<String>? teacherIds,
+    List<String>? teacherNames,
     String? roomId,
     String? roomName,
     int? studentCount,
@@ -64,8 +68,8 @@ class ClassModel {
       id: id,
       name: name ?? this.name,
       grade: grade ?? this.grade,
-      teacherId: teacherId ?? this.teacherId,
-      teacherName: teacherName ?? this.teacherName,
+      teacherIds: teacherIds ?? this.teacherIds,
+      teacherNames: teacherNames ?? this.teacherNames,
       roomId: roomId ?? this.roomId,
       roomName: roomName ?? this.roomName,
       studentCount: studentCount ?? this.studentCount,
@@ -74,6 +78,5 @@ class ClassModel {
   }
 
   @override
-  String toString() =>
-      'ClassModel(id: $id, name: $name, grade: $grade)';
+  String toString() => 'ClassModel(id: $id, name: $name, grade: $grade)';
 }
