@@ -133,23 +133,24 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                   child: FadeTransition(
                     opacity: _fadeAnimation,
                     child: Container(
-                      width: 90,
-                      height: 90,
+                      width: 120,
+                      height: 120,
                       decoration: BoxDecoration(
-                        gradient: AppColors.accentGradient,
                         borderRadius: BorderRadius.circular(24),
                         boxShadow: [
                           BoxShadow(
-                            color: AppColors.accent.withValues(alpha: 0.4),
+                            color: AppColors.accent.withValues(alpha: 0.3),
                             blurRadius: 24,
                             offset: const Offset(0, 8),
                           ),
                         ],
                       ),
-                      child: const Icon(
-                        Icons.school_rounded,
-                        color: AppColors.primary,
-                        size: 48,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(24),
+                        child: Image.asset(
+                          'assets/images/logo.png',
+                          fit: BoxFit.cover,
+                        ),
                       ),
                     ),
                   ),

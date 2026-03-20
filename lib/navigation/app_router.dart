@@ -525,16 +525,21 @@ class _SplashLoadingScreen extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              width: 80,
-              height: 80,
+              width: 100,
+              height: 100,
               decoration: BoxDecoration(
-                color: const Color(0xFFD4A843),
                 borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.2),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-              child: const Icon(
-                Icons.school_rounded,
-                color: Color(0xFF0A1628),
-                size: 44,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: Image.asset('assets/images/logo.png', fit: BoxFit.cover),
               ),
             ),
             const SizedBox(height: 24),
