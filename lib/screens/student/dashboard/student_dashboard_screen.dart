@@ -56,17 +56,13 @@ class _StudentDashboardScreenState
       elevation: 0,
       title: Row(
         children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: AppColors.studentColor.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(
-              Icons.school_rounded,
-              color: AppColors.studentColor,
-              size: 18,
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.asset(
+              'assets/images/logo.png',
+              width: 32,
+              height: 32,
+              fit: BoxFit.cover,
             ),
           ),
           const SizedBox(width: 10),

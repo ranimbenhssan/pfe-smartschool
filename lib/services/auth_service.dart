@@ -141,60 +141,67 @@ class AuthService {
 
   // ─── Create User (without logging out admin) ───
   Future<AuthResult> createUser({
-    required String email,
-    required String password,
-    required String name,
-    required UserRole role,
-  }) async {
+  required String email,
+  required String password,
+  required String name,
+  required UserRole role,
+}) async {
+  try {
+    // ─── Create secondary Firebase app ───
+    FirebaseApp secondaryApp;
     try {
-      // ─── Create secondary Firebase app ───
-      FirebaseApp secondaryApp;
-      try {
-        secondaryApp = Firebase.app('secondary');
-      } catch (e) {
-        secondaryApp = await Firebase.initializeApp(
-          name: 'secondary',
-          options: DefaultFirebaseOptions.currentPlatform,
-        );
-      }
-
-      // ─── Create user in secondary app ───
-      final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
-      final credential = await secondaryAuth.createUserWithEmailAndPassword(
-        email: email.trim(),
-        password: password,
-      );
-
-      if (credential.user == null) {
-        return AuthResult.error('Failed to create user.');
-      }
-
-      // ─── Save to Firestore ───
-      final user = UserModel(
-        id: credential.user!.uid,
-        name: name,
-        email: email.trim(),
-        role: role,
-        createdAt: DateTime.now(),
-      );
-
-      await _firestore
-          .collection('users')
-          .doc(credential.user!.uid)
-          .set(user.toFirestore());
-
-      final newUserId = credential.user!.uid;
-
-      // ─── Sign out from secondary app ───
-      await secondaryAuth.signOut();
-
-      return AuthResult.success(userId: newUserId);
-    } on FirebaseAuthException catch (e) {
-      return AuthResult.error(_mapFirebaseError(e.code));
+      secondaryApp = Firebase.app('secondary');
     } catch (e) {
-      return AuthResult.error('An unexpected error occurred: $e');
+      secondaryApp = await Firebase.initializeApp(
+        name: 'secondary',
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
     }
+
+    // ─── Create user in secondary app ───
+    final secondaryAuth =
+        FirebaseAuth.instanceFor(app: secondaryApp);
+    final credential =
+        await secondaryAuth.createUserWithEmailAndPassword(
+      email: email.trim(),
+      password: password,
+    );
+
+    if (credential.user == null) {
+      return AuthResult.error('Failed to create user.');
+    }
+
+    final newUserId = credential.user!.uid;
+
+    // ─── Sign out from secondary app immediately ───
+    await secondaryAuth.signOut();
+
+    // ─── Save to Firestore using MAIN instance ───
+    // (not secondary app — avoids App Check issues)
+    final user = UserModel(
+      id: newUserId,
+      name: name,
+      email: email.trim(),
+      role: role,
+      createdAt: DateTime.now(),
+    );
+
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(newUserId)
+        .set(user.toFirestore());
+
+    debugPrint('✅ User created: $newUserId role: ${role.name}');
+
+    return AuthResult.success(userId: newUserId);
+  } on FirebaseAuthException catch (e) {
+    debugPrint('💥 FirebaseAuth error: ${e.code}');
+    return AuthResult.error(_mapFirebaseError(e.code));
+  } catch (e) {
+    debugPrint('💥 createUser error: $e');
+    return AuthResult.error('An unexpected error occurred: $e');
   }
+}
 
   // ─── Update Password ───
   Future<AuthResult> updatePassword(String newPassword) async {

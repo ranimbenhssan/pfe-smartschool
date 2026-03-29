@@ -55,17 +55,13 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
       elevation: 0,
       title: Row(
         children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              gradient: AppColors.accentGradient,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(
-              Icons.school_rounded,
-              color: AppColors.primary,
-              size: 18,
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.asset(
+              'assets/images/logo.png',
+              width: 32,
+              height: 32,
+              fit: BoxFit.cover,
             ),
           ),
           const SizedBox(width: 10),
@@ -89,13 +85,13 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                     : Icons.dark_mode_rounded,
                 size: 20,
               ),
-             onPressed: () {
-  final current = ref.read(themeModeProvider);
-  ref.read(themeModeProvider.notifier).state =
-      current == ThemeMode.dark
-          ? ThemeMode.light
-          : ThemeMode.dark;
-},
+              onPressed: () {
+                final current = ref.read(themeModeProvider);
+                ref.read(themeModeProvider.notifier).state =
+                    current == ThemeMode.dark
+                        ? ThemeMode.light
+                        : ThemeMode.dark;
+              },
             );
           },
         ),

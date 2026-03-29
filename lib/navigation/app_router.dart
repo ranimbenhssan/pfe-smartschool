@@ -525,15 +525,15 @@ class _SplashLoadingScreen extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              width: 100,
-              height: 100,
+              width: 90,
+              height: 90,
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.2),
-                    blurRadius: 16,
-                    offset: const Offset(0, 4),
+                    blurRadius: 20,
+                    offset: const Offset(0, 6),
                   ),
                 ],
               ),
@@ -542,7 +542,7 @@ class _SplashLoadingScreen extends StatelessWidget {
                 child: Image.asset('assets/images/logo.png', fit: BoxFit.cover),
               ),
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: 24),
             const Text(
               'SmartSchool',
               style: TextStyle(

@@ -35,37 +35,33 @@ class _TeacherDashboardScreenState
       backgroundColor:
           isDark ? AppColors.darkBackground : AppColors.lightBackground,
       appBar: _buildAppBar(isDark),
-      body: _selectedIndex == 0
-          ? const _DashboardBody()
-          : _selectedIndex == 1
+      body:
+          _selectedIndex == 0
+              ? const _DashboardBody()
+              : _selectedIndex == 1
               ? const _AttendanceQuickView()
               : _selectedIndex == 2
-                  ? const _IotQuickView()
-                  : _selectedIndex == 3
-                      ? const _StudentsQuickView()
-                      : const _MoreMenu(),
+              ? const _IotQuickView()
+              : _selectedIndex == 3
+              ? const _StudentsQuickView()
+              : const _MoreMenu(),
       bottomNavigationBar: _buildBottomNav(isDark),
     );
   }
 
   PreferredSizeWidget _buildAppBar(bool isDark) {
     return AppBar(
-      backgroundColor:
-          isDark ? AppColors.darkSurface : AppColors.lightSurface,
+      backgroundColor: isDark ? AppColors.darkSurface : AppColors.lightSurface,
       elevation: 0,
       title: Row(
         children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: AppColors.teacherColor.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(
-              Icons.school_rounded,
-              color: AppColors.teacherColor,
-              size: 18,
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.asset(
+              'assets/images/logo.png',
+              width: 32,
+              height: 32,
+              fit: BoxFit.cover,
             ),
           ),
           const SizedBox(width: 10),
@@ -79,28 +75,29 @@ class _TeacherDashboardScreenState
         ],
       ),
       actions: [
-        Consumer(builder: (context, ref, _) {
-          final themeMode = ref.watch(themeModeProvider);
-          return IconButton(
-            icon: Icon(
-              themeMode == ThemeMode.dark
-                  ? Icons.light_mode_rounded
-                  : Icons.dark_mode_rounded,
-              size: 20,
-            ),
-            onPressed: () {
-              final current = ref.read(themeModeProvider);
-              ref.read(themeModeProvider.notifier).state =
-                  current == ThemeMode.dark
-                      ? ThemeMode.light
-                      : ThemeMode.dark;
-            },
-          );
-        }),
+        Consumer(
+          builder: (context, ref, _) {
+            final themeMode = ref.watch(themeModeProvider);
+            return IconButton(
+              icon: Icon(
+                themeMode == ThemeMode.dark
+                    ? Icons.light_mode_rounded
+                    : Icons.dark_mode_rounded,
+                size: 20,
+              ),
+              onPressed: () {
+                final current = ref.read(themeModeProvider);
+                ref.read(themeModeProvider.notifier).state =
+                    current == ThemeMode.dark
+                        ? ThemeMode.light
+                        : ThemeMode.dark;
+              },
+            );
+          },
+        ),
         IconButton(
           icon: const Icon(Icons.notifications_outlined, size: 22),
-          onPressed: () =>
-              context.push(AppRoutes.teacherNotifications),
+          onPressed: () => context.push(AppRoutes.teacherNotifications),
         ),
         GestureDetector(
           onTap: () => _showProfileMenu(context),
@@ -148,12 +145,15 @@ class _TeacherDashboardScreenState
         onTap: (index) => setState(() => _selectedIndex = index),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        items: _navItems
-            .map((item) => BottomNavigationBarItem(
-                  icon: Icon(item.icon),
-                  label: item.label,
-                ))
-            .toList(),
+        items:
+            _navItems
+                .map(
+                  (item) => BottomNavigationBarItem(
+                    icon: Icon(item.icon),
+                    label: item.label,
+                  ),
+                )
+                .toList(),
       ),
     );
   }
@@ -186,28 +186,29 @@ class _DashboardBody extends ConsumerWidget {
             currentUser.when(
               loading: () => const SizedBox(height: 50),
               error: (_, __) => const SizedBox.shrink(),
-              data: (user) => Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '${_getGreeting()}, ${user?.name ?? 'Teacher'} 👋',
-                    style: AppTypography.headingLarge.copyWith(
-                      color: isDark
-                          ? AppColors.darkText
-                          : AppColors.lightText,
-                    ),
+              data:
+                  (user) => Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${_getGreeting()}, ${user?.name ?? 'Teacher'} 👋',
+                        style: AppTypography.headingLarge.copyWith(
+                          color:
+                              isDark ? AppColors.darkText : AppColors.lightText,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _formatDate(),
+                        style: AppTypography.bodySmall.copyWith(
+                          color:
+                              isDark
+                                  ? AppColors.darkTextSecondary
+                                  : AppColors.lightTextSecondary,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _formatDate(),
-                    style: AppTypography.bodySmall.copyWith(
-                      color: isDark
-                          ? AppColors.darkTextSecondary
-                          : AppColors.lightTextSecondary,
-                    ),
-                  ),
-                ],
-              ),
             ),
             const SizedBox(height: 24),
 
@@ -265,11 +266,7 @@ class _DashboardBody extends ConsumerWidget {
                             icon: Icons.check_circle_rounded,
                           ),
                         ),
-                        Container(
-                          width: 1,
-                          height: 40,
-                          color: Colors.white24,
-                        ),
+                        Container(width: 1, height: 40, color: Colors.white24),
                         Expanded(
                           child: _AttendanceStat(
                             label: 'Absent',
@@ -277,11 +274,7 @@ class _DashboardBody extends ConsumerWidget {
                             icon: Icons.cancel_rounded,
                           ),
                         ),
-                        Container(
-                          width: 1,
-                          height: 40,
-                          color: Colors.white24,
-                        ),
+                        Container(width: 1, height: 40, color: Colors.white24),
                         Expanded(
                           child: _AttendanceStat(
                             label: 'Late',
@@ -328,8 +321,7 @@ class _DashboardBody extends ConsumerWidget {
                   label: 'Attendance',
                   icon: Icons.how_to_reg_rounded,
                   color: AppColors.success,
-                  onTap: () =>
-                      context.push(AppRoutes.teacherAttendance),
+                  onTap: () => context.push(AppRoutes.teacherAttendance),
                 ),
                 const SizedBox(width: 8),
                 _QuickAction(
@@ -343,16 +335,14 @@ class _DashboardBody extends ConsumerWidget {
                   label: 'AI Alerts',
                   icon: Icons.warning_amber_rounded,
                   color: AppColors.warning,
-                  onTap: () =>
-                      context.push(AppRoutes.teacherAiAlerts),
+                  onTap: () => context.push(AppRoutes.teacherAiAlerts),
                 ),
                 const SizedBox(width: 8),
                 _QuickAction(
                   label: 'Timetable',
                   icon: Icons.calendar_today_rounded,
                   color: AppColors.accent,
-                  onTap: () =>
-                      context.push(AppRoutes.teacherTimetable),
+                  onTap: () => context.push(AppRoutes.teacherTimetable),
                 ),
               ],
             ),
@@ -381,21 +371,32 @@ class _DashboardBody extends ConsumerWidget {
   String _formatDate() {
     final now = DateTime.now();
     const days = [
-      'Monday', 'Tuesday', 'Wednesday',
-      'Thursday', 'Friday', 'Saturday', 'Sunday'
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
     ];
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${days[now.weekday - 1]}, ${now.day} ${months[now.month - 1]} ${now.year}';
   }
 
-  Widget _buildClassroomIot(
-    BuildContext context,
-    bool isDark,
-    WidgetRef ref,
-  ) {
+  Widget _buildClassroomIot(BuildContext context, bool isDark, WidgetRef ref) {
     final rooms = ref.watch(roomsProvider);
 
     return Column(
@@ -429,9 +430,10 @@ class _DashboardBody extends ConsumerWidget {
               );
             }
             final room = list.first;
-            final color = room.comfortScore >= 70
-                ? AppColors.success
-                : room.comfortScore >= 40
+            final color =
+                room.comfortScore >= 70
+                    ? AppColors.success
+                    : room.comfortScore >= 40
                     ? AppColors.warning
                     : AppColors.error;
             return GestureDetector(
@@ -439,12 +441,9 @@ class _DashboardBody extends ConsumerWidget {
               child: Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: isDark
-                      ? AppColors.darkCard
-                      : AppColors.lightCard,
+                  color: isDark ? AppColors.darkCard : AppColors.lightCard,
                   borderRadius: BorderRadius.circular(16),
-                  border:
-                      Border.all(color: color.withValues(alpha: 0.3)),
+                  border: Border.all(color: color.withValues(alpha: 0.3)),
                 ),
                 child: Row(
                   children: [
@@ -469,9 +468,10 @@ class _DashboardBody extends ConsumerWidget {
                           Text(
                             room.name,
                             style: AppTypography.labelLarge.copyWith(
-                              color: isDark
-                                  ? AppColors.darkText
-                                  : AppColors.lightText,
+                              color:
+                                  isDark
+                                      ? AppColors.darkText
+                                      : AppColors.lightText,
                             ),
                           ),
                           Text(
@@ -486,17 +486,17 @@ class _DashboardBody extends ConsumerWidget {
                       children: [
                         Text(
                           '${room.comfortScore.toInt()}%',
-                          style: AppTypography.headingMedium
-                              .copyWith(color: color),
+                          style: AppTypography.headingMedium.copyWith(
+                            color: color,
+                          ),
                         ),
                         Text(
                           room.comfortScore >= 70
                               ? 'Good'
                               : room.comfortScore >= 40
-                                  ? 'Average'
-                                  : 'Poor',
-                          style: AppTypography.caption
-                              .copyWith(color: color),
+                              ? 'Average'
+                              : 'Poor',
+                          style: AppTypography.caption.copyWith(color: color),
                         ),
                       ],
                     ),
@@ -510,11 +510,7 @@ class _DashboardBody extends ConsumerWidget {
     );
   }
 
-  Widget _buildRecentAlerts(
-    BuildContext context,
-    bool isDark,
-    WidgetRef ref,
-  ) {
+  Widget _buildRecentAlerts(BuildContext context, bool isDark, WidgetRef ref) {
     final currentUser = ref.watch(currentUserProvider);
 
     return currentUser.when(
@@ -534,13 +530,11 @@ class _DashboardBody extends ConsumerWidget {
                 Text(
                   'Recent AI Alerts',
                   style: AppTypography.headingMedium.copyWith(
-                    color:
-                        isDark ? AppColors.darkText : AppColors.lightText,
+                    color: isDark ? AppColors.darkText : AppColors.lightText,
                   ),
                 ),
                 TextButton(
-                  onPressed: () =>
-                      context.push(AppRoutes.teacherAiAlerts),
+                  onPressed: () => context.push(AppRoutes.teacherAiAlerts),
                   child: const Text('See all'),
                 ),
               ],
@@ -558,15 +552,19 @@ class _DashboardBody extends ConsumerWidget {
                   );
                 }
                 return Column(
-                  children: list
-                      .take(3)
-                      .map((flag) => AlertCard(
-                            flag: flag,
-                            onTap: () => context.push(
-                              '${AppRoutes.teacherAlertDetail}/${flag.id}',
+                  children:
+                      list
+                          .take(3)
+                          .map(
+                            (flag) => AlertCard(
+                              flag: flag,
+                              onTap:
+                                  () => context.push(
+                                    '${AppRoutes.teacherAlertDetail}/${flag.id}',
+                                  ),
                             ),
-                          ))
-                      .toList(),
+                          )
+                          .toList(),
                 );
               },
             ),
@@ -600,13 +598,11 @@ class _AttendanceQuickView extends ConsumerWidget {
               Text(
                 "Today's Attendance",
                 style: AppTypography.headingMedium.copyWith(
-                  color:
-                      isDark ? AppColors.darkText : AppColors.lightText,
+                  color: isDark ? AppColors.darkText : AppColors.lightText,
                 ),
               ),
               TextButton(
-                onPressed: () =>
-                    context.push(AppRoutes.teacherAttendance),
+                onPressed: () => context.push(AppRoutes.teacherAttendance),
                 child: const Text('Full view'),
               ),
             ],
@@ -615,55 +611,60 @@ class _AttendanceQuickView extends ConsumerWidget {
         Expanded(
           child: attendance.when(
             loading: () => const LoadingWidget(),
-            error: (e, _) => EmptyState(
-              title: 'Error',
-              message: e.toString(),
-              icon: Icons.error_outline_rounded,
-            ),
-            data: (list) => list.isEmpty
-                ? const EmptyState(
-                    title: 'No Attendance',
-                    message: 'No records for today yet',
-                    icon: Icons.event_busy_rounded,
-                  )
-                : ListView.builder(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: list.length,
-                    itemBuilder: (context, index) {
-                      final record = list[index];
-                      return Container(
-                        padding: const EdgeInsets.all(14),
-                        margin: const EdgeInsets.only(bottom: 8),
-                        decoration: BoxDecoration(
-                          color: isDark
-                              ? AppColors.darkCard
-                              : AppColors.lightCard,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: isDark
-                                ? AppColors.darkBorder
-                                : AppColors.lightBorder,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                record.studentName,
-                                style: AppTypography.labelLarge.copyWith(
-                                  color: isDark
-                                      ? AppColors.darkText
-                                      : AppColors.lightText,
+            error:
+                (e, _) => EmptyState(
+                  title: 'Error',
+                  message: e.toString(),
+                  icon: Icons.error_outline_rounded,
+                ),
+            data:
+                (list) =>
+                    list.isEmpty
+                        ? const EmptyState(
+                          title: 'No Attendance',
+                          message: 'No records for today yet',
+                          icon: Icons.event_busy_rounded,
+                        )
+                        : ListView.builder(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          itemCount: list.length,
+                          itemBuilder: (context, index) {
+                            final record = list[index];
+                            return Container(
+                              padding: const EdgeInsets.all(14),
+                              margin: const EdgeInsets.only(bottom: 8),
+                              decoration: BoxDecoration(
+                                color:
+                                    isDark
+                                        ? AppColors.darkCard
+                                        : AppColors.lightCard,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color:
+                                      isDark
+                                          ? AppColors.darkBorder
+                                          : AppColors.lightBorder,
                                 ),
                               ),
-                            ),
-                            AttendanceBadge(status: record.status),
-                          ],
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      record.studentName,
+                                      style: AppTypography.labelLarge.copyWith(
+                                        color:
+                                            isDark
+                                                ? AppColors.darkText
+                                                : AppColors.lightText,
+                                      ),
+                                    ),
+                                  ),
+                                  AttendanceBadge(status: record.status),
+                                ],
+                              ),
+                            );
+                          },
                         ),
-                      );
-                    },
-                  ),
           ),
         ),
       ],
@@ -684,78 +685,89 @@ class _IotQuickView extends ConsumerWidget {
 
     return rooms.when(
       loading: () => const LoadingWidget(),
-      error: (e, _) => EmptyState(
-        title: 'Error',
-        message: e.toString(),
-        icon: Icons.error_outline_rounded,
-      ),
-      data: (list) => list.isEmpty
-          ? const EmptyState(
-              title: 'No Rooms',
-              message: 'No rooms configured yet',
-              icon: Icons.meeting_room_outlined,
-            )
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: list.length,
-              itemBuilder: (context, index) {
-                final room = list[index];
-                final color = room.comfortScore >= 70
-                    ? AppColors.success
-                    : room.comfortScore >= 40
-                        ? AppColors.warning
-                        : AppColors.error;
-                return GestureDetector(
-                  onTap: () => context.push(AppRoutes.teacherIot),
-                  child: Container(
+      error:
+          (e, _) => EmptyState(
+            title: 'Error',
+            message: e.toString(),
+            icon: Icons.error_outline_rounded,
+          ),
+      data:
+          (list) =>
+              list.isEmpty
+                  ? const EmptyState(
+                    title: 'No Rooms',
+                    message: 'No rooms configured yet',
+                    icon: Icons.meeting_room_outlined,
+                  )
+                  : ListView.builder(
                     padding: const EdgeInsets.all(16),
-                    margin: const EdgeInsets.only(bottom: 12),
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? AppColors.darkCard
-                          : AppColors.lightCard,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                          color: color.withValues(alpha: 0.3)),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 44,
-                          height: 44,
+                    itemCount: list.length,
+                    itemBuilder: (context, index) {
+                      final room = list[index];
+                      final color =
+                          room.comfortScore >= 70
+                              ? AppColors.success
+                              : room.comfortScore >= 40
+                              ? AppColors.warning
+                              : AppColors.error;
+                      return GestureDetector(
+                        onTap: () => context.push(AppRoutes.teacherIot),
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          margin: const EdgeInsets.only(bottom: 12),
                           decoration: BoxDecoration(
-                            color: color.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(12),
+                            color:
+                                isDark
+                                    ? AppColors.darkCard
+                                    : AppColors.lightCard,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: color.withValues(alpha: 0.3),
+                            ),
                           ),
-                          child: Icon(
-                            Icons.meeting_room_rounded,
-                            color: color,
-                            size: 22,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          child: Row(
                             children: [
-                              Text(room.name,
-                                  style: AppTypography.labelLarge),
-                              Text('Floor ${room.floor}',
-                                  style: AppTypography.caption),
+                              Container(
+                                width: 44,
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  color: color.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Icon(
+                                  Icons.meeting_room_rounded,
+                                  color: color,
+                                  size: 22,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      room.name,
+                                      style: AppTypography.labelLarge,
+                                    ),
+                                    Text(
+                                      'Floor ${room.floor}',
+                                      style: AppTypography.caption,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Text(
+                                '${room.comfortScore.toInt()}%',
+                                style: AppTypography.headingSmall.copyWith(
+                                  color: color,
+                                ),
+                              ),
                             ],
                           ),
                         ),
-                        Text(
-                          '${room.comfortScore.toInt()}%',
-                          style: AppTypography.headingSmall
-                              .copyWith(color: color),
-                        ),
-                      ],
-                    ),
+                      );
+                    },
                   ),
-                );
-              },
-            ),
     );
   }
 }
@@ -778,36 +790,40 @@ class _StudentsQuickView extends ConsumerWidget {
             label: '',
             hint: 'Search students...',
             prefixIcon: const Icon(Icons.search_rounded, size: 18),
-            onChanged: (val) =>
-                ref.read(studentSearchQueryProvider.notifier).state =
-                    val,
+            onChanged:
+                (val) =>
+                    ref.read(studentSearchQueryProvider.notifier).state = val,
           ),
         ),
         Expanded(
           child: students.when(
             loading: () => const LoadingWidget(),
-            error: (e, _) => EmptyState(
-              title: 'Error',
-              message: e.toString(),
-              icon: Icons.error_outline_rounded,
-            ),
-            data: (list) => list.isEmpty
-                ? const EmptyState(
-                    title: 'No Students',
-                    message: 'No students found',
-                    icon: Icons.people_outline_rounded,
-                  )
-                : ListView.builder(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: list.length,
-                    itemBuilder: (context, index) => StudentCard(
-                      student: list[index],
-                      onTap: () => context.push(
-                        '${AppRoutes.teacherStudentProfile}/${list[index].id}',
-                      ),
-                    ),
-                  ),
+            error:
+                (e, _) => EmptyState(
+                  title: 'Error',
+                  message: e.toString(),
+                  icon: Icons.error_outline_rounded,
+                ),
+            data:
+                (list) =>
+                    list.isEmpty
+                        ? const EmptyState(
+                          title: 'No Students',
+                          message: 'No students found',
+                          icon: Icons.people_outline_rounded,
+                        )
+                        : ListView.builder(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          itemCount: list.length,
+                          itemBuilder:
+                              (context, index) => StudentCard(
+                                student: list[index],
+                                onTap:
+                                    () => context.push(
+                                      '${AppRoutes.teacherStudentProfile}/${list[index].id}',
+                                    ),
+                              ),
+                        ),
           ),
         ),
       ],
@@ -860,9 +876,7 @@ class _MoreMenu extends StatelessWidget {
               color: isDark ? AppColors.darkCard : AppColors.lightCard,
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
-                color: isDark
-                    ? AppColors.darkBorder
-                    : AppColors.lightBorder,
+                color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
               ),
             ),
             child: Row(
@@ -881,17 +895,14 @@ class _MoreMenu extends StatelessWidget {
                   child: Text(
                     item.label,
                     style: AppTypography.labelLarge.copyWith(
-                      color: isDark
-                          ? AppColors.darkText
-                          : AppColors.lightText,
+                      color: isDark ? AppColors.darkText : AppColors.lightText,
                     ),
                   ),
                 ),
                 Icon(
                   Icons.chevron_right_rounded,
-                  color: isDark
-                      ? AppColors.darkTextHint
-                      : AppColors.lightTextHint,
+                  color:
+                      isDark ? AppColors.darkTextHint : AppColors.lightTextHint,
                 ),
               ],
             ),
@@ -931,8 +942,7 @@ class _ProfileBottomSheet extends ConsumerWidget {
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-        borderRadius:
-            const BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -941,8 +951,7 @@ class _ProfileBottomSheet extends ConsumerWidget {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color:
-                  isDark ? AppColors.darkBorder : AppColors.lightBorder,
+              color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -964,43 +973,44 @@ class _ProfileBottomSheet extends ConsumerWidget {
           user.when(
             loading: () => const LoadingWidget(),
             error: (_, __) => const Text('Teacher'),
-            data: (u) => Column(
-              children: [
-                Text(
-                  u?.name ?? 'Teacher',
-                  style: AppTypography.headingMedium.copyWith(
-                    color:
-                        isDark ? AppColors.darkText : AppColors.lightText,
-                  ),
-                ),
-                Text(
-                  u?.email ?? '',
-                  style: AppTypography.bodySmall.copyWith(
-                    color: isDark
-                        ? AppColors.darkTextSecondary
-                        : AppColors.lightTextSecondary,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color:
-                        AppColors.teacherColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    'TEACHER',
-                    style: AppTypography.labelSmall.copyWith(
-                      color: AppColors.teacherColor,
+            data:
+                (u) => Column(
+                  children: [
+                    Text(
+                      u?.name ?? 'Teacher',
+                      style: AppTypography.headingMedium.copyWith(
+                        color:
+                            isDark ? AppColors.darkText : AppColors.lightText,
+                      ),
                     ),
-                  ),
+                    Text(
+                      u?.email ?? '',
+                      style: AppTypography.bodySmall.copyWith(
+                        color:
+                            isDark
+                                ? AppColors.darkTextSecondary
+                                : AppColors.lightTextSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.teacherColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        'TEACHER',
+                        style: AppTypography.labelSmall.copyWith(
+                          color: AppColors.teacherColor,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
           ),
           const SizedBox(height: 24),
           AppButton(

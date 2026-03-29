@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/models.dart';
 import 'auth_service.dart';
+import 'package:flutter/foundation.dart';
 
 final firestoreServiceProvider = Provider<FirestoreService>((ref) {
   return FirestoreService(firestore: ref.watch(firestoreProvider));
@@ -63,10 +64,12 @@ class FirestoreService {
 
   // Add student
   Future<void> addStudent(StudentModel student) async {
+    debugPrint('📝 Adding student: ${student.id}');
     await _firestore
         .collection('students')
         .doc(student.id)
         .set(student.toFirestore());
+    debugPrint('✅ Student added successfully');
   }
 
   // Update student
@@ -104,11 +107,13 @@ class FirestoreService {
   }
 
   Future<void> addTeacher(TeacherModel teacher) async {
-    await _firestore
-        .collection('teachers')
-        .doc(teacher.id)
-        .set(teacher.toFirestore());
-  }
+  debugPrint('📝 Adding teacher: ${teacher.id}');
+  await _firestore
+      .collection('teachers')
+      .doc(teacher.id)
+      .set(teacher.toFirestore());
+  debugPrint('✅ Teacher added successfully');
+}
 
   Future<void> updateTeacher(
     String teacherId,
