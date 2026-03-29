@@ -40,6 +40,7 @@ import '../screens/teacher/attendance/teacher_attendance_today_screen.dart';
 import '../screens/teacher/attendance/teacher_attendance_by_date_screen.dart';
 import '../screens/teacher/attendance/teacher_attendance_edit_screen.dart';
 import '../screens/teacher/attendance/teacher_attendance_stats_screen.dart';
+import '../screens/teacher/attendance/teacher_namecall_screen.dart'; // ← NEW
 import '../screens/teacher/iot_monitor/teacher_iot_screen.dart';
 import '../screens/teacher/iot_monitor/teacher_iot_history_screen.dart';
 import '../screens/teacher/students/teacher_students_screen.dart';
@@ -289,7 +290,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'admin-settings-rfid',
         builder: (context, state) => const AdminSettingsRfidScreen(),
       ),
-
       GoRoute(
         path: AppRoutes.adminSettingsSensors,
         name: 'admin-settings-sensors',
@@ -316,6 +316,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.teacherAttendanceToday,
         name: 'teacher-attendance-today',
         builder: (context, state) => const TeacherAttendanceTodayScreen(),
+      ),
+      // ─── NEW: Name Call ───
+      GoRoute(
+        path: AppRoutes.teacherAttendanceNameCall,
+        name: 'teacher-attendance-namecall',
+        builder: (context, state) {
+          final extra = state.extra as Map<String, String>;
+          return TeacherNameCallScreen(
+            classId: extra['classId']!,
+            className: extra['className']!,
+          );
+        },
       ),
       GoRoute(
         path: AppRoutes.teacherAttendanceByDate,
@@ -542,7 +554,7 @@ class _SplashLoadingScreen extends StatelessWidget {
                 child: Image.asset('assets/images/logo.png', fit: BoxFit.cover),
               ),
             ),
-            SizedBox(height: 24),
+            const SizedBox(height: 24),
             const Text(
               'SmartSchool',
               style: TextStyle(

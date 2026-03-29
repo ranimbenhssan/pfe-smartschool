@@ -26,7 +26,7 @@ class StatCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(10), // reduced from 16
         decoration: BoxDecoration(
           color: isDark ? AppColors.darkCard : AppColors.lightCard,
           borderRadius: BorderRadius.circular(16),
@@ -46,18 +46,19 @@ class StatCard extends StatelessWidget {
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min, // ← key fix
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Container(
-                  width: 40,
-                  height: 40,
+                  width: 32, // reduced from 40
+                  height: 32, // reduced from 40
                   decoration: BoxDecoration(
                     color: color.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Icon(icon, color: color, size: 20),
+                  child: Icon(icon, color: color, size: 16), // reduced from 20
                 ),
                 if (onTap != null)
                   Icon(
@@ -70,14 +71,14 @@ class StatCard extends StatelessWidget {
                   ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 4), // reduced from 12
             Text(
               value,
               style: AppTypography.statNumber.copyWith(
                 color: isDark ? AppColors.darkText : AppColors.lightText,
               ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 1), // reduced from 4
             Text(
               title,
               style: AppTypography.bodySmall.copyWith(
@@ -88,10 +89,11 @@ class StatCard extends StatelessWidget {
               ),
             ),
             if (subtitle != null) ...[
-              const SizedBox(height: 4),
+              const SizedBox(height: 1), // reduced from 4
               Text(
                 subtitle!,
                 style: AppTypography.caption.copyWith(color: color),
+                overflow: TextOverflow.ellipsis, // safety net
               ),
             ],
           ],
