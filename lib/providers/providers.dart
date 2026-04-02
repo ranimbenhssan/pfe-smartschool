@@ -9,4 +9,4 @@ export 'notification_provider.dart';
 export 'timetable_provider.dart';
 export 'dashboard_provider.dart';
 export '../services/auth_service.dart';
-export 'ai_flag_provider.dart';
+

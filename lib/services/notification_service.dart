@@ -1,5 +1,4 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
@@ -21,7 +20,7 @@ class NotificationService {
 
   final _messaging = FirebaseMessaging.instance;
   final _localNotifications = FlutterLocalNotificationsPlugin();
-  final _functions = FirebaseFunctions.instance;
+
 
   static const _channelId = 'smartschool_channel';
   static const _channelName = 'SmartSchool Notifications';
