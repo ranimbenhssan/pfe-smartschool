@@ -9,12 +9,12 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  cloud_functions:^4.6.0
+
   # Firebase
   firebase_core: ^3.15.2
   firebase_auth: ^5.5.2
   cloud_firestore: ^5.6.5
-  firebase_messaging: ^14.7.10
+  firebase_messaging: ^15.2.5
   firebase_storage: ^12.4.5
   firebase_app_check: ^0.3.2+10
 
@@ -50,7 +50,6 @@ dev_dependencies:
   riverpod_generator: ^2.3.9
   flutter_launcher_icons: ^0.14.1
 
-# ─── Launcher Icons Config ───
 flutter_launcher_icons:
   android: true
   ios: true
