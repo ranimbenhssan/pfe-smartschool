@@ -23,18 +23,33 @@ class ClassModel {
     required this.createdAt,
   });
 
+  String get teacherId =>
+      teacherIds.isNotEmpty ? teacherIds.first : '';
+  String get teacherName =>
+      teacherNames.isNotEmpty ? teacherNames.first : '';
+  String get displayName => '$grade $name';
+
   factory ClassModel.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+    final raw = doc.data() as Map<String, dynamic>;
+
+    List<String> safeList(String field) {
+      final val = raw[field];
+      if (val == null) return [];
+      if (val is List) return val.map((e) => e.toString()).toList();
+      return [];
+    }
+
     return ClassModel(
       id: doc.id,
-      name: data['name'] ?? '',
-      grade: data['grade'] ?? '',
-      teacherIds: List<String>.from(data['teacherIds'] ?? []),
-      teacherNames: List<String>.from(data['teacherNames'] ?? []),
-      roomId: data['roomId'] ?? '',
-      roomName: data['roomName'] ?? '',
-      studentCount: data['studentCount'] ?? 0,
-      createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      name: raw['name']?.toString().trim() ?? '',
+      grade: raw['grade']?.toString().trim() ?? '',
+      teacherIds: safeList('teacherIds'),
+      teacherNames: safeList('teacherNames'),
+      roomId: raw['roomId']?.toString() ?? '',
+      roomName: raw['roomName']?.toString() ?? '',
+      studentCount: (raw['studentCount'] as num?)?.toInt() ?? 0,
+      createdAt:
+          (raw['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
   }
 
@@ -50,10 +65,6 @@ class ClassModel {
       'createdAt': Timestamp.fromDate(createdAt),
     };
   }
-
-  // ─── Keep backward compatibility ───
-  String get teacherId => teacherIds.isNotEmpty ? teacherIds.first : '';
-  String get teacherName => teacherNames.isNotEmpty ? teacherNames.first : '';
 
   ClassModel copyWith({
     String? name,
@@ -76,7 +87,4 @@ class ClassModel {
       createdAt: createdAt,
     );
   }
-
-  @override
-  String toString() => 'ClassModel(id: $id, name: $name, grade: $grade)';
 }

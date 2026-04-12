@@ -22,16 +22,23 @@ class TeacherModel {
   });
 
   factory TeacherModel.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+    final raw = doc.data() as Map<String, dynamic>;
+
+    List<String> safeList(String field) {
+      final val = raw[field];
+      if (val == null) return [];
+      if (val is List) return val.map((e) => e.toString()).toList();
+      return [];
+    }
+
     return TeacherModel(
       id: doc.id,
-      userId: data['userId'] ?? '',
-      name: data['name'] ?? '',
-      email: data['email'] ?? '',
-      assignedClassIds: List<String>.from(data['assignedClassIds'] ?? []),
-      assignedClassNames: List<String>.from(data['assignedClassNames'] ?? []),
-      photoUrl: data['photoUrl'],
-      createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      userId: raw['userId']?.toString() ?? '',
+      name: raw['name']?.toString() ?? '',
+      email: raw['email']?.toString() ?? '',
+      assignedClassIds: safeList('assignedClassIds'),
+      assignedClassNames: safeList('assignedClassNames'),
+      createdAt: (raw['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
   }
 
@@ -67,6 +74,5 @@ class TeacherModel {
   }
 
   @override
-  String toString() =>
-      'TeacherModel(id: $id, name: $name)';
+  String toString() => 'TeacherModel(id: $id, name: $name)';
 }

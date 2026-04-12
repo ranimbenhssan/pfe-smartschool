@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../theme/theme.dart';
 import '../../../widgets/widgets.dart';
 import '../../../providers/providers.dart';
 import '../../../services/services.dart';
 import '../../../services/auth_service.dart';
+import '../../../navigation/app_routes.dart';
 
 class StudentNotificationsScreen extends ConsumerWidget {
   const StudentNotificationsScreen({super.key});
@@ -22,6 +24,12 @@ class StudentNotificationsScreen extends ConsumerWidget {
         backgroundColor:
             isDark ? AppColors.darkSurface : AppColors.lightSurface,
         actions: [
+          // ─── Send button — always visible ───
+          IconButton(
+            icon: const Icon(Icons.edit_rounded),
+            onPressed: () => context.push(AppRoutes.studentNotificationSend),
+          ),
+          // ─── Mark all read ───
           currentUser.when(
             loading: () => const SizedBox.shrink(),
             error: (_, __) => const SizedBox.shrink(),

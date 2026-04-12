@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-import 'package:uuid/uuid.dart';
 import '../../../theme/theme.dart';
 import '../../../widgets/widgets.dart';
 import '../../../providers/providers.dart';
@@ -18,345 +16,305 @@ class AdminNotificationSendScreen extends ConsumerStatefulWidget {
 
 class _AdminNotificationSendScreenState
     extends ConsumerState<AdminNotificationSendScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _titleController = TextEditingController();
-  final _messageController = TextEditingController();
-  String _recipientType = 'all';
-  String? _selectedUserId;
   bool _isLoading = false;
+  String _targetType = 'whole_school';
+  List<String> _selectedClassIds = [];
+  List<String> _selectedStudentIds = [];
+  List<String> _selectedTeacherIds = [];
 
-  @override
-  void dispose() {
-    _titleController.dispose();
-    _messageController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _send() async {
-    if (!_formKey.currentState!.validate()) return;
+  Future<void> _send(
+    String title,
+    String message,
+    MessageType messageType,
+    List<AttachmentModel> attachments,
+  ) async {
+    final currentUser = await ref.read(currentUserProvider.future);
+    if (currentUser == null) return;
 
     setState(() => _isLoading = true);
 
+    final service = ref.read(notificationServiceProvider);
+    final attMaps = attachments.map((a) => a.toMap()).toList();
+
     try {
-      final firestoreService = ref.read(firestoreServiceProvider);
+      Future<bool> send(String userId) => service.sendToUser(
+            userId,
+            title,
+            message,
+            type: messageType.name,
+            senderId: currentUser.id,
+            senderName: currentUser.name,
+            senderRole: 'admin',
+            attachments: attMaps,
+          );
 
-      if (_recipientType == 'all') {
-        // Send to all users
-        final students = await firestoreService.getStudents().first;
-        final teachers = await firestoreService.getTeachers().first;
+      switch (_targetType) {
+        case 'whole_school':
+          await service.sendToAll(title, message,
+              type: messageType.name);
+          break;
 
-        for (final student in students) {
-          await _sendNotification(firestoreService, student.userId);
-        }
-        for (final teacher in teachers) {
-          await _sendNotification(firestoreService, teacher.userId);
-        }
-      } else if (_recipientType == 'specific' && _selectedUserId != null) {
-        await _sendNotification(firestoreService, _selectedUserId!);
+        case 'class':
+          for (final classId in _selectedClassIds) {
+            await service.sendToClass(classId, title, message,
+                type: messageType.name);
+          }
+          break;
+
+        case 'student':
+          for (final studentId in _selectedStudentIds) {
+            final student = await ref
+                .read(firestoreServiceProvider)
+                .getStudent(studentId);
+            if (student?.userId != null &&
+                student!.userId.isNotEmpty) {
+              await send(student.userId);
+            }
+          }
+          break;
+
+        case 'teacher':
+          for (final id in _selectedTeacherIds) {
+            await send(id);
+          }
+          break;
+
+        case 'mixed':
+          for (final id in _selectedTeacherIds) {
+            await send(id);
+          }
+          for (final classId in _selectedClassIds) {
+            await service.sendToClass(classId, title, message,
+                type: messageType.name);
+          }
+          for (final studentId in _selectedStudentIds) {
+            final student = await ref
+                .read(firestoreServiceProvider)
+                .getStudent(studentId);
+            if (student?.userId != null &&
+                student!.userId.isNotEmpty) {
+              await send(student.userId);
+            }
+          }
+          break;
       }
 
       if (mounted) {
-        context.pop();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Notification sent successfully')),
+          const SnackBar(
+              content: Text('Message sent successfully ✅')),
         );
+        setState(() {
+          _targetType = 'whole_school';
+          _selectedClassIds = [];
+          _selectedStudentIds = [];
+          _selectedTeacherIds = [];
+        });
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
 
     if (mounted) setState(() => _isLoading = false);
   }
 
-  Future<void> _sendNotification(
-    dynamic firestoreService,
-    String userId,
-  ) async {
-    final notification = NotificationModel(
-      id: const Uuid().v4(),
-      userId: userId,
-      title: _titleController.text.trim(),
-      message: _messageController.text.trim(),
-      type: NotificationType.general,
-      isRead: false,
-      createdAt: DateTime.now(),
-    );
-    await firestoreService.addNotification(notification);
-  }
-
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final students = ref.watch(studentsProvider);
-    final teachers = ref.watch(teachersProvider);
 
     return Scaffold(
       backgroundColor:
           isDark ? AppColors.darkBackground : AppColors.lightBackground,
       appBar: AppBar(
-        title: const Text('Send Notification'),
+        title: const Text('Send Message'),
         backgroundColor:
             isDark ? AppColors.darkSurface : AppColors.lightSurface,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ─── Title ───
-              AppTextField(
-                label: 'Title',
-                hint: 'Notification title',
-                controller: _titleController,
-                prefixIcon: const Icon(Icons.title_rounded, size: 18),
-                validator:
-                    (v) => v == null || v.isEmpty ? 'Title is required' : null,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ─── Target ───
+            Text(
+              'Send To',
+              style: AppTypography.labelMedium.copyWith(
+                color: isDark
+                    ? AppColors.darkTextSecondary
+                    : AppColors.lightTextSecondary,
               ),
-              const SizedBox(height: 16),
+            ),
+            const SizedBox(height: 8),
+            _buildTargetSelector(isDark),
+            const SizedBox(height: 16),
 
-              // ─── Message ───
-              AppTextField(
-                label: 'Message',
-                hint: 'Write your message here...',
-                controller: _messageController,
-                maxLines: 4,
-                prefixIcon: const Icon(Icons.message_rounded, size: 18),
-                validator:
-                    (v) =>
-                        v == null || v.isEmpty ? 'Message is required' : null,
-              ),
-              const SizedBox(height: 24),
+            if (_targetType == 'class' || _targetType == 'mixed')
+              _buildClassSelector(isDark),
+            if (_targetType == 'student' || _targetType == 'mixed')
+              _buildStudentSelector(isDark),
+            if (_targetType == 'teacher' || _targetType == 'mixed')
+              _buildTeacherSelector(isDark),
 
-              // ─── Recipient Type ───
-              Text(
-                'Send To',
-                style: AppTypography.labelMedium.copyWith(
-                  color:
-                      isDark
-                          ? AppColors.darkTextSecondary
-                          : AppColors.lightTextSecondary,
-                ),
-              ),
-              const SizedBox(height: 12),
-              _RecipientOption(
-                isDark: isDark,
-                label: 'Everyone',
-                subtitle: 'Send to all students and teachers',
-                icon: Icons.people_rounded,
-                isSelected: _recipientType == 'all',
-                onTap:
-                    () => setState(() {
-                      _recipientType = 'all';
-                      _selectedUserId = null;
-                    }),
-              ),
-              const SizedBox(height: 8),
-              _RecipientOption(
-                isDark: isDark,
-                label: 'Specific Student',
-                subtitle: 'Choose a student',
-                icon: Icons.person_rounded,
-                isSelected: _recipientType == 'student',
-                onTap: () => setState(() => _recipientType = 'student'),
-              ),
-              const SizedBox(height: 8),
-              _RecipientOption(
-                isDark: isDark,
-                label: 'Specific Teacher',
-                subtitle: 'Choose a teacher',
-                icon: Icons.school_rounded,
-                isSelected: _recipientType == 'teacher',
-                onTap: () => setState(() => _recipientType = 'teacher'),
-              ),
-              const SizedBox(height: 16),
+            const SizedBox(height: 8),
 
-              // ─── User Selector ───
-              if (_recipientType == 'student')
-                students.when(
-                  loading: () => const LoadingWidget(),
-                  error: (e, _) => Text('Error: $e'),
-                  data:
-                      (list) => _buildUserDropdown(
-                        isDark: isDark,
-                        hint: 'Select student',
-                        items:
-                            list
-                                .map(
-                                  (s) => DropdownMenuItem(
-                                    value: s.userId,
-                                    child: Text(s.name),
-                                  ),
-                                )
-                                .toList(),
-                      ),
-                ),
-
-              if (_recipientType == 'teacher')
-                teachers.when(
-                  loading: () => const LoadingWidget(),
-                  error: (e, _) => Text('Error: $e'),
-                  data:
-                      (list) => _buildUserDropdown(
-                        isDark: isDark,
-                        hint: 'Select teacher',
-                        items:
-                            list
-                                .map(
-                                  (t) => DropdownMenuItem(
-                                    value: t.userId,
-                                    child: Text(t.name),
-                                  ),
-                                )
-                                .toList(),
-                      ),
-                ),
-
-              const SizedBox(height: 32),
-
-              // ─── Send Button ───
-              AppButton(
-                label: 'Send Notification',
-                onPressed: _send,
-                isLoading: _isLoading,
-                width: double.infinity,
-                icon: Icons.send_rounded,
-              ),
-            ],
-          ),
+            // ─── Compose ───
+            MessageComposeWidget(
+              allowedTypes: [
+                'announcement', 'form', 'note', 'general'
+              ],
+              isLoading: _isLoading,
+              onSend: _send,
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildUserDropdown({
-    required bool isDark,
-    required String hint,
-    required List<DropdownMenuItem<String>> items,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.darkSurface : AppColors.lightBackground,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+  Widget _buildTargetSelector(bool isDark) {
+    final options = [
+      _Opt('whole_school', 'Whole School', Icons.school_rounded),
+      _Opt('class', 'Class(es)', Icons.class_rounded),
+      _Opt('student', 'Student(s)', Icons.person_rounded),
+      _Opt('teacher', 'Teacher(s)', Icons.person_pin_rounded),
+      _Opt('mixed', 'Mixed', Icons.group_rounded),
+    ];
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: options.map((opt) {
+        final isSelected = _targetType == opt.value;
+        return GestureDetector(
+          onTap: () => setState(() {
+            _targetType = opt.value;
+            _selectedClassIds = [];
+            _selectedStudentIds = [];
+            _selectedTeacherIds = [];
+          }),
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+                horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? AppColors.accent.withValues(alpha: 0.15)
+                  : isDark
+                      ? AppColors.darkCard
+                      : AppColors.lightCard,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: isSelected
+                    ? AppColors.accent
+                    : isDark
+                        ? AppColors.darkBorder
+                        : AppColors.lightBorder,
+                width: isSelected ? 2 : 1,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(opt.icon,
+                    size: 16,
+                    color:
+                        isSelected ? AppColors.accent : null),
+                const SizedBox(width: 6),
+                Text(
+                  opt.label,
+                  style: AppTypography.labelSmall.copyWith(
+                    color: isSelected ? AppColors.accent : null,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildClassSelector(bool isDark) {
+    final classes = ref.watch(classesProvider);
+    return SelectorSection(
+      isDark: isDark,
+      title: 'Select Class(es)',
+      child: classes.when(
+        loading: () => const LoadingWidget(),
+        error: (e, _) => Text('Error: $e'),
+        data: (list) => Column(
+          children: list.map((cls) {
+            final isSelected = _selectedClassIds.contains(cls.id);
+            return SelectTile(
+              isDark: isDark,
+              label: cls.displayName,
+              isSelected: isSelected,
+              onTap: () => setState(() => isSelected
+                  ? _selectedClassIds.remove(cls.id)
+                  : _selectedClassIds.add(cls.id)),
+            );
+          }).toList(),
         ),
       ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          isExpanded: true,
-          hint: Text(hint),
-          value: _selectedUserId,
-          dropdownColor: isDark ? AppColors.darkCard : AppColors.lightCard,
-          items: items,
-          onChanged: (val) => setState(() => _selectedUserId = val),
+    );
+  }
+
+  Widget _buildStudentSelector(bool isDark) {
+    final students = ref.watch(studentsProvider);
+    return SelectorSection(
+      isDark: isDark,
+      title: 'Select Student(s)',
+      child: students.when(
+        loading: () => const LoadingWidget(),
+        error: (e, _) => Text('Error: $e'),
+        data: (list) => Column(
+          children: list.map((s) {
+            final isSelected = _selectedStudentIds.contains(s.id);
+            return SelectTile(
+              isDark: isDark,
+              label: s.name,
+              subtitle: s.className,
+              isSelected: isSelected,
+              onTap: () => setState(() => isSelected
+                  ? _selectedStudentIds.remove(s.id)
+                  : _selectedStudentIds.add(s.id)),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTeacherSelector(bool isDark) {
+    final teachers = ref.watch(teachersProvider);
+    return SelectorSection(
+      isDark: isDark,
+      title: 'Select Teacher(s)',
+      child: teachers.when(
+        loading: () => const LoadingWidget(),
+        error: (e, _) => Text('Error: $e'),
+        data: (list) => Column(
+          children: list.map((t) {
+            final isSelected = _selectedTeacherIds.contains(t.id);
+            return SelectTile(
+              isDark: isDark,
+              label: t.name,
+              subtitle: t.assignedClassNames.join(', '),
+              isSelected: isSelected,
+              onTap: () => setState(() => isSelected
+                  ? _selectedTeacherIds.remove(t.id)
+                  : _selectedTeacherIds.add(t.id)),
+            );
+          }).toList(),
         ),
       ),
     );
   }
 }
 
-class _RecipientOption extends StatelessWidget {
-  final bool isDark;
-  final String label;
-  final String subtitle;
+class _Opt {
+  final String value, label;
   final IconData icon;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _RecipientOption({
-    required this.isDark,
-    required this.label,
-    required this.subtitle,
-    required this.icon,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color:
-              isSelected
-                  ? AppColors.accent.withValues(alpha: 0.08)
-                  : isDark
-                  ? AppColors.darkCard
-                  : AppColors.lightCard,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color:
-                isSelected
-                    ? AppColors.accent
-                    : isDark
-                    ? AppColors.darkBorder
-                    : AppColors.lightBorder,
-            width: isSelected ? 2 : 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color:
-                    isSelected
-                        ? AppColors.accent.withValues(alpha: 0.15)
-                        : isDark
-                        ? AppColors.darkSurface
-                        : AppColors.lightBackground,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(
-                icon,
-                color:
-                    isSelected
-                        ? AppColors.accent
-                        : isDark
-                        ? AppColors.darkTextHint
-                        : AppColors.lightTextHint,
-                size: 20,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: AppTypography.labelLarge.copyWith(
-                      color:
-                          isSelected
-                              ? AppColors.accent
-                              : isDark
-                              ? AppColors.darkText
-                              : AppColors.lightText,
-                    ),
-                  ),
-                  Text(subtitle, style: AppTypography.caption),
-                ],
-              ),
-            ),
-            if (isSelected)
-              const Icon(
-                Icons.check_circle_rounded,
-                color: AppColors.accent,
-                size: 20,
-              ),
-          ],
-        ),
-      ),
-    );
-  }
+  const _Opt(this.value, this.label, this.icon);
 }

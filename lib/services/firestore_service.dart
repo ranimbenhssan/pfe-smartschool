@@ -30,6 +30,12 @@ class FirestoreService {
         );
   }
 
+  Future<StudentModel?> getStudent(String studentId) async {
+    final doc = await _firestore.collection('students').doc(studentId).get();
+    if (!doc.exists) return null;
+    return StudentModel.fromFirestore(doc);
+  }
+
   // Get students by class
   Stream<List<StudentModel>> getStudentsByClass(String classId) {
     return _firestore
@@ -42,13 +48,16 @@ class FirestoreService {
               snap.docs.map((doc) => StudentModel.fromFirestore(doc)).toList(),
         );
   }
-
-  // Get single student
-  Future<StudentModel?> getStudent(String studentId) async {
-    final doc = await _firestore.collection('students').doc(studentId).get();
-    if (!doc.exists) return null;
-    return StudentModel.fromFirestore(doc);
-  }
+  // Returns a Future (one-time fetch) instead of Stream
+Future<List<StudentModel>> getStudentsByClassOnce(String classId) async {
+  final snap = await _firestore
+      .collection('students')
+      .where('classId', isEqualTo: classId)
+      .get();
+  return snap.docs
+      .map((d) => StudentModel.fromFirestore(d))
+      .toList();
+}
 
   // Get student by RFID tag
   Future<StudentModel?> getStudentByRfid(String rfidTag) async {
@@ -107,13 +116,13 @@ class FirestoreService {
   }
 
   Future<void> addTeacher(TeacherModel teacher) async {
-  debugPrint('📝 Adding teacher: ${teacher.id}');
-  await _firestore
-      .collection('teachers')
-      .doc(teacher.id)
-      .set(teacher.toFirestore());
-  debugPrint('✅ Teacher added successfully');
-}
+    debugPrint('📝 Adding teacher: ${teacher.id}');
+    await _firestore
+        .collection('teachers')
+        .doc(teacher.id)
+        .set(teacher.toFirestore());
+    debugPrint('✅ Teacher added successfully');
+  }
 
   Future<void> updateTeacher(
     String teacherId,
@@ -177,14 +186,18 @@ class FirestoreService {
         );
   }
 
+  Future<void> addRoom(RoomModel room) async {
+    await _firestore.collection('rooms').doc(room.id).set(room.toFirestore());
+  }
+
+  Future<void> deleteRoom(String roomId) async {
+    await _firestore.collection('rooms').doc(roomId).delete();
+  }
+
   Future<RoomModel?> getRoom(String roomId) async {
     final doc = await _firestore.collection('rooms').doc(roomId).get();
     if (!doc.exists) return null;
     return RoomModel.fromFirestore(doc);
-  }
-
-  Future<void> addRoom(RoomModel room) async {
-    await _firestore.collection('rooms').doc(room.id).set(room.toFirestore());
   }
 
   Future<void> updateRoom(String roomId, Map<String, dynamic> data) async {

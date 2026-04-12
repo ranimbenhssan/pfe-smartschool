@@ -28,18 +28,28 @@ class AttendanceModel {
   });
 
   factory AttendanceModel.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+    final raw = doc.data() as Map<String, dynamic>;
+
+    AttendanceStatus parseStatus(String? s) {
+      switch (s?.trim().toLowerCase()) {
+        case 'present': return AttendanceStatus.present;
+        case 'late':    return AttendanceStatus.late;
+        default:        return AttendanceStatus.absent;
+      }
+    }
+
     return AttendanceModel(
       id: doc.id,
-      studentId: data['studentId'] ?? '',
-      studentName: data['studentName'] ?? '',
-      classId: data['classId'] ?? '',
-      date: data['date'] ?? '',
-      status: _parseStatus(data['status']),
-      entryTime: (data['entryTime'] as Timestamp?)?.toDate(),
-      exitTime: (data['exitTime'] as Timestamp?)?.toDate(),
-      note: data['note'],
-      createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      studentId: raw['studentId']?.toString() ?? '',
+      studentName: raw['studentName']?.toString() ?? '',
+      classId: raw['classId']?.toString() ?? '',
+      date: raw['date']?.toString() ?? '',
+      status: parseStatus(raw['status']?.toString()),
+      entryTime: (raw['entryTime'] as Timestamp?)?.toDate(),
+      exitTime: (raw['exitTime'] as Timestamp?)?.toDate(),
+      note: raw['note']?.toString(),
+      createdAt:
+          (raw['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
   }
 
@@ -50,47 +60,12 @@ class AttendanceModel {
       'classId': classId,
       'date': date,
       'status': status.name,
-      'entryTime': entryTime != null ? Timestamp.fromDate(entryTime!) : null,
-      'exitTime': exitTime != null ? Timestamp.fromDate(exitTime!) : null,
-      'note': note,
+      'entryTime':
+          entryTime != null ? Timestamp.fromDate(entryTime!) : null,
+      'exitTime':
+          exitTime != null ? Timestamp.fromDate(exitTime!) : null,
+      'note': note ?? '',
       'createdAt': Timestamp.fromDate(createdAt),
     };
   }
-
-  static AttendanceStatus _parseStatus(String? status) {
-    switch (status) {
-      case 'present':
-        return AttendanceStatus.present;
-      case 'absent':
-        return AttendanceStatus.absent;
-      case 'late':
-        return AttendanceStatus.late;
-      default:
-        return AttendanceStatus.absent;
-    }
-  }
-
-  AttendanceModel copyWith({
-    AttendanceStatus? status,
-    DateTime? entryTime,
-    DateTime? exitTime,
-    String? note,
-  }) {
-    return AttendanceModel(
-      id: id,
-      studentId: studentId,
-      studentName: studentName,
-      classId: classId,
-      date: date,
-      status: status ?? this.status,
-      entryTime: entryTime ?? this.entryTime,
-      exitTime: exitTime ?? this.exitTime,
-      note: note ?? this.note,
-      createdAt: createdAt,
-    );
-  }
-
-  @override
-  String toString() =>
-      'AttendanceModel(studentId: $studentId, date: $date, status: ${status.name})';
 }

@@ -6,12 +6,12 @@ class TimetableModel {
   final String className;
   final String teacherId;
   final String teacherName;
+  final String subject;
+  final String dayOfWeek;
+  final String startTime;
+  final String endTime;
   final String roomId;
   final String roomName;
-  final String subject;
-  final int dayOfWeek; // 1=Monday, 2=Tuesday ... 5=Friday
-  final String startTime; // "08:00"
-  final String endTime;   // "09:00"
   final DateTime createdAt;
 
   const TimetableModel({
@@ -20,30 +20,30 @@ class TimetableModel {
     required this.className,
     required this.teacherId,
     required this.teacherName,
-    required this.roomId,
-    required this.roomName,
     required this.subject,
     required this.dayOfWeek,
     required this.startTime,
     required this.endTime,
+    required this.roomId,
+    required this.roomName,
     required this.createdAt,
   });
 
   factory TimetableModel.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+    final raw = doc.data() as Map<String, dynamic>;
     return TimetableModel(
       id: doc.id,
-      classId: data['classId'] ?? '',
-      className: data['className'] ?? '',
-      teacherId: data['teacherId'] ?? '',
-      teacherName: data['teacherName'] ?? '',
-      roomId: data['roomId'] ?? '',
-      roomName: data['roomName'] ?? '',
-      subject: data['subject'] ?? '',
-      dayOfWeek: data['dayOfWeek'] ?? 1,
-      startTime: data['startTime'] ?? '',
-      endTime: data['endTime'] ?? '',
-      createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      classId: raw['classId']?.toString() ?? '',
+      className: raw['className']?.toString() ?? '',
+      teacherId: raw['teacherId']?.toString() ?? '',
+      teacherName: raw['teacherName']?.toString() ?? '',
+      subject: raw['subject']?.toString() ?? '',
+      dayOfWeek: raw['dayOfWeek']?.toString() ?? raw['day']?.toString() ?? '',
+      startTime: raw['startTime']?.toString() ?? '',
+      endTime: raw['endTime']?.toString() ?? '',
+      roomId: raw['roomId']?.toString() ?? '',
+      roomName: raw['roomName']?.toString() ?? '',
+      createdAt: (raw['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
   }
 
@@ -53,54 +53,16 @@ class TimetableModel {
       'className': className,
       'teacherId': teacherId,
       'teacherName': teacherName,
-      'roomId': roomId,
-      'roomName': roomName,
       'subject': subject,
       'dayOfWeek': dayOfWeek,
       'startTime': startTime,
       'endTime': endTime,
+      'roomId': roomId,
+      'roomName': roomName,
       'createdAt': Timestamp.fromDate(createdAt),
     };
   }
 
-  String get dayName {
-    switch (dayOfWeek) {
-      case 1: return 'Monday';
-      case 2: return 'Tuesday';
-      case 3: return 'Wednesday';
-      case 4: return 'Thursday';
-      case 5: return 'Friday';
-      default: return '';
-    }
-  }
-
-  TimetableModel copyWith({
-    String? subject,
-    String? teacherId,
-    String? teacherName,
-    String? roomId,
-    String? roomName,
-    int? dayOfWeek,
-    String? startTime,
-    String? endTime,
-  }) {
-    return TimetableModel(
-      id: id,
-      classId: classId,
-      className: className,
-      teacherId: teacherId ?? this.teacherId,
-      teacherName: teacherName ?? this.teacherName,
-      roomId: roomId ?? this.roomId,
-      roomName: roomName ?? this.roomName,
-      subject: subject ?? this.subject,
-      dayOfWeek: dayOfWeek ?? this.dayOfWeek,
-      startTime: startTime ?? this.startTime,
-      endTime: endTime ?? this.endTime,
-      createdAt: createdAt,
-    );
-  }
-
-  @override
-  String toString() =>
-      'TimetableModel(subject: $subject, day: $dayName, time: $startTime-$endTime)';
+  // Keep backward compat with 'day' field
+  String get day => dayOfWeek;
 }

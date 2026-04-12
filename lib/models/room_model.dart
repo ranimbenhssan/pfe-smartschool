@@ -35,9 +35,6 @@ class RoomModel {
       'floor': floor,
       'capacity': capacity,
       'comfortScore': comfortScore,
-      'lastUpdated': lastUpdated != null
-          ? Timestamp.fromDate(lastUpdated!)
-          : null,
     };
   }
 
@@ -59,6 +56,5 @@ class RoomModel {
   }
 
   @override
-  String toString() =>
-      'RoomModel(id: $id, name: $name, floor: $floor)';
+  String toString() => 'RoomModel(id: $id, name: $name, floor: $floor)';
 }

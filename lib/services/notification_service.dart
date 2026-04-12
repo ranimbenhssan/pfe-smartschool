@@ -27,7 +27,7 @@ class NotificationService {
   final _localNotifications = FlutterLocalNotificationsPlugin();
   final _db = FirebaseFirestore.instance;
 
-  static const _channelId   = 'smartschool_channel';
+  static const _channelId = 'smartschool_channel';
   static const _channelName = 'SmartSchool Notifications';
 
   String? _currentUserId;
@@ -39,58 +39,60 @@ class NotificationService {
   }
 
   // ─── Initialize ──────────────────────────────────────────────────────────
-Future<void> initialize() async {
-  // Register background handler
-  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  Future<void> initialize() async {
+    // Register background handler
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
-  // Request permission
-  final settings = await _messaging.requestPermission(
-    alert: true,
-    badge: true,
-    sound: true,
-  );
-  debugPrint('[FCM] Permission: ${settings.authorizationStatus}');
+    // Request permission
+    final settings = await _messaging.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+    debugPrint('[FCM] Permission: ${settings.authorizationStatus}');
 
-  // Init local notifications
-  const androidSettings =
-      AndroidInitializationSettings('@mipmap/ic_launcher');
-  const iosSettings = DarwinInitializationSettings();
-  await _localNotifications.initialize(
-    const InitializationSettings(
-      android: androidSettings,
-      iOS: iosSettings,
-    ),
-    onDidReceiveNotificationResponse: _onNotificationTap,
-  );
+    // Init local notifications
+    const androidSettings = AndroidInitializationSettings(
+      '@mipmap/ic_launcher',
+    );
+    const iosSettings = DarwinInitializationSettings();
+    await _localNotifications.initialize(
+      const InitializationSettings(android: androidSettings, iOS: iosSettings),
+      onDidReceiveNotificationResponse: _onNotificationTap,
+    );
 
-  // Create Android notification channel
-// Create Android notification channel
-final plugin = _localNotifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-if (plugin != null) {
-  await plugin.createNotificationChannel(
-    const AndroidNotificationChannel(
-      _channelId,
-      _channelName,
-      importance: Importance.high,
-    ),
-  );
-}
+    // Create Android notification channel
+    // Create Android notification channel
+    final plugin =
+        _localNotifications
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >();
+    if (plugin != null) {
+      await plugin.createNotificationChannel(
+        const AndroidNotificationChannel(
+          _channelId,
+          _channelName,
+          importance: Importance.high,
+        ),
+      );
+    }
 
-  // Listen for token refresh
-  _messaging.onTokenRefresh.listen(_saveFcmTokenToFirestore);
+    // Listen for token refresh
+    _messaging.onTokenRefresh.listen(_saveFcmTokenToFirestore);
 
-  // Foreground messages
-  FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
+    // Foreground messages
+    FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
 
-  // App opened from notification (background → foreground)
-  FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationOpen);
+    // App opened from notification (background → foreground)
+    FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationOpen);
 
-  // App opened from terminated state via notification
-  final initial = await _messaging.getInitialMessage();
-  if (initial != null) _handleNotificationOpen(initial);
+    // App opened from terminated state via notification
+    final initial = await _messaging.getInitialMessage();
+    if (initial != null) _handleNotificationOpen(initial);
 
-  debugPrint('[FCM] NotificationService initialized.');
-}
+    debugPrint('[FCM] NotificationService initialized.');
+  }
 
   // ─── Register / Save FCM Token ───────────────────────────────────────────
   Future<void> _registerFcmToken() async {
@@ -155,6 +157,10 @@ if (plugin != null) {
     String title,
     String body, {
     String type = 'general',
+    String senderId = '',
+    String senderName = '',
+    String senderRole = '',
+    List<Map<String, dynamic>> attachments = const [],
   }) async {
     try {
       await _db.collection('notifications').add({
@@ -162,10 +168,13 @@ if (plugin != null) {
         'title': title,
         'message': body,
         'type': type,
+        'senderId': senderId,
+        'senderName': senderName,
+        'senderRole': senderRole,
+        'attachments': attachments,
         'isRead': false,
         'createdAt': FieldValue.serverTimestamp(),
       });
-      debugPrint('[FCM] Notification sent to user: $userId');
       return true;
     } catch (e) {
       debugPrint('[FCM] Error sending notification: $e');
@@ -180,10 +189,8 @@ if (plugin != null) {
     String type = 'general',
   }) async {
     try {
-      final usersSnap = await _db
-          .collection('users')
-          .where('role', isEqualTo: role)
-          .get();
+      final usersSnap =
+          await _db.collection('users').where('role', isEqualTo: role).get();
 
       for (final userDoc in usersSnap.docs) {
         await _db.collection('notifications').add({
@@ -211,10 +218,11 @@ if (plugin != null) {
   }) async {
     try {
       // Get all students in the class
-      final studentsSnap = await _db
-          .collection('students')
-          .where('classId', isEqualTo: classId)
-          .get();
+      final studentsSnap =
+          await _db
+              .collection('students')
+              .where('classId', isEqualTo: classId)
+              .get();
 
       for (final studentDoc in studentsSnap.docs) {
         final userId = studentDoc.data()['userId'] as String?;
@@ -280,10 +288,9 @@ if (plugin != null) {
   // ─── Mark notification read ───────────────────────────────────────────────
   Future<void> markRead(String notificationId) async {
     try {
-      await _db
-          .collection('notifications')
-          .doc(notificationId)
-          .update({'isRead': true});
+      await _db.collection('notifications').doc(notificationId).update({
+        'isRead': true,
+      });
     } catch (e) {
       debugPrint('[FCM] Error marking read: $e');
     }

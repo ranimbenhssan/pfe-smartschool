@@ -24,17 +24,17 @@ class StudentModel {
   });
 
   factory StudentModel.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+    final raw = doc.data() as Map<String, dynamic>;
+
     return StudentModel(
       id: doc.id,
-      userId: data['userId'] ?? '',
-      name: data['name'] ?? '',
-      email: data['email'] ?? '',
-      rfidTag: data['rfidTag'] ?? '',
-      classId: data['classId'] ?? '',
-      className: data['className'] ?? '',
-      photoUrl: data['photoUrl'],
-      createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      name: raw['name']?.toString() ?? '',
+      email: raw['email']?.toString() ?? '',
+      classId: raw['classId']?.toString() ?? '',
+      className: raw['className']?.toString() ?? '',
+      rfidTag: raw['rfidTag']?.toString() ?? '',
+      userId: raw['userId']?.toString() ?? '',
+      createdAt: (raw['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
   }
 
@@ -73,6 +73,5 @@ class StudentModel {
   }
 
   @override
-  String toString() =>
-      'StudentModel(id: $id, name: $name, classId: $classId)';
+  String toString() => 'StudentModel(id: $id, name: $name, classId: $classId)';
 }

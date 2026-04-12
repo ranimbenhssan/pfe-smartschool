@@ -28,7 +28,7 @@ class _AdminTimetableFormScreenState
   String? _selectedTeacherName;
   String? _selectedRoomId;
   String? _selectedRoomName;
-  int _selectedDay = 1;
+  String _selectedDay = 'Monday';
   TimeOfDay _startTime = const TimeOfDay(hour: 8, minute: 0);
   TimeOfDay _endTime = const TimeOfDay(hour: 9, minute: 0);
   bool _isLoading = false;
@@ -234,10 +234,10 @@ class _AdminTimetableFormScreenState
                 child: Row(
                   children:
                       _days.asMap().entries.map((entry) {
-                        final dayIndex = entry.key + 1;
-                        final isSelected = _selectedDay == dayIndex;
+                        final dayName = entry.value;
+                        final isSelected = _selectedDay == dayName;
                         return GestureDetector(
-                          onTap: () => setState(() => _selectedDay = dayIndex),
+                          onTap: () => setState(() => _selectedDay = dayName),
                           child: Container(
                             margin: const EdgeInsets.only(right: 8),
                             padding: const EdgeInsets.symmetric(
@@ -262,7 +262,7 @@ class _AdminTimetableFormScreenState
                               ),
                             ),
                             child: Text(
-                              entry.value.substring(0, 3),
+                              dayName.substring(0, 3),
                               style: AppTypography.labelMedium.copyWith(
                                 color:
                                     isSelected

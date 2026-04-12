@@ -48,14 +48,17 @@ import '../screens/teacher/students/teacher_student_profile_screen.dart';
 import '../screens/teacher/ai_alerts/teacher_ai_alerts_screen.dart';
 import '../screens/teacher/ai_alerts/teacher_alert_detail_screen.dart';
 import '../screens/teacher/timetable/teacher_timetable_screen.dart';
-import '../screens/teacher/notifications/teacher_notifications_screen.dart';
 import '../screens/student/dashboard/student_dashboard_screen.dart';
 import '../screens/student/attendance/student_attendance_screen.dart';
 import '../screens/student/attendance/student_attendance_stats_screen.dart';
 import '../screens/student/timetable/student_timetable_screen.dart';
 import '../screens/student/iot_monitor/student_iot_screen.dart';
 import '../screens/student/iot_monitor/student_iot_history_screen.dart';
+import '../screens/admin/rooms/admin_rooms_screen.dart';
+import '../screens/student/notifications/student_notification_send_screen.dart';
 import '../screens/student/notifications/student_notifications_screen.dart';
+import '../screens/teacher/notifications/teacher_notifications_screen.dart';
+import '../screens/teacher/notifications/teacher_notification_send_screen.dart';
 
 class PlaceholderScreen extends StatelessWidget {
   final String title;
@@ -122,6 +125,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'admin-student-add',
         builder: (context, state) => const AdminStudentFormScreen(),
       ),
+      GoRoute(
+        path: AppRoutes.adminRooms,
+        builder: (context, state) => const AdminRoomsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.adminRooms,
+        builder: (context, state) => const AdminRoomsScreen(),
+      ),
+
       GoRoute(
         path: '${AppRoutes.adminStudentEdit}/:id',
         name: 'admin-student-edit',
@@ -280,6 +292,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             (context, state) =>
                 AdminTimetableFormScreen(entryId: state.pathParameters['id']),
       ),
+
+      GoRoute(
+        path: AppRoutes.adminTimetableForm,
+        builder:
+            (context, state) =>
+                AdminTimetableFormScreen(entryId: state.extra as String?),
+      ),
+
       GoRoute(
         path: AppRoutes.adminSettings,
         name: 'admin-settings',
@@ -333,6 +353,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.teacherAttendanceByDate,
         name: 'teacher-attendance-by-date',
         builder: (context, state) => const TeacherAttendanceByDateScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.teacherNotificationSend,
+        builder: (context, state) => const TeacherNotificationSendScreen(),
       ),
       GoRoute(
         path: AppRoutes.teacherAttendanceEdit,
@@ -433,6 +457,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.studentIotHistory,
         name: 'student-iot-history',
         builder: (context, state) => const StudentIotHistoryScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.studentNotificationSend,
+        builder: (context, state) => const StudentNotificationSendScreen(),
       ),
       GoRoute(
         path: AppRoutes.studentNotifications,

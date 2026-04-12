@@ -5,7 +5,6 @@ import '../../../theme/theme.dart';
 import '../../../widgets/widgets.dart';
 import '../../../providers/providers.dart';
 import '../../../navigation/app_routes.dart';
-import '../../../services/auth_service.dart';
 import '../../../models/ai_flag_model.dart';
 
 class AdminDashboardScreen extends ConsumerStatefulWidget {
@@ -1060,6 +1059,12 @@ class _MoreMenu extends StatelessWidget {
         icon: Icons.settings_rounded,
         color: AppColors.error,
         route: AppRoutes.adminSettings,
+      ),
+      _MoreItem(
+        label: 'Room Management',
+        icon: Icons.meeting_room_rounded,
+        color: AppColors.info,
+        route: AppRoutes.adminRooms,
       ),
     ];
 

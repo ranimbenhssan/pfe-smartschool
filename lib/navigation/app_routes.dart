@@ -70,4 +70,8 @@ class AppRoutes {
   static const String studentIot = '/student/iot';
   static const String studentIotHistory = '/student/iot/history';
   static const String studentNotifications = '/student/notifications';
+  static const adminRooms = '/admin/rooms';
+  static const teacherNotificationSend = '/teacher/notifications/send';
+  static const studentNotificationSend = '/student/notifications/send';
+  static const adminTimetableForm = '/admin/timetable/form';
 }
