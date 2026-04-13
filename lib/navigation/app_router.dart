@@ -59,6 +59,7 @@ import '../screens/student/notifications/student_notification_send_screen.dart';
 import '../screens/student/notifications/student_notifications_screen.dart';
 import '../screens/teacher/notifications/teacher_notifications_screen.dart';
 import '../screens/teacher/notifications/teacher_notification_send_screen.dart';
+import '../screens/shared/message_detail_screen.dart';
 
 class PlaceholderScreen extends StatelessWidget {
   final String title;
@@ -107,6 +108,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.forgotPassword,
         name: 'forgot-password',
         builder: (context, state) => const ForgotPasswordScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.messageDetail,
+        builder:
+            (context, state) =>
+                MessageDetailScreen(message: state.extra as NotificationModel),
       ),
 
       // ─── Admin ───

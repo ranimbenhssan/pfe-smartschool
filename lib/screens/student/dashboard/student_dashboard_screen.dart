@@ -25,7 +25,7 @@ class _StudentDashboardScreenState
     _NavItem(icon: Icons.how_to_reg_rounded, label: 'Attendance'),
     _NavItem(icon: Icons.calendar_today_rounded, label: 'Timetable'),
     _NavItem(icon: Icons.sensors_rounded, label: 'Environment'),
-    _NavItem(icon: Icons.notifications_rounded, label: 'Notifications'),
+    _NavItem(icon: Icons.message_rounded, label: 'Messages'),
   ];
 
   @override
@@ -42,7 +42,7 @@ class _StudentDashboardScreenState
               : _selectedIndex == 1
               ? const _AttendanceQuickView()
               : _selectedIndex == 2
-              ? const _TimetableQuickView()
+              ? const _TimetableTab()
               : _selectedIndex == 3
               ? const _EnvironmentQuickView()
               : const _NotificationsQuickView(),
@@ -163,6 +163,82 @@ class _DashboardBody extends ConsumerWidget {
   const _DashboardBody();
 
   @override
+  Widget _buildRecentMessages(
+    BuildContext context,
+    bool isDark,
+    WidgetRef ref,
+  ) {
+    final currentUser = ref.watch(currentUserProvider);
+
+    return currentUser.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (user) {
+        if (user == null) return const SizedBox.shrink();
+        final messages = ref.watch(notificationsProvider(user.id));
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Recent Messages',
+                  style: AppTypography.headingMedium.copyWith(
+                    color: isDark ? AppColors.darkText : AppColors.lightText,
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => context.push(AppRoutes.studentNotifications),
+                  child: const Text('See all'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            messages.when(
+              loading: () => const LoadingWidget(),
+              error: (_, __) => const SizedBox.shrink(),
+              data: (list) {
+                if (list.isEmpty) {
+                  return Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: isDark ? AppColors.darkCard : AppColors.lightCard,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color:
+                            isDark
+                                ? AppColors.darkBorder
+                                : AppColors.lightBorder,
+                      ),
+                    ),
+                    child: Text(
+                      'No messages yet',
+                      style: AppTypography.bodySmall.copyWith(
+                        color:
+                            isDark
+                                ? AppColors.darkTextSecondary
+                                : AppColors.lightTextSecondary,
+                      ),
+                    ),
+                  );
+                }
+                return Column(
+                  children:
+                      list
+                          .take(3)
+                          .map((msg) => NotificationTile(notification: msg))
+                          .toList(),
+                );
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+  
+
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final currentUser = ref.watch(currentUserProvider);
@@ -257,6 +333,8 @@ class _DashboardBody extends ConsumerWidget {
 
             // ─── Classroom Environment ───
             _buildEnvironment(context, isDark, ref),
+            _buildRecentMessages(context, isDark, ref),
+            const SizedBox(height: 20),
             const SizedBox(height: 20),
           ],
         ),
@@ -705,8 +783,8 @@ class _AttendanceQuickView extends ConsumerWidget {
 // ─────────────────────────────────────────
 //  TIMETABLE QUICK VIEW
 // ─────────────────────────────────────────
-class _TimetableQuickView extends ConsumerWidget {
-  const _TimetableQuickView();
+class _TimetableTab extends ConsumerWidget {
+  const _TimetableTab();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -715,25 +793,86 @@ class _TimetableQuickView extends ConsumerWidget {
 
     return currentUser.when(
       loading: () => const LoadingWidget(),
-      error: (_, __) => const SizedBox.shrink(),
+      error:
+          (e, _) => EmptyState(
+            title: 'Error',
+            message: e.toString(),
+            icon: Icons.error_outline_rounded,
+          ),
       data: (user) {
         if (user == null) return const SizedBox.shrink();
-        final timetable = ref.watch(timetableByClassProvider(user.id));
-        return timetable.when(
+        final students = ref.watch(studentsProvider);
+        return students.when(
           loading: () => const LoadingWidget(),
-          error: (_, __) => const SizedBox.shrink(),
-          data:
-              (list) =>
-                  list.isEmpty
-                      ? const EmptyState(
-                        title: 'No Timetable',
-                        message: 'No schedule available',
-                        icon: Icons.calendar_today_rounded,
-                      )
-                      : SingleChildScrollView(
-                        padding: const EdgeInsets.all(16),
-                        child: TimetableGrid(entries: list),
+          error:
+              (e, _) => EmptyState(
+                title: 'Error',
+                message: e.toString(),
+                icon: Icons.error_outline_rounded,
+              ),
+          data: (list) {
+            final student = list.where((s) => s.userId == user.id).firstOrNull;
+            if (student == null) {
+              return const EmptyState(
+                title: 'Not Found',
+                message: 'Student profile not found',
+                icon: Icons.person_off_rounded,
+              );
+            }
+            final timetable = ref.watch(
+              timetableByClassProvider(student.classId),
+            );
+            return timetable.when(
+              loading: () => const LoadingWidget(),
+              error:
+                  (e, _) => EmptyState(
+                    title: 'Error',
+                    message: e.toString(),
+                    icon: Icons.error_outline_rounded,
+                  ),
+              data: (entries) {
+                if (entries.isEmpty) {
+                  return const EmptyState(
+                    title: 'No Timetable',
+                    message: 'No schedule available yet',
+                    icon: Icons.calendar_today_rounded,
+                  );
+                }
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'My Timetable',
+                            style: AppTypography.headingMedium.copyWith(
+                              color:
+                                  isDark
+                                      ? AppColors.darkText
+                                      : AppColors.lightText,
+                            ),
+                          ),
+                          TextButton(
+                            onPressed:
+                                () => context.push(AppRoutes.studentTimetable),
+                            child: const Text('Full view'),
+                          ),
+                        ],
                       ),
+                      const SizedBox(height: 8),
+                      TimetableGrid(
+                        entries: entries,
+                        accentColor: AppColors.studentColor,
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
         );
       },
     );

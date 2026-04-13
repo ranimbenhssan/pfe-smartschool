@@ -96,7 +96,7 @@ class _TeacherDashboardScreenState
           },
         ),
         IconButton(
-          icon: const Icon(Icons.notifications_outlined, size: 22),
+          icon: const Icon(Icons.message_rounded, size: 22),
           onPressed: () => context.push(AppRoutes.teacherNotifications),
         ),
         GestureDetector(
@@ -166,6 +166,81 @@ class _DashboardBody extends ConsumerWidget {
   const _DashboardBody();
 
   @override
+  Widget _buildRecentMessages(
+    BuildContext context,
+    bool isDark,
+    WidgetRef ref,
+  ) {
+    final currentUser = ref.watch(currentUserProvider);
+
+    return currentUser.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (user) {
+        if (user == null) return const SizedBox.shrink();
+        final messages = ref.watch(notificationsProvider(user.id));
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Recent Messages',
+                  style: AppTypography.headingMedium.copyWith(
+                    color: isDark ? AppColors.darkText : AppColors.lightText,
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => context.push(AppRoutes.studentNotifications),
+                  child: const Text('See all'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            messages.when(
+              loading: () => const LoadingWidget(),
+              error: (_, __) => const SizedBox.shrink(),
+              data: (list) {
+                if (list.isEmpty) {
+                  return Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: isDark ? AppColors.darkCard : AppColors.lightCard,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color:
+                            isDark
+                                ? AppColors.darkBorder
+                                : AppColors.lightBorder,
+                      ),
+                    ),
+                    child: Text(
+                      'No messages yet',
+                      style: AppTypography.bodySmall.copyWith(
+                        color:
+                            isDark
+                                ? AppColors.darkTextSecondary
+                                : AppColors.lightTextSecondary,
+                      ),
+                    ),
+                  );
+                }
+                return Column(
+                  children:
+                      list
+                          .take(3)
+                          .map((msg) => NotificationTile(notification: msg))
+                          .toList(),
+                );
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final currentUser = ref.watch(currentUserProvider);
@@ -354,6 +429,10 @@ class _DashboardBody extends ConsumerWidget {
 
             // ─── Recent AI Alerts ───
             _buildRecentAlerts(context, isDark, ref),
+            const SizedBox(height: 20),
+
+            // ─── Recent Messages ───
+            _buildRecentMessages(context, isDark, ref),
             const SizedBox(height: 20),
           ],
         ),

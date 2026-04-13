@@ -31,65 +31,29 @@ class _StudentTimetableScreenState
         backgroundColor:
             isDark ? AppColors.darkSurface : AppColors.lightSurface,
         actions: [
-          // ─── Toggle day/week view ───
           Container(
             margin: const EdgeInsets.only(right: 8),
             decoration: BoxDecoration(
               color: isDark ? AppColors.darkCard : AppColors.lightCard,
               borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+              ),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                GestureDetector(
-                  onTap: () => setState(() => _isWeekView = false),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color:
-                          !_isWeekView ? AppColors.accent : Colors.transparent,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      'Day',
-                      style: AppTypography.labelSmall.copyWith(
-                        color:
-                            !_isWeekView
-                                ? AppColors.primary
-                                : isDark
-                                ? AppColors.darkText
-                                : AppColors.lightText,
-                      ),
-                    ),
-                  ),
+                _toggleBtn(
+                  'Day',
+                  !_isWeekView,
+                  isDark,
+                  () => setState(() => _isWeekView = false),
                 ),
-                GestureDetector(
-                  onTap: () => setState(() => _isWeekView = true),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color:
-                          _isWeekView ? AppColors.accent : Colors.transparent,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      'Week',
-                      style: AppTypography.labelSmall.copyWith(
-                        color:
-                            _isWeekView
-                                ? AppColors.primary
-                                : isDark
-                                ? AppColors.darkText
-                                : AppColors.lightText,
-                      ),
-                    ),
-                  ),
+                _toggleBtn(
+                  'Week',
+                  _isWeekView,
+                  isDark,
+                  () => setState(() => _isWeekView = true),
                 ),
               ],
             ),
@@ -106,8 +70,6 @@ class _StudentTimetableScreenState
             ),
         data: (user) {
           if (user == null) return const SizedBox.shrink();
-
-          // Get student's classId
           final students = ref.watch(studentsProvider);
           return students.when(
             loading: () => const LoadingWidget(),
@@ -118,10 +80,8 @@ class _StudentTimetableScreenState
                   icon: Icons.error_outline_rounded,
                 ),
             data: (list) {
-              // Find student by userId
               final student =
                   list.where((s) => s.userId == user.id).firstOrNull;
-
               if (student == null) {
                 return const EmptyState(
                   title: 'Not Found',
@@ -129,11 +89,9 @@ class _StudentTimetableScreenState
                   icon: Icons.person_off_rounded,
                 );
               }
-
               final timetable = ref.watch(
                 timetableByClassProvider(student.classId),
               );
-
               return timetable.when(
                 loading: () => const LoadingWidget(),
                 error:
@@ -150,10 +108,9 @@ class _StudentTimetableScreenState
                       icon: Icons.calendar_today_rounded,
                     );
                   }
-
                   return _isWeekView
-                      ? _WeekView(entries: entries, isDark: isDark)
-                      : _DayView(entries: entries, isDark: isDark);
+                      ? _StudentWeekGrid(entries: entries, isDark: isDark)
+                      : _StudentDayView(entries: entries, isDark: isDark);
                 },
               );
             },
@@ -162,22 +119,52 @@ class _StudentTimetableScreenState
       ),
     );
   }
+
+  Widget _toggleBtn(
+    String label,
+    bool isActive,
+    bool isDark,
+    VoidCallback onTap,
+  ) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: isActive ? AppColors.studentColor : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          label,
+          style: AppTypography.labelSmall.copyWith(
+            color:
+                isActive
+                    ? Colors.white
+                    : isDark
+                    ? AppColors.darkText
+                    : AppColors.lightText,
+            fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // ─────────────────────────────────────────
-//  DAY VIEW — shows only today's classes
+//  DAY VIEW
 // ─────────────────────────────────────────
-class _DayView extends StatefulWidget {
+class _StudentDayView extends StatefulWidget {
   final List<TimetableModel> entries;
   final bool isDark;
 
-  const _DayView({required this.entries, required this.isDark});
+  const _StudentDayView({required this.entries, required this.isDark});
 
   @override
-  State<_DayView> createState() => _DayViewState();
+  State<_StudentDayView> createState() => _StudentDayViewState();
 }
 
-class _DayViewState extends State<_DayView> {
+class _StudentDayViewState extends State<_StudentDayView> {
   final List<String> _days = [
     'Monday',
     'Tuesday',
@@ -185,15 +172,13 @@ class _DayViewState extends State<_DayView> {
     'Thursday',
     'Friday',
   ];
-
   late String _selectedDay;
 
   @override
   void initState() {
     super.initState();
-    final weekday = DateTime.now().weekday;
-    _selectedDay =
-        (weekday >= 1 && weekday <= 5) ? _days[weekday - 1] : 'Monday';
+    final w = DateTime.now().weekday;
+    _selectedDay = (w >= 1 && w <= 5) ? _days[w - 1] : 'Monday';
   }
 
   @override
@@ -208,7 +193,7 @@ class _DayViewState extends State<_DayView> {
 
     return Column(
       children: [
-        // ─── Day selector ───
+        // ─── Day chips ───
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -311,7 +296,7 @@ class _DayViewState extends State<_DayView> {
                     padding: const EdgeInsets.all(16),
                     itemCount: dayEntries.length,
                     itemBuilder:
-                        (context, index) => _EntryCard(
+                        (context, index) => _StudentEntryCard(
                           entry: dayEntries[index],
                           isDark: widget.isDark,
                         ),
@@ -323,131 +308,174 @@ class _DayViewState extends State<_DayView> {
 }
 
 // ─────────────────────────────────────────
-//  WEEK VIEW — shows full week with Tabs
+//  WEEK GRID — same as admin
 // ─────────────────────────────────────────
-class _WeekView extends StatefulWidget {
+class _StudentWeekGrid extends StatelessWidget {
   final List<TimetableModel> entries;
   final bool isDark;
 
-  const _WeekView({required this.entries, required this.isDark});
+  const _StudentWeekGrid({required this.entries, required this.isDark});
 
-  @override
-  State<_WeekView> createState() => _WeekViewState();
-}
-
-class _WeekViewState extends State<_WeekView>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-
-  final List<String> _days = [
-    'Monday',
-    'Tuesday',
-    'Wednesday',
-    'Thursday',
-    'Friday',
-  ];
-
-  @override
-  void initState() {
-    super.initState();
-    final weekday = DateTime.now().weekday;
-    // Sélectionne le jour actuel si on est en semaine, sinon lundi
-    final initialIndex = (weekday >= 1 && weekday <= 5) ? weekday - 1 : 0;
-    _tabController = TabController(
-      length: _days.length,
-      vsync: this,
-      initialIndex: initialIndex,
-    );
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
+  static const _days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        TabBar(
-          controller: _tabController,
-          isScrollable: true,
-          indicatorColor: AppColors.studentColor,
-          labelColor: AppColors.studentColor,
-          unselectedLabelColor:
-              widget.isDark
-                  ? AppColors.darkTextSecondary
-                  : AppColors.lightTextSecondary,
-          tabs: _days.map((d) => Tab(text: d)).toList(),
-        ),
-        Expanded(
-          child: TabBarView(
-            controller: _tabController,
-            children:
-                _days.map((day) {
-                  final dayEntries =
-                      widget.entries
-                          .where(
-                            (e) =>
-                                e.dayOfWeek.toLowerCase() == day.toLowerCase(),
-                          )
-                          .toList()
-                        ..sort((a, b) => a.startTime.compareTo(b.startTime));
+    final timeSlots =
+        entries.map((e) => '${e.startTime}-${e.endTime}').toSet().toList()
+          ..sort();
 
-                  if (dayEntries.isEmpty) {
-                    return Center(
+    if (timeSlots.isEmpty) return const SizedBox.shrink();
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Table(
+          defaultColumnWidth: const FixedColumnWidth(120),
+          border: TableBorder.all(
+            color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+            width: 1,
+          ),
+          children: [
+            // ─── Header ───
+            TableRow(
+              decoration: BoxDecoration(
+                color: AppColors.studentColor.withValues(alpha: 0.15),
+              ),
+              children: [
+                _headerCell('Time'),
+                ..._days.map((d) => _headerCell(d.substring(0, 3))),
+              ],
+            ),
+
+            // ─── Time rows ───
+            ...timeSlots.map((slot) {
+              final parts = slot.split('-');
+              final start = parts[0];
+              final end = parts[1];
+
+              return TableRow(
+                decoration: BoxDecoration(
+                  color: isDark ? AppColors.darkCard : AppColors.lightCard,
+                ),
+                children: [
+                  // Time column
+                  Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Column(
+                      children: [
+                        Text(
+                          start,
+                          style: AppTypography.labelSmall.copyWith(
+                            color: AppColors.studentColor,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        Text(
+                          end,
+                          style: AppTypography.caption,
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Day columns
+                  ..._days.map((day) {
+                    final entry =
+                        entries
+                            .where(
+                              (e) =>
+                                  e.dayOfWeek.toLowerCase() ==
+                                      day.toLowerCase() &&
+                                  e.startTime == start &&
+                                  e.endTime == end,
+                            )
+                            .firstOrNull;
+
+                    if (entry == null) {
+                      return Container(
+                        height: 72,
+                        color:
+                            isDark
+                                ? AppColors.darkBackground
+                                : AppColors.lightBackground,
+                      );
+                    }
+
+                    return Container(
+                      height: 72,
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: AppColors.studentColor.withValues(alpha: 0.08),
+                      ),
                       child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(
-                            Icons.free_breakfast_rounded,
-                            size: 48,
-                            color:
-                                widget.isDark
-                                    ? AppColors.darkTextHint
-                                    : AppColors.lightTextHint,
-                          ),
-                          const SizedBox(height: 8),
                           Text(
-                            'No classes on $day',
-                            style: AppTypography.bodySmall.copyWith(
+                            entry.subject,
+                            style: AppTypography.labelSmall.copyWith(
                               color:
-                                  widget.isDark
-                                      ? AppColors.darkTextSecondary
-                                      : AppColors.lightTextSecondary,
+                                  isDark
+                                      ? AppColors.darkText
+                                      : AppColors.lightText,
+                              fontWeight: FontWeight.bold,
                             ),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
                           ),
+                          if (entry.teacherName.isNotEmpty)
+                            Text(
+                              entry.teacherName,
+                              style: AppTypography.caption,
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          if (entry.roomName.isNotEmpty)
+                            Text(
+                              '📍 ${entry.roomName}',
+                              style: AppTypography.caption,
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
                         ],
                       ),
                     );
-                  }
-
-                  return ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: dayEntries.length,
-                    itemBuilder:
-                        (context, index) => _EntryCard(
-                          entry: dayEntries[index],
-                          isDark: widget.isDark,
-                        ),
-                  );
-                }).toList(),
-          ),
+                  }),
+                ],
+              );
+            }),
+          ],
         ),
-      ],
+      ),
+    );
+  }
+
+  Widget _headerCell(String text) {
+    return Padding(
+      padding: const EdgeInsets.all(10),
+      child: Text(
+        text,
+        style: AppTypography.labelSmall.copyWith(
+          color: AppColors.studentColor,
+          fontWeight: FontWeight.bold,
+        ),
+        textAlign: TextAlign.center,
+      ),
     );
   }
 }
 
 // ─────────────────────────────────────────
-//  SHARED ENTRY CARD
+//  ENTRY CARD
 // ─────────────────────────────────────────
-class _EntryCard extends StatelessWidget {
+class _StudentEntryCard extends StatelessWidget {
   final TimetableModel entry;
   final bool isDark;
 
-  const _EntryCard({required this.entry, required this.isDark});
+  const _StudentEntryCard({required this.entry, required this.isDark});
 
   @override
   Widget build(BuildContext context) {
@@ -463,7 +491,6 @@ class _EntryCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // ─── Time ───
           Container(
             width: 58,
             padding: const EdgeInsets.symmetric(vertical: 8),
@@ -498,8 +525,6 @@ class _EntryCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-
-          // ─── Info ───
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

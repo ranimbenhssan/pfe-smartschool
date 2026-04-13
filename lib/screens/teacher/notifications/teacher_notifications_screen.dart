@@ -19,7 +19,7 @@ class TeacherNotificationsScreen extends ConsumerWidget {
       backgroundColor:
           isDark ? AppColors.darkBackground : AppColors.lightBackground,
       appBar: AppBar(
-        title: const Text('Notifications'),
+        title: const Text('Messages'),
         backgroundColor:
             isDark ? AppColors.darkSurface : AppColors.lightSurface,
         actions: [
@@ -89,6 +89,12 @@ class TeacherNotificationsScreen extends ConsumerWidget {
                                 await ref
                                     .read(firestoreServiceProvider)
                                     .markNotificationRead(notification.id);
+                                if (context.mounted) {
+                                  context.push(
+                                    AppRoutes.messageDetail,
+                                    extra: notification,
+                                  );
+                                }
                               },
                             );
                           },

@@ -1,47 +1,63 @@
 import 'package:flutter/material.dart';
 import '../models/models.dart';
 import '../theme/theme.dart';
+import 'package:go_router/go_router.dart';
+import '../navigation/app_routes.dart';
 
 class NotificationTile extends StatelessWidget {
   final NotificationModel notification;
   final VoidCallback? onTap;
 
-  const NotificationTile({
-    super.key,
-    required this.notification,
-    this.onTap,
-  });
+  const NotificationTile({super.key, required this.notification, this.onTap});
 
   Color _typeColor(MessageType type) {
     switch (type) {
-      case MessageType.announcement: return Colors.blue;
-      case MessageType.form:         return Colors.orange;
-      case MessageType.note:         return Colors.green;
-      case MessageType.course:       return Colors.purple;
-      case MessageType.report:       return Colors.teal;
-      case MessageType.general:      return Colors.grey;
+      case MessageType.announcement:
+        return Colors.blue;
+      case MessageType.form:
+        return Colors.orange;
+      case MessageType.note:
+        return Colors.green;
+      case MessageType.course:
+        return Colors.purple;
+      case MessageType.report:
+        return Colors.teal;
+      case MessageType.general:
+        return Colors.grey;
     }
   }
 
   IconData _typeIcon(MessageType type) {
     switch (type) {
-      case MessageType.announcement: return Icons.campaign_rounded;
-      case MessageType.form:         return Icons.assignment_rounded;
-      case MessageType.note:         return Icons.note_rounded;
-      case MessageType.course:       return Icons.menu_book_rounded;
-      case MessageType.report:       return Icons.bar_chart_rounded;
-      case MessageType.general:      return Icons.notifications_rounded;
+      case MessageType.announcement:
+        return Icons.campaign_rounded;
+      case MessageType.form:
+        return Icons.assignment_rounded;
+      case MessageType.note:
+        return Icons.note_rounded;
+      case MessageType.course:
+        return Icons.menu_book_rounded;
+      case MessageType.report:
+        return Icons.bar_chart_rounded;
+      case MessageType.general:
+        return Icons.notifications_rounded;
     }
   }
 
   String _typeLabel(MessageType type) {
     switch (type) {
-      case MessageType.announcement: return 'Announcement';
-      case MessageType.form:         return 'Form';
-      case MessageType.note:         return 'Note';
-      case MessageType.course:       return 'Course';
-      case MessageType.report:       return 'Report';
-      case MessageType.general:      return 'Notification';
+      case MessageType.announcement:
+        return 'Announcement';
+      case MessageType.form:
+        return 'Form';
+      case MessageType.note:
+        return 'Note';
+      case MessageType.course:
+        return 'Course';
+      case MessageType.report:
+        return 'Report';
+      case MessageType.general:
+        return 'Notification';
     }
   }
 
@@ -52,19 +68,26 @@ class NotificationTile extends StatelessWidget {
     final icon = _typeIcon(notification.messageType);
 
     return GestureDetector(
-      onTap: onTap,
+      onTap: () {
+        // Call original onTap if provided
+        onTap?.call();
+        // Navigate to detail screen
+        context.push(AppRoutes.messageDetail, extra: notification);
+      },
       child: Container(
         padding: const EdgeInsets.all(14),
         margin: const EdgeInsets.only(bottom: 10),
         decoration: BoxDecoration(
-          color: notification.isRead
-              ? (isDark ? AppColors.darkCard : AppColors.lightCard)
-              : color.withValues(alpha: 0.06),
+          color:
+              notification.isRead
+                  ? (isDark ? AppColors.darkCard : AppColors.lightCard)
+                  : color.withValues(alpha: 0.06),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: notification.isRead
-                ? (isDark ? AppColors.darkBorder : AppColors.lightBorder)
-                : color.withValues(alpha: 0.3),
+            color:
+                notification.isRead
+                    ? (isDark ? AppColors.darkBorder : AppColors.lightBorder)
+                    : color.withValues(alpha: 0.3),
           ),
         ),
         child: Column(
@@ -92,12 +115,14 @@ class NotificationTile extends StatelessWidget {
                             child: Text(
                               notification.title,
                               style: AppTypography.labelLarge.copyWith(
-                                color: isDark
-                                    ? AppColors.darkText
-                                    : AppColors.lightText,
-                                fontWeight: notification.isRead
-                                    ? FontWeight.normal
-                                    : FontWeight.bold,
+                                color:
+                                    isDark
+                                        ? AppColors.darkText
+                                        : AppColors.lightText,
+                                fontWeight:
+                                    notification.isRead
+                                        ? FontWeight.normal
+                                        : FontWeight.bold,
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -149,9 +174,10 @@ class NotificationTile extends StatelessWidget {
             Text(
               notification.message,
               style: AppTypography.bodySmall.copyWith(
-                color: isDark
-                    ? AppColors.darkTextSecondary
-                    : AppColors.lightTextSecondary,
+                color:
+                    isDark
+                        ? AppColors.darkTextSecondary
+                        : AppColors.lightTextSecondary,
               ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
@@ -162,49 +188,53 @@ class NotificationTile extends StatelessWidget {
               const SizedBox(height: 8),
               Wrap(
                 spacing: 6,
-                children: notification.attachments.map((att) {
-                  return Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? AppColors.darkBackground
-                          : AppColors.lightBackground,
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(
-                        color: isDark
-                            ? AppColors.darkBorder
-                            : AppColors.lightBorder,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          att.type == AttachmentType.image
-                              ? Icons.image_rounded
-                              : att.type == AttachmentType.pdf
+                children:
+                    notification.attachments.map((att) {
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color:
+                              isDark
+                                  ? AppColors.darkBackground
+                                  : AppColors.lightBackground,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color:
+                                isDark
+                                    ? AppColors.darkBorder
+                                    : AppColors.lightBorder,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              att.type == AttachmentType.image
+                                  ? Icons.image_rounded
+                                  : att.type == AttachmentType.pdf
                                   ? Icons.picture_as_pdf_rounded
                                   : Icons.insert_drive_file_rounded,
-                          size: 12,
-                          color: att.type == AttachmentType.image
-                              ? AppColors.info
-                              : att.type == AttachmentType.pdf
-                                  ? AppColors.error
-                                  : AppColors.accent,
+                              size: 12,
+                              color:
+                                  att.type == AttachmentType.image
+                                      ? AppColors.info
+                                      : att.type == AttachmentType.pdf
+                                      ? AppColors.error
+                                      : AppColors.accent,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              att.name,
+                              style: AppTypography.caption,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 4),
-                        Text(
-                          att.name,
-                          style: AppTypography.caption,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
+                      );
+                    }).toList(),
               ),
             ],
 
@@ -213,9 +243,8 @@ class NotificationTile extends StatelessWidget {
             Text(
               _formatTime(notification.createdAt),
               style: AppTypography.caption.copyWith(
-                color: isDark
-                    ? AppColors.darkTextHint
-                    : AppColors.lightTextHint,
+                color:
+                    isDark ? AppColors.darkTextHint : AppColors.lightTextHint,
               ),
             ),
           ],

@@ -74,4 +74,5 @@ class AppRoutes {
   static const teacherNotificationSend = '/teacher/notifications/send';
   static const studentNotificationSend = '/student/notifications/send';
   static const adminTimetableForm = '/admin/timetable/form';
+  static const messageDetail = '/message-detail';
 }
