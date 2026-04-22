@@ -5,7 +5,6 @@ import '../../../theme/theme.dart';
 import '../../../widgets/widgets.dart';
 import '../../../providers/providers.dart';
 import '../../../navigation/app_routes.dart';
-import '../../../services/auth_service.dart';
 import '../../../models/models.dart';
 
 class StudentDashboardScreen extends ConsumerStatefulWidget {
@@ -25,7 +24,7 @@ class _StudentDashboardScreenState
     _NavItem(icon: Icons.how_to_reg_rounded, label: 'Attendance'),
     _NavItem(icon: Icons.calendar_today_rounded, label: 'Timetable'),
     _NavItem(icon: Icons.sensors_rounded, label: 'Environment'),
-    _NavItem(icon: Icons.message_rounded, label: 'Messages'),
+    _NavItem(icon: Icons.message_rounded, label: 'message'),
   ];
 
   @override
@@ -45,7 +44,7 @@ class _StudentDashboardScreenState
               ? const _TimetableTab()
               : _selectedIndex == 3
               ? const _EnvironmentQuickView()
-              : const _NotificationsQuickView(),
+              : const _MessageQuickView(),
       bottomNavigationBar: _buildBottomNav(isDark),
     );
   }
@@ -162,12 +161,7 @@ class _StudentDashboardScreenState
 class _DashboardBody extends ConsumerWidget {
   const _DashboardBody();
 
-  @override
-  Widget _buildRecentMessages(
-    BuildContext context,
-    bool isDark,
-    WidgetRef ref,
-  ) {
+  Widget _buildRecentmessage(BuildContext context, bool isDark, WidgetRef ref) {
     final currentUser = ref.watch(currentUserProvider);
 
     return currentUser.when(
@@ -175,7 +169,7 @@ class _DashboardBody extends ConsumerWidget {
       error: (_, __) => const SizedBox.shrink(),
       data: (user) {
         if (user == null) return const SizedBox.shrink();
-        final messages = ref.watch(notificationsProvider(user.id));
+        final message = ref.watch(notificationsProvider(user.id));
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -183,19 +177,19 @@ class _DashboardBody extends ConsumerWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Recent Messages',
+                  'Recent message',
                   style: AppTypography.headingMedium.copyWith(
                     color: isDark ? AppColors.darkText : AppColors.lightText,
                   ),
                 ),
                 TextButton(
-                  onPressed: () => context.push(AppRoutes.studentNotifications),
+                  onPressed: () => context.push(AppRoutes.studentmessage),
                   child: const Text('See all'),
                 ),
               ],
             ),
             const SizedBox(height: 8),
-            messages.when(
+            message.when(
               loading: () => const LoadingWidget(),
               error: (_, __) => const SizedBox.shrink(),
               data: (list) {
@@ -213,7 +207,7 @@ class _DashboardBody extends ConsumerWidget {
                       ),
                     ),
                     child: Text(
-                      'No messages yet',
+                      'No message yet',
                       style: AppTypography.bodySmall.copyWith(
                         color:
                             isDark
@@ -227,7 +221,7 @@ class _DashboardBody extends ConsumerWidget {
                   children:
                       list
                           .take(3)
-                          .map((msg) => NotificationTile(notification: msg))
+                          .map((msg) => MessagesTile(message: msg))
                           .toList(),
                 );
               },
@@ -237,8 +231,7 @@ class _DashboardBody extends ConsumerWidget {
       },
     );
   }
-  
-
+@override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final currentUser = ref.watch(currentUserProvider);
@@ -253,32 +246,147 @@ class _DashboardBody extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // ─── Greeting ───
+            // In _DashboardBody build method
+            // REPLACE the greeting section with:
             currentUser.when(
               loading: () => const SizedBox(height: 50),
               error: (_, __) => const SizedBox.shrink(),
-              data:
-                  (user) => Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '${_getGreeting()}, ${user?.name ?? 'Student'} 👋',
-                        style: AppTypography.headingLarge.copyWith(
-                          color:
-                              isDark ? AppColors.darkText : AppColors.lightText,
-                        ),
+              data: (user) {
+                if (user == null) return const SizedBox.shrink();
+
+                // Get student info
+                final students = ref.watch(studentsProvider);
+                return students.when(
+                  loading:
+                      () => Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${_getGreeting()}, ${user.name} 👋',
+                            style: AppTypography.headingLarge.copyWith(
+                              color:
+                                  isDark
+                                      ? AppColors.darkText
+                                      : AppColors.lightText,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _formatDate(),
-                        style: AppTypography.bodySmall.copyWith(
-                          color:
-                              isDark
-                                  ? AppColors.darkTextSecondary
-                                  : AppColors.lightTextSecondary,
+                  error: (_, __) => const SizedBox.shrink(),
+                  data: (list) {
+                    final student =
+                        list.where((s) => s.userId == user.id).firstOrNull;
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${_getGreeting()} 👋',
+                          style: AppTypography.bodyMedium.copyWith(
+                            color:
+                                isDark
+                                    ? AppColors.darkTextSecondary
+                                    : AppColors.lightTextSecondary,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
+                        const SizedBox(height: 4),
+                        Text(
+                          user.name,
+                          style: AppTypography.headingLarge.copyWith(
+                            color:
+                                isDark
+                                    ? AppColors.darkText
+                                    : AppColors.lightText,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+
+                        // ─── Student Info Card ───
+                        if (student != null)
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: AppColors.studentColor.withValues(
+                                alpha: 0.08,
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: AppColors.studentColor.withValues(
+                                  alpha: 0.25,
+                                ),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 44,
+                                  height: 44,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.studentColor.withValues(
+                                      alpha: 0.15,
+                                    ),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: const Icon(
+                                    Icons.school_rounded,
+                                    color: AppColors.studentColor,
+                                    size: 22,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      // ─── Full display: Name – Level Class ───
+                                      Text(
+                                        student.fullDisplay,
+                                        style: AppTypography.labelLarge
+                                            .copyWith(
+                                              color: AppColors.studentColor,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Row(
+                                        children: [
+                                          _InfoBadge(
+                                            label: student.classDisplay,
+                                            icon: Icons.class_rounded,
+                                            color: AppColors.studentColor,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          if (student.level.isNotEmpty)
+                                            _InfoBadge(
+                                              label: 'Level ${student.level}',
+                                              icon: Icons.layers_rounded,
+                                              color: AppColors.info,
+                                            ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                        const SizedBox(height: 4),
+                        Text(
+                          _formatDate(),
+                          style: AppTypography.bodySmall.copyWith(
+                            color:
+                                isDark
+                                    ? AppColors.darkTextSecondary
+                                    : AppColors.lightTextSecondary,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                );
+              },
             ),
             const SizedBox(height: 24),
 
@@ -318,10 +426,10 @@ class _DashboardBody extends ConsumerWidget {
                 ),
                 const SizedBox(width: 8),
                 _QuickAction(
-                  label: 'Alerts',
-                  icon: Icons.notifications_rounded,
+                  label: 'Messages',
+                  icon: Icons.message_rounded,
                   color: AppColors.warning,
-                  onTap: () => context.push(AppRoutes.studentNotifications),
+                  onTap: () => context.push(AppRoutes.studentmessage),
                 ),
               ],
             ),
@@ -333,7 +441,7 @@ class _DashboardBody extends ConsumerWidget {
 
             // ─── Classroom Environment ───
             _buildEnvironment(context, isDark, ref),
-            _buildRecentMessages(context, isDark, ref),
+            _buildRecentmessage(context, isDark, ref),
             const SizedBox(height: 20),
             const SizedBox(height: 20),
           ],
@@ -376,6 +484,7 @@ class _DashboardBody extends ConsumerWidget {
     ];
     return '${days[now.weekday - 1]}, ${now.day} ${months[now.month - 1]} ${now.year}';
   }
+
 
   Widget _buildTodayStatus(BuildContext context, bool isDark, WidgetRef ref) {
     final currentUser = ref.watch(currentUserProvider);
@@ -887,7 +996,6 @@ class _EnvironmentQuickView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final rooms = ref.watch(roomsProvider);
 
     return rooms.when(
@@ -1032,10 +1140,10 @@ class _EnvironmentQuickView extends ConsumerWidget {
 }
 
 // ─────────────────────────────────────────
-//  NOTIFICATIONS QUICK VIEW
+//  message QUICK VIEW
 // ─────────────────────────────────────────
-class _NotificationsQuickView extends ConsumerWidget {
-  const _NotificationsQuickView();
+class _MessageQuickView extends ConsumerWidget {
+  const _MessageQuickView();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1046,8 +1154,8 @@ class _NotificationsQuickView extends ConsumerWidget {
       error: (_, __) => const SizedBox.shrink(),
       data: (user) {
         if (user == null) return const SizedBox.shrink();
-        final notifications = ref.watch(notificationsProvider(user.id));
-        return notifications.when(
+        final message = ref.watch(notificationsProvider(user.id));
+        return message.when(
           loading: () => const LoadingWidget(),
           error:
               (e, _) => EmptyState(
@@ -1059,16 +1167,16 @@ class _NotificationsQuickView extends ConsumerWidget {
               (list) =>
                   list.isEmpty
                       ? const EmptyState(
-                        title: 'No Notifications',
-                        message: 'No notifications yet',
-                        icon: Icons.notifications_none_rounded,
+                        title: 'No message',
+                        message: 'No message yet',
+                        icon: Icons.message_rounded,
                       )
                       : ListView.builder(
                         padding: const EdgeInsets.all(16),
                         itemCount: list.length,
                         itemBuilder:
                             (context, index) =>
-                                NotificationTile(notification: list[index]),
+                                MessagesTile(message: list[index]),
                       ),
         );
       },
@@ -1079,6 +1187,37 @@ class _NotificationsQuickView extends ConsumerWidget {
 // ─────────────────────────────────────────
 //  PROFILE BOTTOM SHEET
 // ─────────────────────────────────────────
+class _InfoBadge extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+
+  const _InfoBadge({
+    required this.label,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: color),
+          const SizedBox(width: 4),
+          Text(label, style: AppTypography.caption.copyWith(color: color)),
+        ],
+      ),
+    );
+  }
+}
+
 class _ProfileBottomSheet extends ConsumerWidget {
   const _ProfileBottomSheet();
 
@@ -1122,25 +1261,53 @@ class _ProfileBottomSheet extends ConsumerWidget {
           user.when(
             loading: () => const LoadingWidget(),
             error: (_, __) => const Text('Student'),
-            data:
-                (u) => Column(
-                  children: [
-                    Text(
-                      u?.name ?? 'Student',
-                      style: AppTypography.headingMedium.copyWith(
-                        color:
-                            isDark ? AppColors.darkText : AppColors.lightText,
+            data: (u) {
+              final students = ref.watch(studentsProvider);
+              final student = students.maybeWhen(
+                data:
+                    (list) => list.where((s) => s.userId == u?.id).firstOrNull,
+                orElse: () => null,
+              );
+
+              return Column(
+                children: [
+                  Text(
+                    u?.name ?? 'Student',
+                    style: AppTypography.headingMedium.copyWith(
+                      color: isDark ? AppColors.darkText : AppColors.lightText,
+                    ),
+                  ),
+                  Text(
+                    u?.email ?? '',
+                    style: AppTypography.bodySmall.copyWith(
+                      color:
+                          isDark
+                              ? AppColors.darkTextSecondary
+                              : AppColors.lightTextSecondary,
+                    ),
+                  ),
+                  if (student != null) ...[
+                    const SizedBox(height: 6),
+                    // ─── Class + Level display ───
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.studentColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        student.fullDisplay,
+                        style: AppTypography.labelSmall.copyWith(
+                          color: AppColors.studentColor,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
                       ),
                     ),
-                    Text(
-                      u?.email ?? '',
-                      style: AppTypography.bodySmall.copyWith(
-                        color:
-                            isDark
-                                ? AppColors.darkTextSecondary
-                                : AppColors.lightTextSecondary,
-                      ),
-                    ),
+                  ] else ...[
                     const SizedBox(height: 4),
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -1159,7 +1326,9 @@ class _ProfileBottomSheet extends ConsumerWidget {
                       ),
                     ),
                   ],
-                ),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 24),
           AppButton(

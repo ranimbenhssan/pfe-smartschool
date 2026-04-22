@@ -48,16 +48,16 @@ class FirestoreService {
               snap.docs.map((doc) => StudentModel.fromFirestore(doc)).toList(),
         );
   }
+
   // Returns a Future (one-time fetch) instead of Stream
-Future<List<StudentModel>> getStudentsByClassOnce(String classId) async {
-  final snap = await _firestore
-      .collection('students')
-      .where('classId', isEqualTo: classId)
-      .get();
-  return snap.docs
-      .map((d) => StudentModel.fromFirestore(d))
-      .toList();
-}
+  Future<List<StudentModel>> getStudentsByClassOnce(String classId) async {
+    final snap =
+        await _firestore
+            .collection('students')
+            .where('classId', isEqualTo: classId)
+            .get();
+    return snap.docs.map((d) => StudentModel.fromFirestore(d)).toList();
+  }
 
   // Get student by RFID tag
   Future<StudentModel?> getStudentByRfid(String rfidTag) async {
@@ -94,6 +94,10 @@ Future<List<StudentModel>> getStudentsByClassOnce(String classId) async {
     await _firestore.collection('students').doc(studentId).delete();
   }
 
+  Future<void> updateUser(String userId, Map<String, dynamic> data) async {
+    await _firestore.collection('users').doc(userId).update(data);
+  }
+
   // ─────────────────────────────────────────
   //  TEACHERS
   // ─────────────────────────────────────────
@@ -109,10 +113,15 @@ Future<List<StudentModel>> getStudentsByClassOnce(String classId) async {
         );
   }
 
-  Future<TeacherModel?> getTeacher(String teacherId) async {
-    final doc = await _firestore.collection('teachers').doc(teacherId).get();
-    if (!doc.exists) return null;
-    return TeacherModel.fromFirestore(doc);
+  Future<TeacherModel?> getTeacherById(String teacherId) async {
+    try {
+      final doc = await _firestore.collection('teachers').doc(teacherId).get();
+      if (!doc.exists) return null;
+      return TeacherModel.fromFirestore(doc);
+    } catch (e) {
+      debugPrint('getTeacherById error: $e');
+      return null;
+    }
   }
 
   Future<void> addTeacher(TeacherModel teacher) async {
@@ -421,11 +430,11 @@ Future<List<StudentModel>> getStudentsByClassOnce(String classId) async {
   }
 
   // ─────────────────────────────────────────
-  //  NOTIFICATIONS
+  //  message
   // ─────────────────────────────────────────
 
-  // Get notifications for a user
-  Stream<List<NotificationModel>> getNotifications(String userId) {
+  // Get message for a user
+  Stream<List<NotificationModel>> getmessage(String userId) {
     return _firestore
         .collection('notifications')
         .where('userId', isEqualTo: userId)
@@ -440,14 +449,14 @@ Future<List<StudentModel>> getStudentsByClassOnce(String classId) async {
         );
   }
 
-  // Mark notification as read
-  Future<void> markNotificationRead(String notificationId) async {
-    await _firestore.collection('notifications').doc(notificationId).update({
+  // Mark message as read
+  Future<void> markNotificationRead(String messageId) async {
+    await _firestore.collection('notifications').doc(messageId).update({
       'isRead': true,
     });
   }
 
-  // Mark all notifications as read
+  // Mark all message as read
   Future<void> markAllNotificationsRead(String userId) async {
     final snap =
         await _firestore
@@ -463,12 +472,12 @@ Future<List<StudentModel>> getStudentsByClassOnce(String classId) async {
     await batch.commit();
   }
 
-  // Add notification
-  Future<void> addNotification(NotificationModel notification) async {
+  // Add message
+  Future<void> addmessage(NotificationModel message) async {
     await _firestore
         .collection('notifications')
-        .doc(notification.id)
-        .set(notification.toFirestore());
+        .doc(message.id)
+        .set(message.toFirestore());
   }
 
   // ─────────────────────────────────────────

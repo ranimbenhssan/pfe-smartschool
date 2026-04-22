@@ -29,11 +29,12 @@ class AdminAlertDetailScreen extends ConsumerWidget {
       ),
       body: flags.when(
         loading: () => const LoadingWidget(),
-        error: (e, _) => EmptyState(
-          title: 'Error',
-          message: e.toString(),
-          icon: Icons.error_outline_rounded,
-        ),
+        error:
+            (e, _) => EmptyState(
+              title: 'Error',
+              message: e.toString(),
+              icon: Icons.error_outline_rounded,
+            ),
         data: (list) {
           final flag = list.where((f) => f.id == flagId).firstOrNull;
           if (flag == null) {
@@ -55,9 +56,10 @@ class AdminAlertDetailScreen extends ConsumerWidget {
     AiFlagModel flag,
     WidgetRef ref,
   ) {
-    final color = flag.type == FlagType.frequentAbsent
-        ? AppColors.error
-        : flag.type == FlagType.latePattern
+    final color =
+        flag.type == FlagType.frequentAbsent
+            ? AppColors.error
+            : flag.type == FlagType.latePattern
             ? AppColors.warning
             : AppColors.info;
 
@@ -88,8 +90,8 @@ class AdminAlertDetailScreen extends ConsumerWidget {
                     flag.type == FlagType.frequentAbsent
                         ? Icons.event_busy_rounded
                         : flag.type == FlagType.latePattern
-                            ? Icons.watch_later_rounded
-                            : Icons.warning_amber_rounded,
+                        ? Icons.watch_later_rounded
+                        : Icons.warning_amber_rounded,
                     color: color,
                     size: 28,
                   ),
@@ -97,17 +99,16 @@ class AdminAlertDetailScreen extends ConsumerWidget {
                 const SizedBox(height: 12),
                 Text(
                   flag.typeLabel,
-                  style: AppTypography.headingMedium.copyWith(
-                    color: color,
-                  ),
+                  style: AppTypography.headingMedium.copyWith(color: color),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   'Risk Score: ${(flag.riskScore * 100).toInt()}%',
                   style: AppTypography.bodySmall.copyWith(
-                    color: isDark
-                        ? AppColors.darkTextSecondary
-                        : AppColors.lightTextSecondary,
+                    color:
+                        isDark
+                            ? AppColors.darkTextSecondary
+                            : AppColors.lightTextSecondary,
                   ),
                 ),
               ],
@@ -124,25 +125,24 @@ class AdminAlertDetailScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 8),
           GestureDetector(
-            onTap: () => context.push(
-              '${AppRoutes.adminStudentProfile}/${flag.studentId}',
-            ),
+            onTap:
+                () => context.push(
+                  '${AppRoutes.adminStudentProfile}/${flag.studentId}',
+                ),
             child: Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: isDark ? AppColors.darkCard : AppColors.lightCard,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color:
-                      isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                  color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
                 ),
               ),
               child: Row(
                 children: [
                   CircleAvatar(
                     radius: 22,
-                    backgroundColor:
-                        AppColors.accent.withValues(alpha: 0.15),
+                    backgroundColor: AppColors.accent.withValues(alpha: 0.15),
                     child: Text(
                       flag.studentName.isNotEmpty
                           ? flag.studentName[0].toUpperCase()
@@ -188,8 +188,7 @@ class AdminAlertDetailScreen extends ConsumerWidget {
               color: isDark ? AppColors.darkCard : AppColors.lightCard,
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
-                color:
-                    isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
               ),
             ),
             child: Column(
@@ -198,9 +197,7 @@ class AdminAlertDetailScreen extends ConsumerWidget {
                 Text(
                   flag.details,
                   style: AppTypography.bodyMedium.copyWith(
-                    color: isDark
-                        ? AppColors.darkText
-                        : AppColors.lightText,
+                    color: isDark ? AppColors.darkText : AppColors.lightText,
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -229,15 +226,11 @@ class AdminAlertDetailScreen extends ConsumerWidget {
           AppButton(
             label: 'Mark as Resolved',
             onPressed: () async {
-              await ref
-                  .read(firestoreServiceProvider)
-                  .resolveAiFlag(flag.id);
+              await ref.read(firestoreServiceProvider).resolveAiFlag(flag.id);
               if (context.mounted) {
                 context.pop();
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Alert marked as resolved'),
-                  ),
+                  const SnackBar(content: Text('Alert marked as resolved')),
                 );
               }
             },

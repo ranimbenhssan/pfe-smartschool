@@ -10,7 +10,7 @@ final teachersProvider = StreamProvider<List<TeacherModel>>((ref) {
 // ─── Single Teacher ───
 final teacherProvider =
     FutureProvider.family<TeacherModel?, String>((ref, teacherId) {
-  return ref.watch(firestoreServiceProvider).getTeacher(teacherId);
+  return ref.watch(firestoreServiceProvider).getTeacherById(teacherId);
 });
 
 // ─── Teacher Search Query ───

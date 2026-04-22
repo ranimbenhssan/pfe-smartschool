@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/models.dart';
+import 'package:flutter/foundation.dart';
 
 // ─── All students ───
 final studentsProvider = StreamProvider<List<StudentModel>>((ref) {
@@ -54,6 +55,7 @@ final filteredStudentsProvider = StreamProvider<List<StudentModel>>((
 // ─── Students by classId ───
 final studentsByClassIdProvider =
     StreamProvider.family<List<StudentModel>, String>((ref, classId) {
+      if (classId.isEmpty) return Stream.value([]);
       return FirebaseFirestore.instance
           .collection('students')
           .where('classId', isEqualTo: classId)
@@ -62,7 +64,7 @@ final studentsByClassIdProvider =
             (snap) =>
                 snap.docs.map((d) => StudentModel.fromFirestore(d)).toList(),
           );
-    });
+});
 
 // ─── Students in same class as current user ───
 // Students in same class as current user

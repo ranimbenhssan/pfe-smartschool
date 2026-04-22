@@ -21,7 +21,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _isLoading = false;
-  String? _errorMessage;
+  String? _errormessage;
 
   late AnimationController _animController;
   late Animation<double> _fadeAnimation;
@@ -58,7 +58,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
 
     setState(() {
       _isLoading = true;
-      _errorMessage = null;
+      _errormessage = null;
     });
 
     final result = await ref
@@ -73,7 +73,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     if (!result.isSuccess) {
       setState(() {
         _isLoading = false;
-        _errorMessage = result.errorMessage;
+        _errormessage = result.error;
       });
       return;
     }
@@ -97,7 +97,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         default:
           setState(() {
             _isLoading = false;
-            _errorMessage = 'Unknown role. Please contact admin.';
+            _errormessage = 'Unknown role. Please contact admin.';
           });
       }
     });
@@ -327,8 +327,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                               ),
                             ),
 
-                            // Error Message
-                            if (_errorMessage != null) ...[
+                            // Error message
+                            if (_errormessage != null) ...[
                               Container(
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
@@ -352,7 +352,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                     const SizedBox(width: 8),
                                     Expanded(
                                       child: Text(
-                                        _errorMessage!,
+                                        _errormessage!,
                                         style: AppTypography.bodySmall.copyWith(
                                           color: AppColors.error,
                                         ),

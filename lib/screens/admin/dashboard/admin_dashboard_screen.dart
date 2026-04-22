@@ -96,7 +96,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
         ),
         IconButton(
           icon: const Icon(Icons.message_rounded, size: 22),
-          onPressed: () => context.push(AppRoutes.adminNotifications),
+          onPressed: () => context.push(AppRoutes.adminmessage),
         ),
         GestureDetector(
           onTap: () => _showProfileMenu(context),
@@ -164,12 +164,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
 class _DashboardBody extends ConsumerWidget {
   const _DashboardBody();
 
-  @override
-  Widget _buildRecentMessages(
-    BuildContext context,
-    bool isDark,
-    WidgetRef ref,
-  ) {
+  Widget _buildRecentmessage(BuildContext context, bool isDark, WidgetRef ref) {
     final currentUser = ref.watch(currentUserProvider);
 
     return currentUser.when(
@@ -177,7 +172,7 @@ class _DashboardBody extends ConsumerWidget {
       error: (_, __) => const SizedBox.shrink(),
       data: (user) {
         if (user == null) return const SizedBox.shrink();
-        final messages = ref.watch(notificationsProvider(user.id));
+        final message = ref.watch(notificationsProvider(user.id));
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -185,19 +180,19 @@ class _DashboardBody extends ConsumerWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Recent Messages',
+                  'Recent message',
                   style: AppTypography.headingMedium.copyWith(
                     color: isDark ? AppColors.darkText : AppColors.lightText,
                   ),
                 ),
                 TextButton(
-                  onPressed: () => context.push(AppRoutes.studentNotifications),
+                  onPressed: () => context.push(AppRoutes.adminmessage),
                   child: const Text('See all'),
                 ),
               ],
             ),
             const SizedBox(height: 8),
-            messages.when(
+            message.when(
               loading: () => const LoadingWidget(),
               error: (_, __) => const SizedBox.shrink(),
               data: (list) {
@@ -215,7 +210,7 @@ class _DashboardBody extends ConsumerWidget {
                       ),
                     ),
                     child: Text(
-                      'No messages yet',
+                      'No message yet',
                       style: AppTypography.bodySmall.copyWith(
                         color:
                             isDark
@@ -229,7 +224,7 @@ class _DashboardBody extends ConsumerWidget {
                   children:
                       list
                           .take(3)
-                          .map((msg) => NotificationTile(notification: msg))
+                          .map((msg) => MessagesTile(message: msg))
                           .toList(),
                 );
               },
@@ -240,6 +235,7 @@ class _DashboardBody extends ConsumerWidget {
     );
   }
 
+  @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final stats = ref.watch(dashboardStatsProvider);
@@ -298,8 +294,8 @@ class _DashboardBody extends ConsumerWidget {
             const SizedBox(height: 24),
             _buildRoomsOverview(context, isDark, ref),
             const SizedBox(height: 20),
-            // ─── Recent Messages ───
-            _buildRecentMessages(context, isDark, ref),
+            // ─── Recent message ───
+            _buildRecentmessage(context, isDark, ref),
             const SizedBox(height: 20),
           ],
         ),
@@ -541,10 +537,10 @@ class _DashboardBody extends ConsumerWidget {
         onTap: () => context.push(AppRoutes.adminTimetable),
       ),
       _QuickAction(
-        label: 'Notifications',
-        icon: Icons.notifications_rounded,
+        label: 'message',
+        icon: Icons.message_rounded,
         color: AppColors.success,
-        onTap: () => context.push(AppRoutes.adminNotifications),
+        onTap: () => context.push(AppRoutes.adminmessage),
       ),
       _QuickAction(
         label: 'Settings',
@@ -1121,16 +1117,22 @@ class _MoreMenu extends StatelessWidget {
         route: AppRoutes.adminAttendance,
       ),
       _MoreItem(
-        label: 'Send Notification',
+        label: 'Send message',
         icon: Icons.send_rounded,
         color: AppColors.secondary,
-        route: AppRoutes.adminNotificationSend,
+        route: AppRoutes.adminmessageend,
       ),
       _MoreItem(
         label: 'Timetable',
         icon: Icons.calendar_today_rounded,
         color: AppColors.accent,
         route: AppRoutes.adminTimetable,
+      ),
+      _MoreItem(
+        label: 'Bulk Import (Excel)',
+        icon: Icons.upload_file_rounded,
+        color: AppColors.success,
+        route: AppRoutes.adminImport,
       ),
       _MoreItem(
         label: 'Settings',

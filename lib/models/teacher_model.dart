@@ -5,9 +5,15 @@ class TeacherModel {
   final String userId;
   final String name;
   final String email;
+  final String subject;
   final List<String> assignedClassIds;
   final List<String> assignedClassNames;
-  final String? photoUrl;
+
+  // ─── RFID fields for future tracking ───
+  final String rfidTag;
+  final bool rfidEnabled;
+  final DateTime? lastRfidScan;
+
   final DateTime createdAt;
 
   const TeacherModel({
@@ -15,9 +21,12 @@ class TeacherModel {
     required this.userId,
     required this.name,
     required this.email,
+    this.subject = '',
     required this.assignedClassIds,
     required this.assignedClassNames,
-    this.photoUrl,
+    this.rfidTag = '',
+    this.rfidEnabled = false,
+    this.lastRfidScan,
     required this.createdAt,
   });
 
@@ -36,8 +45,12 @@ class TeacherModel {
       userId: raw['userId']?.toString() ?? '',
       name: raw['name']?.toString() ?? '',
       email: raw['email']?.toString() ?? '',
+      subject: raw['subject']?.toString() ?? '',
       assignedClassIds: safeList('assignedClassIds'),
       assignedClassNames: safeList('assignedClassNames'),
+      rfidTag: raw['rfidTag']?.toString() ?? '',
+      rfidEnabled: raw['rfidEnabled'] as bool? ?? false,
+      lastRfidScan: (raw['lastRfidScan'] as Timestamp?)?.toDate(),
       createdAt: (raw['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
   }
@@ -47,32 +60,14 @@ class TeacherModel {
       'userId': userId,
       'name': name,
       'email': email,
+      'subject': subject,
       'assignedClassIds': assignedClassIds,
       'assignedClassNames': assignedClassNames,
-      'photoUrl': photoUrl,
+      'rfidTag': rfidTag,
+      'rfidEnabled': rfidEnabled,
+      'lastRfidScan':
+          lastRfidScan != null ? Timestamp.fromDate(lastRfidScan!) : null,
       'createdAt': Timestamp.fromDate(createdAt),
     };
   }
-
-  TeacherModel copyWith({
-    String? name,
-    String? email,
-    List<String>? assignedClassIds,
-    List<String>? assignedClassNames,
-    String? photoUrl,
-  }) {
-    return TeacherModel(
-      id: id,
-      userId: userId,
-      name: name ?? this.name,
-      email: email ?? this.email,
-      assignedClassIds: assignedClassIds ?? this.assignedClassIds,
-      assignedClassNames: assignedClassNames ?? this.assignedClassNames,
-      photoUrl: photoUrl ?? this.photoUrl,
-      createdAt: createdAt,
-    );
-  }
-
-  @override
-  String toString() => 'TeacherModel(id: $id, name: $name)';
 }

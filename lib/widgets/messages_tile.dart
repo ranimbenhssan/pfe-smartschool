@@ -4,11 +4,11 @@ import '../theme/theme.dart';
 import 'package:go_router/go_router.dart';
 import '../navigation/app_routes.dart';
 
-class NotificationTile extends StatelessWidget {
-  final NotificationModel notification;
+class MessagesTile extends StatelessWidget {
+  final NotificationModel message;
   final VoidCallback? onTap;
 
-  const NotificationTile({super.key, required this.notification, this.onTap});
+  const MessagesTile({super.key, required this.message, this.onTap});
 
   Color _typeColor(MessageType type) {
     switch (type) {
@@ -40,7 +40,7 @@ class NotificationTile extends StatelessWidget {
       case MessageType.report:
         return Icons.bar_chart_rounded;
       case MessageType.general:
-        return Icons.notifications_rounded;
+        return Icons.message_rounded;
     }
   }
 
@@ -57,37 +57,39 @@ class NotificationTile extends StatelessWidget {
       case MessageType.report:
         return 'Report';
       case MessageType.general:
-        return 'Notification';
+        return 'message';
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final color = _typeColor(notification.messageType);
-    final icon = _typeIcon(notification.messageType);
+    final color = _typeColor(message.messageType);
+    final icon = _typeIcon(message.messageType);
 
     return GestureDetector(
       onTap: () {
         // Call original onTap if provided
         onTap?.call();
         // Navigate to detail screen
-        context.push(AppRoutes.messageDetail, extra: notification);
+        context.push(AppRoutes.messageDetail, extra: message);
       },
       child: Container(
         padding: const EdgeInsets.all(14),
         margin: const EdgeInsets.only(bottom: 10),
         decoration: BoxDecoration(
+          // ─── Unread = colored background, Read = neutral ───
           color:
-              notification.isRead
+              message.isRead
                   ? (isDark ? AppColors.darkCard : AppColors.lightCard)
                   : color.withValues(alpha: 0.06),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color:
-                notification.isRead
+                message.isRead
                     ? (isDark ? AppColors.darkBorder : AppColors.lightBorder)
-                    : color.withValues(alpha: 0.3),
+                    : color.withValues(alpha: 0.35),
+            width: message.isRead ? 1 : 1.5,
           ),
         ),
         child: Column(
@@ -113,21 +115,21 @@ class NotificationTile extends StatelessWidget {
                         children: [
                           Expanded(
                             child: Text(
-                              notification.title,
+                              message.title,
                               style: AppTypography.labelLarge.copyWith(
                                 color:
                                     isDark
                                         ? AppColors.darkText
                                         : AppColors.lightText,
                                 fontWeight:
-                                    notification.isRead
+                                    message.isRead
                                         ? FontWeight.normal
                                         : FontWeight.bold,
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          if (!notification.isRead)
+                          if (!message.isRead)
                             Container(
                               width: 8,
                               height: 8,
@@ -150,16 +152,22 @@ class NotificationTile extends StatelessWidget {
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
-                              _typeLabel(notification.messageType),
+                              _typeLabel(message.messageType),
                               style: AppTypography.caption.copyWith(
                                 color: color,
                               ),
                             ),
                           ),
-                          if (notification.senderName.isNotEmpty) ...[
+                          if (message.senderName.isNotEmpty) ...[
                             const SizedBox(width: 6),
                             Text(
-                              'from ${notification.senderName}',
+                              message.senderName.isNotEmpty
+                                  ? 'From ${message.senderName}'
+                                  : message.senderRole == 'admin'
+                                  ? 'From Administration'
+                                  : message.senderRole == 'teacher'
+                                  ? 'From Teacher'
+                                  : 'SmartSchool',
                               style: AppTypography.caption,
                             ),
                           ],
@@ -172,7 +180,7 @@ class NotificationTile extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              notification.message,
+              message.message,
               style: AppTypography.bodySmall.copyWith(
                 color:
                     isDark
@@ -184,12 +192,12 @@ class NotificationTile extends StatelessWidget {
             ),
 
             // ─── Attachments preview ───
-            if (notification.attachments.isNotEmpty) ...[
+            if (message.attachments.isNotEmpty) ...[
               const SizedBox(height: 8),
               Wrap(
                 spacing: 6,
                 children:
-                    notification.attachments.map((att) {
+                    message.attachments.map((att) {
                       return Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 8,
@@ -241,7 +249,7 @@ class NotificationTile extends StatelessWidget {
             // ─── Timestamp ───
             const SizedBox(height: 6),
             Text(
-              _formatTime(notification.createdAt),
+              _formatTime(message.createdAt),
               style: AppTypography.caption.copyWith(
                 color:
                     isDark ? AppColors.darkTextHint : AppColors.lightTextHint,

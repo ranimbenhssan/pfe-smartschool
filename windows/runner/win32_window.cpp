@@ -167,14 +167,14 @@ LRESULT CALLBACK Win32Window::WndProc(HWND const window,
     EnableFullDpiSupportIfAvailable(window);
     that->window_handle_ = window;
   } else if (Win32Window* that = GetThisFromHandle(window)) {
-    return that->MessageHandler(window, message, wparam, lparam);
+    return that->messageHandler(window, message, wparam, lparam);
   }
 
   return DefWindowProc(window, message, wparam, lparam);
 }
 
 LRESULT
-Win32Window::MessageHandler(HWND hwnd,
+Win32Window::messageHandler(HWND hwnd,
                             UINT const message,
                             WPARAM const wparam,
                             LPARAM const lparam) noexcept {
@@ -183,7 +183,7 @@ Win32Window::MessageHandler(HWND hwnd,
       window_handle_ = nullptr;
       Destroy();
       if (quit_on_close_) {
-        PostQuitMessage(0);
+        PostQuitmessage(0);
       }
       return 0;
 

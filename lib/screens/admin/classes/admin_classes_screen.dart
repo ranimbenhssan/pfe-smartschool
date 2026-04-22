@@ -98,28 +98,41 @@ class AdminClassesScreen extends ConsumerWidget {
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
+                                      // --- MISE À JOUR ICI ---
                                       Text(
-                                        cls.name,
+                                        cls.displayName, // "3 IoT1"
                                         style: AppTypography.labelLarge
                                             .copyWith(
+                                              fontWeight: FontWeight.bold,
                                               color:
                                                   isDark
                                                       ? AppColors.darkText
                                                       : AppColors.lightText,
                                             ),
                                       ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        'Grade: ${cls.grade}',
-                                        style: AppTypography.bodySmall.copyWith(
-                                          color:
-                                              isDark
-                                                  ? AppColors.darkTextSecondary
-                                                  : AppColors
-                                                      .lightTextSecondary,
+                                      const SizedBox(height: 6),
+                                      SingleChildScrollView(
+                                        scrollDirection: Axis.horizontal,
+                                        child: Row(
+                                          children: [
+                                            _Badge(cls.grade, AppColors.info),
+                                            if (cls.level.isNotEmpty) ...[
+                                              const SizedBox(width: 6),
+                                              _Badge(
+                                                'Level ${cls.level}',
+                                                AppColors.accent,
+                                              ),
+                                            ],
+                                            const SizedBox(width: 6),
+                                            _Badge(
+                                              '${cls.studentCount} students',
+                                              AppColors.success,
+                                            ),
+                                          ],
                                         ),
                                       ),
-                                      const SizedBox(height: 2),
+                                      // -----------------------
+                                      const SizedBox(height: 4),
                                       Text(
                                         'Teacher: ${cls.teacherName.isEmpty ? 'Not assigned' : cls.teacherName}',
                                         style: AppTypography.caption.copyWith(
@@ -129,72 +142,63 @@ class AdminClassesScreen extends ConsumerWidget {
                                     ],
                                   ),
                                 ),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    PopupMenuButton(
-                                      icon: Icon(
-                                        Icons.more_vert_rounded,
-                                        color:
-                                            isDark
-                                                ? AppColors.darkTextHint
-                                                : AppColors.lightTextHint,
-                                      ),
-                                      itemBuilder:
-                                          (_) => [
-                                            const PopupMenuItem(
-                                              value: 'edit',
-                                              child: Row(
-                                                children: [
-                                                  Icon(
-                                                    Icons.edit_rounded,
-                                                    size: 16,
-                                                  ),
-                                                  SizedBox(width: 8),
-                                                  Text('Edit'),
-                                                ],
+                                PopupMenuButton(
+                                  icon: Icon(
+                                    Icons.more_vert_rounded,
+                                    color:
+                                        isDark
+                                            ? AppColors.darkTextHint
+                                            : AppColors.lightTextHint,
+                                  ),
+                                  itemBuilder:
+                                      (_) => [
+                                        const PopupMenuItem(
+                                          value: 'edit',
+                                          child: Row(
+                                            children: [
+                                              Icon(
+                                                Icons.edit_rounded,
+                                                size: 16,
                                               ),
-                                            ),
-                                            const PopupMenuItem(
-                                              value: 'delete',
-                                              child: Row(
-                                                children: [
-                                                  Icon(
-                                                    Icons.delete_rounded,
-                                                    size: 16,
-                                                    color: AppColors.error,
-                                                  ),
-                                                  SizedBox(width: 8),
-                                                  Text(
-                                                    'Delete',
-                                                    style: TextStyle(
-                                                      color: AppColors.error,
-                                                    ),
-                                                  ),
-                                                ],
+                                              SizedBox(width: 8),
+                                              Text('Edit'),
+                                            ],
+                                          ),
+                                        ),
+                                        const PopupMenuItem(
+                                          value: 'delete',
+                                          child: Row(
+                                            children: [
+                                              Icon(
+                                                Icons.delete_rounded,
+                                                size: 16,
+                                                color: AppColors.error,
                                               ),
-                                            ),
-                                          ],
-                                      onSelected: (value) {
-                                        if (value == 'edit') {
-                                          context.push(
-                                            '${AppRoutes.adminClassEdit}/${cls.id}',
-                                          );
-                                        } else if (value == 'delete') {
-                                          _confirmDelete(
-                                            context,
-                                            ref,
-                                            cls.id,
-                                            cls.name,
-                                          );
-                                        }
-                                      },
-                                    ),
-                                    Text(
-                                      '${cls.studentCount} students',
-                                      style: AppTypography.caption,
-                                    ),
-                                  ],
+                                              SizedBox(width: 8),
+                                              Text(
+                                                'Delete',
+                                                style: TextStyle(
+                                                  color: AppColors.error,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                  onSelected: (value) {
+                                    if (value == 'edit') {
+                                      context.push(
+                                        '${AppRoutes.adminClassEdit}/${cls.id}',
+                                      );
+                                    } else if (value == 'delete') {
+                                      _confirmDelete(
+                                        context,
+                                        ref,
+                                        cls.id,
+                                        cls.name,
+                                      );
+                                    }
+                                  },
                                 ),
                               ],
                             ),
@@ -245,6 +249,34 @@ class AdminClassesScreen extends ConsumerWidget {
               ),
             ],
           ),
+    );
+  }
+}
+
+// --- AJOUT DU WIDGET BADGE ICI ---
+class _Badge extends StatelessWidget {
+  final String label;
+  final Color color;
+
+  const _Badge(this.label, this.color);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+          color: color,
+        ),
+      ),
     );
   }
 }

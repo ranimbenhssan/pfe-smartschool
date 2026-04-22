@@ -32,8 +32,8 @@ class AppRoutes {
   static const String adminAiAlerts = '/admin/ai-alerts';
   static const String adminAlertDetail = '/admin/ai-alerts/detail';
   static const String adminAlertResolved = '/admin/ai-alerts/resolved';
-  static const String adminNotifications = '/admin/notifications';
-  static const String adminNotificationSend = '/admin/notifications/send';
+  static const String adminmessage = '/admin/message';
+  static const String adminmessageend = '/admin/message/send';
   static const String adminTimetable = '/admin/timetable';
   static const String adminTimetableAdd = '/admin/timetable/add';
   static const String adminTimetableEdit = '/admin/timetable/edit';
@@ -46,7 +46,7 @@ class AppRoutes {
   static const String teacherDashboard = '/teacher/dashboard';
   static const String teacherAttendance = '/teacher/attendance';
   static const String teacherAttendanceToday = '/teacher/attendance/today';
-  static const String teacherAttendanceNameCall =
+  static const String teacherNameCall =
       '/teacher/attendance/namecall'; // ← NEW
   static const String teacherAttendanceByDate = '/teacher/attendance/by-date';
   static const String teacherAttendanceEdit = '/teacher/attendance/edit';
@@ -59,7 +59,7 @@ class AppRoutes {
   static const String teacherAlertDetail = '/teacher/ai-alerts/detail';
   static const String teacherTimetable = '/teacher/timetable';
   static const String teacherTimetableDetail = '/teacher/timetable/detail';
-  static const String teacherNotifications = '/teacher/notifications';
+  static const String teachermessage = '/teacher/message';
 
   // ─── Student ───
   static const String studentDashboard = '/student/dashboard';
@@ -69,10 +69,13 @@ class AppRoutes {
   static const String studentTimetableDetail = '/student/timetable/detail';
   static const String studentIot = '/student/iot';
   static const String studentIotHistory = '/student/iot/history';
-  static const String studentNotifications = '/student/notifications';
+  static const String studentmessage = '/student/message';
   static const adminRooms = '/admin/rooms';
-  static const teacherNotificationSend = '/teacher/notifications/send';
-  static const studentNotificationSend = '/student/notifications/send';
+  static const teachermessageend = '/teacher/message/send';
+  static const studentmessageend = '/student/message/send';
   static const adminTimetableForm = '/admin/timetable/form';
   static const messageDetail = '/message-detail';
+  static const messageReply = '/message/reply';
+  static const changePassword = '/change-password';
+  static const adminImport = '/admin/import';
 }

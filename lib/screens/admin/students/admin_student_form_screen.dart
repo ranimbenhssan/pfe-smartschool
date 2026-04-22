@@ -96,25 +96,29 @@ class _AdminStudentFormScreenState
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text(result.errorMessage ?? 'Error creating user'),
+                content: Text(result.error ?? 'Error creating user'),
               ),
             );
           }
           setState(() => _isLoading = false);
           return;
         }
+        final selectedClass =
+            (ref.read(classesProvider).value ?? [])
+                .where((c) => c.id == _selectedClassId)
+                .firstOrNull;
 
         final student = StudentModel(
           id: result.userId!,
-          userId: result.userId!,
           name: _nameController.text.trim(),
           email: _emailController.text.trim(),
-          rfidTag: _rfidController.text.trim(),
           classId: _selectedClassId!,
-          className: _selectedClassName!,
+          className: _selectedClassName ?? '',
+          level: selectedClass?.level ?? '', // ← ADD
+          rfidTag: _rfidController.text.trim(),
+          userId: result.userId!,
           createdAt: DateTime.now(),
         );
-
         await ref.read(firestoreServiceProvider).addStudent(student);
       }
 

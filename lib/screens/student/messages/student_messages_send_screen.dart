@@ -6,16 +6,16 @@ import '../../../providers/providers.dart';
 import '../../../services/services.dart';
 import '../../../models/models.dart';
 
-class StudentNotificationSendScreen extends ConsumerStatefulWidget {
-  const StudentNotificationSendScreen({super.key});
+class StudentmessageendScreen extends ConsumerStatefulWidget {
+  const StudentmessageendScreen({super.key});
 
   @override
-  ConsumerState<StudentNotificationSendScreen> createState() =>
-      _StudentNotificationSendScreenState();
+  ConsumerState<StudentmessageendScreen> createState() =>
+      _StudentmessageendScreenState();
 }
 
-class _StudentNotificationSendScreenState
-    extends ConsumerState<StudentNotificationSendScreen> {
+class _StudentmessageendScreenState
+    extends ConsumerState<StudentmessageendScreen> {
   bool _isLoading = false;
   String _targetType = 'teacher';
   List<String> _selectedTeacherIds = [];
@@ -29,20 +29,18 @@ class _StudentNotificationSendScreenState
   ) async {
     final currentUser = await ref.read(currentUserProvider.future);
     if (currentUser == null) return;
-     if (!mounted) return;
+    if (!mounted) return;
 
     if (_targetType == 'teacher' && _selectedTeacherIds.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Please select at least one teacher')),
+        const SnackBar(content: Text('Please select at least one teacher')),
       );
       return;
     }
     if (_targetType == 'student' && _selectedStudentIds.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Please select at least one student')),
+        const SnackBar(content: Text('Please select at least one student')),
       );
       return;
     }
@@ -53,15 +51,15 @@ class _StudentNotificationSendScreenState
 
     try {
       Future<bool> sendToUser(String userId) => service.sendToUser(
-            userId,
-            title,
-            message,
-            type: messageType.name,
-            senderId: currentUser.id,
-            senderName: currentUser.name,
-            senderRole: 'student',
-            attachments: attMaps,
-          );
+        userId,
+        title,
+        message,
+        type: messageType.name,
+        senderId: currentUser.id,
+        senderName: currentUser.name,
+        senderRole: 'student',
+        attachments: attMaps,
+      );
 
       if (_targetType == 'teacher' || _targetType == 'mixed') {
         for (final id in _selectedTeacherIds) {
@@ -73,8 +71,7 @@ class _StudentNotificationSendScreenState
           final student = await ref
               .read(firestoreServiceProvider)
               .getStudent(studentId);
-          if (student?.userId != null &&
-              student!.userId.isNotEmpty) {
+          if (student?.userId != null && student!.userId.isNotEmpty) {
             await sendToUser(student.userId);
           }
         }
@@ -82,8 +79,7 @@ class _StudentNotificationSendScreenState
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Message sent successfully ✅')),
+          const SnackBar(content: Text('message sent successfully ✅')),
         );
         setState(() {
           _targetType = 'teacher';
@@ -93,8 +89,9 @@ class _StudentNotificationSendScreenState
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Error: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
     if (mounted) setState(() => _isLoading = false);
@@ -109,7 +106,7 @@ class _StudentNotificationSendScreenState
       backgroundColor:
           isDark ? AppColors.darkBackground : AppColors.lightBackground,
       appBar: AppBar(
-        title: const Text('Send Message'),
+        title: const Text('Send message'),
         backgroundColor:
             isDark ? AppColors.darkSurface : AppColors.lightSurface,
       ),
@@ -119,23 +116,28 @@ class _StudentNotificationSendScreenState
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // ─── Target ───
-            Text('Send To',
-                style: AppTypography.labelMedium.copyWith(
-                  color: isDark
-                      ? AppColors.darkTextSecondary
-                      : AppColors.lightTextSecondary,
-                )),
+            Text(
+              'Send To',
+              style: AppTypography.labelMedium.copyWith(
+                color:
+                    isDark
+                        ? AppColors.darkTextSecondary
+                        : AppColors.lightTextSecondary,
+              ),
+            ),
             const SizedBox(height: 8),
             Row(
               children: [
-                _chip(isDark, 'teacher', 'Teacher(s)',
-                    Icons.person_pin_rounded),
+                _chip(
+                  isDark,
+                  'teacher',
+                  'Teacher(s)',
+                  Icons.person_pin_rounded,
+                ),
                 const SizedBox(width: 8),
-                _chip(isDark, 'student', 'Classmate(s)',
-                    Icons.people_rounded),
+                _chip(isDark, 'student', 'Classmate(s)', Icons.people_rounded),
                 const SizedBox(width: 8),
-                _chip(isDark, 'mixed', 'Mixed',
-                    Icons.group_rounded),
+                _chip(isDark, 'mixed', 'Mixed', Icons.group_rounded),
               ],
             ),
             const SizedBox(height: 16),
@@ -151,30 +153,39 @@ class _StudentNotificationSendScreenState
                 error: (_, __) => const SizedBox.shrink(),
                 data: (user) {
                   if (user == null) return const SizedBox.shrink();
-                  final classmates =
-                      ref.watch(studentsByClassProvider(user.id));
+                  final classmates = ref.watch(
+                    studentsByClassProvider(user.id),
+                  );
                   return SelectorSection(
                     isDark: isDark,
                     title: 'Select Classmate(s)',
                     child: classmates.when(
                       loading: () => const LoadingWidget(),
                       error: (e, _) => Text('Error: $e'),
-                      data: (list) => Column(
-                        children: list
-                            .where((s) => s.userId != user.id)
-                            .map((s) {
-                          final isSelected =
-                              _selectedStudentIds.contains(s.id);
-                          return SelectTile(
-                            isDark: isDark,
-                            label: s.name,
-                            isSelected: isSelected,
-                            onTap: () => setState(() => isSelected
-                                ? _selectedStudentIds.remove(s.id)
-                                : _selectedStudentIds.add(s.id)),
-                          );
-                        }).toList(),
-                      ),
+                      data:
+                          (list) => Column(
+                            children:
+                                list.where((s) => s.userId != user.id).map((s) {
+                                  final isSelected = _selectedStudentIds
+                                      .contains(s.id);
+                                  return SelectTile(
+                                    isDark: isDark,
+                                    label: s.name,
+                                    isSelected: isSelected,
+                                    onTap:
+                                        () => setState(
+                                          () =>
+                                              isSelected
+                                                  ? _selectedStudentIds.remove(
+                                                    s.id,
+                                                  )
+                                                  : _selectedStudentIds.add(
+                                                    s.id,
+                                                  ),
+                                        ),
+                                  );
+                                }).toList(),
+                          ),
                     ),
                   );
                 },
@@ -197,25 +208,27 @@ class _StudentNotificationSendScreenState
   Widget _chip(bool isDark, String value, String label, IconData icon) {
     final isSelected = _targetType == value;
     return GestureDetector(
-      onTap: () => setState(() {
-        _targetType = value;
-        _selectedTeacherIds = [];
-        _selectedStudentIds = [];
-      }),
+      onTap:
+          () => setState(() {
+            _targetType = value;
+            _selectedTeacherIds = [];
+            _selectedStudentIds = [];
+          }),
       child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected
-              ? AppColors.studentColor.withValues(alpha: 0.12)
-              : isDark
+          color:
+              isSelected
+                  ? AppColors.studentColor.withValues(alpha: 0.12)
+                  : isDark
                   ? AppColors.darkCard
                   : AppColors.lightCard,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: isSelected
-                ? AppColors.studentColor
-                : isDark
+            color:
+                isSelected
+                    ? AppColors.studentColor
+                    : isDark
                     ? AppColors.darkBorder
                     : AppColors.lightBorder,
           ),
@@ -223,15 +236,18 @@ class _StudentNotificationSendScreenState
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon,
-                size: 14,
-                color: isSelected ? AppColors.studentColor : null),
+            Icon(
+              icon,
+              size: 14,
+              color: isSelected ? AppColors.studentColor : null,
+            ),
             const SizedBox(width: 4),
-            Text(label,
-                style: AppTypography.labelSmall.copyWith(
-                  color:
-                      isSelected ? AppColors.studentColor : null,
-                )),
+            Text(
+              label,
+              style: AppTypography.labelSmall.copyWith(
+                color: isSelected ? AppColors.studentColor : null,
+              ),
+            ),
           ],
         ),
       ),
@@ -246,20 +262,26 @@ class _StudentNotificationSendScreenState
       child: teachers.when(
         loading: () => const LoadingWidget(),
         error: (e, _) => Text('Error: $e'),
-        data: (list) => Column(
-          children: list.map((t) {
-            final isSelected = _selectedTeacherIds.contains(t.id);
-            return SelectTile(
-              isDark: isDark,
-              label: t.name,
-              subtitle: t.assignedClassNames.join(', '),
-              isSelected: isSelected,
-              onTap: () => setState(() => isSelected
-                  ? _selectedTeacherIds.remove(t.id)
-                  : _selectedTeacherIds.add(t.id)),
-            );
-          }).toList(),
-        ),
+        data:
+            (list) => Column(
+              children:
+                  list.map((t) {
+                    final isSelected = _selectedTeacherIds.contains(t.id);
+                    return SelectTile(
+                      isDark: isDark,
+                      label: t.name,
+                      subtitle: t.assignedClassNames.join(', '),
+                      isSelected: isSelected,
+                      onTap:
+                          () => setState(
+                            () =>
+                                isSelected
+                                    ? _selectedTeacherIds.remove(t.id)
+                                    : _selectedTeacherIds.add(t.id),
+                          ),
+                    );
+                  }).toList(),
+            ),
       ),
     );
   }

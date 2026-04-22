@@ -100,27 +100,6 @@ class _AdminStudentProfileScreenState
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const SizedBox(height: 60),
-                      CircleAvatar(
-                        radius: 40,
-                        backgroundColor: AppColors.accent.withValues(
-                          alpha: 0.2,
-                        ),
-                        backgroundImage:
-                            student.photoUrl != null
-                                ? NetworkImage(student.photoUrl!)
-                                : null,
-                        child:
-                            student.photoUrl == null
-                                ? Text(
-                                  student.name.isNotEmpty
-                                      ? student.name[0].toUpperCase()
-                                      : '?',
-                                  style: AppTypography.displayMedium.copyWith(
-                                    color: AppColors.accent,
-                                  ),
-                                )
-                                : null,
-                      ),
                       const SizedBox(height: 12),
                       Text(
                         student.name,

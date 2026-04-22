@@ -141,67 +141,65 @@ class AuthService {
 
   // ─── Create User (without logging out admin) ───
   Future<AuthResult> createUser({
-  required String email,
-  required String password,
-  required String name,
-  required UserRole role,
-}) async {
-  try {
-    // ─── Create secondary Firebase app ───
-    FirebaseApp secondaryApp;
+    required String email,
+    required String password,
+    required String name,
+    required UserRole role,
+  }) async {
     try {
-      secondaryApp = Firebase.app('secondary');
-    } catch (e) {
-      secondaryApp = await Firebase.initializeApp(
-        name: 'secondary',
-        options: DefaultFirebaseOptions.currentPlatform,
+      // ─── Create secondary Firebase app ───
+      FirebaseApp secondaryApp;
+      try {
+        secondaryApp = Firebase.app('secondary');
+      } catch (e) {
+        secondaryApp = await Firebase.initializeApp(
+          name: 'secondary',
+          options: DefaultFirebaseOptions.currentPlatform,
+        );
+      }
+
+      // ─── Create user in secondary app ───
+      final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
+      final credential = await secondaryAuth.createUserWithEmailAndPassword(
+        email: email.trim(),
+        password: password,
       );
+
+      if (credential.user == null) {
+        return AuthResult.error('Failed to create user.');
+      }
+
+      final newUserId = credential.user!.uid;
+
+      // ─── Sign out from secondary app immediately ───
+      await secondaryAuth.signOut();
+
+      // ─── Save to Firestore using MAIN instance ───
+      // (not secondary app — avoids App Check issues)
+      final user = UserModel(
+        id: newUserId,
+        name: name,
+        email: email.trim(),
+        role: role,
+        createdAt: DateTime.now(),
+      );
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(newUserId)
+          .set(user.toFirestore());
+
+      debugPrint('✅ User created: $newUserId role: ${role.name}');
+
+      return AuthResult.success(userId: newUserId);
+    } on FirebaseAuthException catch (e) {
+      debugPrint('💥 FirebaseAuth error: ${e.code}');
+      return AuthResult.error(_mapFirebaseError(e.code));
+    } catch (e) {
+      debugPrint('💥 createUser error: $e');
+      return AuthResult.error('An unexpected error occurred: $e');
     }
-
-    // ─── Create user in secondary app ───
-    final secondaryAuth =
-        FirebaseAuth.instanceFor(app: secondaryApp);
-    final credential =
-        await secondaryAuth.createUserWithEmailAndPassword(
-      email: email.trim(),
-      password: password,
-    );
-
-    if (credential.user == null) {
-      return AuthResult.error('Failed to create user.');
-    }
-
-    final newUserId = credential.user!.uid;
-
-    // ─── Sign out from secondary app immediately ───
-    await secondaryAuth.signOut();
-
-    // ─── Save to Firestore using MAIN instance ───
-    // (not secondary app — avoids App Check issues)
-    final user = UserModel(
-      id: newUserId,
-      name: name,
-      email: email.trim(),
-      role: role,
-      createdAt: DateTime.now(),
-    );
-
-    await FirebaseFirestore.instance
-        .collection('users')
-        .doc(newUserId)
-        .set(user.toFirestore());
-
-    debugPrint('✅ User created: $newUserId role: ${role.name}');
-
-    return AuthResult.success(userId: newUserId);
-  } on FirebaseAuthException catch (e) {
-    debugPrint('💥 FirebaseAuth error: ${e.code}');
-    return AuthResult.error(_mapFirebaseError(e.code));
-  } catch (e) {
-    debugPrint('💥 createUser error: $e');
-    return AuthResult.error('An unexpected error occurred: $e');
   }
-}
 
   // ─── Update Password ───
   Future<AuthResult> updatePassword(String newPassword) async {
@@ -243,14 +241,14 @@ class AuthService {
 // ─────────────────────────────────────────
 class AuthResult {
   final bool isSuccess;
-  final String? errorMessage;
+  final String? error;
   final String? userId;
 
-  const AuthResult._({required this.isSuccess, this.errorMessage, this.userId});
+  const AuthResult._({required this.isSuccess, this.error, this.userId});
 
   factory AuthResult.success({String? userId}) =>
       AuthResult._(isSuccess: true, userId: userId);
 
   factory AuthResult.error(String message) =>
-      AuthResult._(isSuccess: false, errorMessage: message);
+      AuthResult._(isSuccess: false, error: message);
 }

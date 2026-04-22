@@ -5,7 +5,6 @@ import '../../../theme/theme.dart';
 import '../../../widgets/widgets.dart';
 import '../../../providers/providers.dart';
 import '../../../navigation/app_routes.dart';
-import '../../../services/auth_service.dart';
 
 class TeacherDashboardScreen extends ConsumerStatefulWidget {
   const TeacherDashboardScreen({super.key});
@@ -97,7 +96,7 @@ class _TeacherDashboardScreenState
         ),
         IconButton(
           icon: const Icon(Icons.message_rounded, size: 22),
-          onPressed: () => context.push(AppRoutes.teacherNotifications),
+          onPressed: () => context.push(AppRoutes.teachermessage),
         ),
         GestureDetector(
           onTap: () => _showProfileMenu(context),
@@ -165,12 +164,8 @@ class _TeacherDashboardScreenState
 class _DashboardBody extends ConsumerWidget {
   const _DashboardBody();
 
-  @override
-  Widget _buildRecentMessages(
-    BuildContext context,
-    bool isDark,
-    WidgetRef ref,
-  ) {
+
+  Widget _buildRecentmessage(BuildContext context, bool isDark, WidgetRef ref) {
     final currentUser = ref.watch(currentUserProvider);
 
     return currentUser.when(
@@ -178,7 +173,7 @@ class _DashboardBody extends ConsumerWidget {
       error: (_, __) => const SizedBox.shrink(),
       data: (user) {
         if (user == null) return const SizedBox.shrink();
-        final messages = ref.watch(notificationsProvider(user.id));
+        final message = ref.watch(notificationsProvider(user.id));
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -186,19 +181,19 @@ class _DashboardBody extends ConsumerWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Recent Messages',
+                  'Recent message',
                   style: AppTypography.headingMedium.copyWith(
                     color: isDark ? AppColors.darkText : AppColors.lightText,
                   ),
                 ),
                 TextButton(
-                  onPressed: () => context.push(AppRoutes.studentNotifications),
+                  onPressed: () => context.push(AppRoutes.teachermessage),
                   child: const Text('See all'),
                 ),
               ],
             ),
             const SizedBox(height: 8),
-            messages.when(
+            message.when(
               loading: () => const LoadingWidget(),
               error: (_, __) => const SizedBox.shrink(),
               data: (list) {
@@ -216,7 +211,7 @@ class _DashboardBody extends ConsumerWidget {
                       ),
                     ),
                     child: Text(
-                      'No messages yet',
+                      'No message yet',
                       style: AppTypography.bodySmall.copyWith(
                         color:
                             isDark
@@ -230,7 +225,7 @@ class _DashboardBody extends ConsumerWidget {
                   children:
                       list
                           .take(3)
-                          .map((msg) => NotificationTile(notification: msg))
+                          .map((msg) => MessagesTile(message: msg))
                           .toList(),
                 );
               },
@@ -240,7 +235,7 @@ class _DashboardBody extends ConsumerWidget {
       },
     );
   }
-
+ @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final currentUser = ref.watch(currentUserProvider);
@@ -431,8 +426,8 @@ class _DashboardBody extends ConsumerWidget {
             _buildRecentAlerts(context, isDark, ref),
             const SizedBox(height: 20),
 
-            // ─── Recent Messages ───
-            _buildRecentMessages(context, isDark, ref),
+            // ─── Recent message ───
+            _buildRecentmessage(context, isDark, ref),
             const SizedBox(height: 20),
           ],
         ),
@@ -934,10 +929,10 @@ class _MoreMenu extends StatelessWidget {
         route: AppRoutes.teacherAiAlerts,
       ),
       _MoreItem(
-        label: 'Notifications',
-        icon: Icons.notifications_rounded,
+        label: 'message',
+        icon: Icons.message_rounded,
         color: AppColors.info,
-        route: AppRoutes.teacherNotifications,
+        route: AppRoutes.teachermessage,
       ),
     ];
 

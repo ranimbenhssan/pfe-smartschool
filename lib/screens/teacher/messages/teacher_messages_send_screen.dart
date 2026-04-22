@@ -1,3 +1,4 @@
+// ignore: file_names
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../theme/theme.dart';
@@ -6,16 +7,16 @@ import '../../../providers/providers.dart';
 import '../../../services/services.dart';
 import '../../../models/models.dart';
 
-class TeacherNotificationSendScreen extends ConsumerStatefulWidget {
-  const TeacherNotificationSendScreen({super.key});
+class TeachermessageendScreen extends ConsumerStatefulWidget {
+  const TeachermessageendScreen({super.key});
 
   @override
-  ConsumerState<TeacherNotificationSendScreen> createState() =>
-      _TeacherNotificationSendScreenState();
+  ConsumerState<TeachermessageendScreen> createState() =>
+      _TeachermessageendScreenState();
 }
 
-class _TeacherNotificationSendScreenState
-    extends ConsumerState<TeacherNotificationSendScreen> {
+class _TeachermessageendScreenState
+    extends ConsumerState<TeachermessageendScreen> {
   bool _isLoading = false;
   String _targetType = 'class';
   List<String> _selectedClassIds = [];
@@ -32,9 +33,11 @@ class _TeacherNotificationSendScreenState
     if (currentUser == null) return;
 
     if (_targetType == 'class' && _selectedClassIds.isEmpty) {
+      if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select at least one class')),
       );
+      }
       return;
     }
 
@@ -98,7 +101,7 @@ class _TeacherNotificationSendScreenState
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Message sent successfully ✅')),
+          const SnackBar(content: Text('message sent successfully ✅')),
         );
         setState(() {
           _targetType = 'class';
@@ -126,7 +129,7 @@ class _TeacherNotificationSendScreenState
       backgroundColor:
           isDark ? AppColors.darkBackground : AppColors.lightBackground,
       appBar: AppBar(
-        title: const Text('Send Message'),
+        title: const Text('Send message'),
         backgroundColor:
             isDark ? AppColors.darkSurface : AppColors.lightSurface,
       ),

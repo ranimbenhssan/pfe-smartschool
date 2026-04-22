@@ -5,7 +5,6 @@ import '../../../theme/theme.dart';
 import '../../../widgets/widgets.dart';
 import '../../../providers/providers.dart';
 import '../../../navigation/app_routes.dart';
-import '../../../services/auth_service.dart';
 
 class TeacherAiAlertsScreen extends ConsumerWidget {
   const TeacherAiAlertsScreen({super.key});

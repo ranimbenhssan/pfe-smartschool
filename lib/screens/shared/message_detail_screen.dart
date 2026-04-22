@@ -3,52 +3,80 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../theme/theme.dart';
-import '../../widgets/widgets.dart';
 import '../../models/models.dart';
 import '../../services/services.dart';
+import 'package:pfe_smartschool/navigation/app_routes.dart';
 
-class MessageDetailScreen extends ConsumerWidget {
+class NotificationDetailscreen extends ConsumerWidget {
   final NotificationModel message;
 
-  const MessageDetailScreen({super.key, required this.message});
+  const NotificationDetailscreen({super.key, required this.message});
 
   Color _typeColor(MessageType type) {
     switch (type) {
-      case MessageType.announcement: return Colors.blue;
-      case MessageType.form:         return Colors.orange;
-      case MessageType.note:         return Colors.green;
-      case MessageType.course:       return Colors.purple;
-      case MessageType.report:       return Colors.teal;
-      case MessageType.general:      return Colors.grey;
+      case MessageType.announcement:
+        return Colors.blue;
+      case MessageType.form:
+        return Colors.orange;
+      case MessageType.note:
+        return Colors.green;
+      case MessageType.course:
+        return Colors.purple;
+      case MessageType.report:
+        return Colors.teal;
+      case MessageType.general:
+        return Colors.grey;
     }
   }
 
   IconData _typeIcon(MessageType type) {
     switch (type) {
-      case MessageType.announcement: return Icons.campaign_rounded;
-      case MessageType.form:         return Icons.assignment_rounded;
-      case MessageType.note:         return Icons.note_rounded;
-      case MessageType.course:       return Icons.menu_book_rounded;
-      case MessageType.report:       return Icons.bar_chart_rounded;
-      case MessageType.general:      return Icons.message_rounded;
+      case MessageType.announcement:
+        return Icons.campaign_rounded;
+      case MessageType.form:
+        return Icons.assignment_rounded;
+      case MessageType.note:
+        return Icons.note_rounded;
+      case MessageType.course:
+        return Icons.menu_book_rounded;
+      case MessageType.report:
+        return Icons.bar_chart_rounded;
+      case MessageType.general:
+        return Icons.message_rounded;
     }
   }
 
   String _typeLabel(MessageType type) {
     switch (type) {
-      case MessageType.announcement: return 'Announcement';
-      case MessageType.form:         return 'Form';
-      case MessageType.note:         return 'Note';
-      case MessageType.course:       return 'Course Content';
-      case MessageType.report:       return 'Report';
-      case MessageType.general:      return 'Message';
+      case MessageType.announcement:
+        return 'Announcement';
+      case MessageType.form:
+        return 'Form';
+      case MessageType.note:
+        return 'Note';
+      case MessageType.course:
+        return 'Course Content';
+      case MessageType.report:
+        return 'Report';
+      case MessageType.general:
+        return 'message';
     }
   }
 
   String _formatDateTime(DateTime dt) {
     final months = [
-      'Jan','Feb','Mar','Apr','May','Jun',
-      'Jul','Aug','Sep','Oct','Nov','Dec'
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     final hour = dt.hour.toString().padLeft(2, '0');
     final min = dt.minute.toString().padLeft(2, '0');
@@ -74,10 +102,32 @@ class MessageDetailScreen extends ConsumerWidget {
         title: const Text('Message'),
         backgroundColor:
             isDark ? AppColors.darkSurface : AppColors.lightSurface,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => context.pop(),
-        ),
+        actions: [
+          // ─── Reply only if sender exists and is not current user ───
+          if (message.senderId.isNotEmpty)
+            Consumer(
+              builder: (context, ref, _) {
+                final currentUser = ref.watch(currentUserProvider);
+                return currentUser.when(
+                  loading: () => const SizedBox.shrink(),
+                  error: (_, __) => const SizedBox.shrink(),
+                  data: (user) {
+                    // ─── Don't show reply to own messages ───
+                    if (user?.id == message.senderId) {
+                      return const SizedBox.shrink();
+                    }
+                    return IconButton(
+                      icon: const Icon(Icons.reply_rounded),
+                      tooltip: 'Reply',
+                      onPressed:
+                          () =>
+                              context.push(AppRoutes.messageReply, extra: message),
+                    );
+                  },
+                );
+              },
+            ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -94,8 +144,11 @@ class MessageDetailScreen extends ConsumerWidget {
                     color: color.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: Icon(_typeIcon(message.messageType),
-                      color: color, size: 24),
+                  child: Icon(
+                    _typeIcon(message.messageType),
+                    color: color,
+                    size: 24,
+                  ),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -104,24 +157,26 @@ class MessageDetailScreen extends ConsumerWidget {
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: color.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
                           _typeLabel(message.messageType),
-                          style: AppTypography.labelSmall
-                              .copyWith(color: color),
+                          style: AppTypography.labelSmall.copyWith(
+                            color: color,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         message.title,
                         style: AppTypography.headingMedium.copyWith(
-                          color: isDark
-                              ? AppColors.darkText
-                              : AppColors.lightText,
+                          color:
+                              isDark ? AppColors.darkText : AppColors.lightText,
                         ),
                       ),
                     ],
@@ -129,6 +184,48 @@ class MessageDetailScreen extends ConsumerWidget {
                 ),
               ],
             ),
+            // ─── Show "In reply to" if this is a reply ───
+            if (message.isReply) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.accent.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: AppColors.accent.withValues(alpha: 0.2),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 3,
+                      height: 30,
+                      decoration: BoxDecoration(
+                        color: AppColors.accent,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    const Icon(
+                      Icons.reply_rounded,
+                      size: 14,
+                      color: AppColors.accent,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'In reply to: ${message.replyToTitle}',
+                        style: AppTypography.caption.copyWith(
+                          color: AppColors.accent,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 20),
 
             // ─── Info card ───
@@ -139,9 +236,7 @@ class MessageDetailScreen extends ConsumerWidget {
                 color: isDark ? AppColors.darkCard : AppColors.lightCard,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: isDark
-                      ? AppColors.darkBorder
-                      : AppColors.lightBorder,
+                  color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
                 ),
               ),
               child: Column(
@@ -151,9 +246,10 @@ class MessageDetailScreen extends ConsumerWidget {
                     isDark: isDark,
                     icon: Icons.person_rounded,
                     label: 'From',
-                    value: message.senderName.isNotEmpty
-                        ? '${message.senderName} (${_capitalize(message.senderRole)})'
-                        : 'System',
+                    value:
+                        message.senderName.isNotEmpty
+                            ? '${message.senderName} (${_capitalize(message.senderRole)})'
+                            : 'System',
                     color: color,
                   ),
                   const Divider(height: 20),
@@ -181,7 +277,7 @@ class MessageDetailScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 20),
 
-            // ─── Message body ───
+            // ─── message body ───
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),
@@ -189,29 +285,26 @@ class MessageDetailScreen extends ConsumerWidget {
                 color: isDark ? AppColors.darkCard : AppColors.lightCard,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: isDark
-                      ? AppColors.darkBorder
-                      : AppColors.lightBorder,
+                  color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
                 ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Message',
+                    'message',
                     style: AppTypography.labelMedium.copyWith(
-                      color: isDark
-                          ? AppColors.darkTextSecondary
-                          : AppColors.lightTextSecondary,
+                      color:
+                          isDark
+                              ? AppColors.darkTextSecondary
+                              : AppColors.lightTextSecondary,
                     ),
                   ),
                   const SizedBox(height: 10),
                   Text(
                     message.message,
                     style: AppTypography.bodyMedium.copyWith(
-                      color: isDark
-                          ? AppColors.darkText
-                          : AppColors.lightText,
+                      color: isDark ? AppColors.darkText : AppColors.lightText,
                       height: 1.6,
                     ),
                   ),
@@ -225,16 +318,12 @@ class MessageDetailScreen extends ConsumerWidget {
               Text(
                 'Attachments (${message.attachments.length})',
                 style: AppTypography.headingSmall.copyWith(
-                  color:
-                      isDark ? AppColors.darkText : AppColors.lightText,
+                  color: isDark ? AppColors.darkText : AppColors.lightText,
                 ),
               ),
               const SizedBox(height: 10),
               ...message.attachments.map(
-                (att) => _AttachmentTile(
-                  attachment: att,
-                  isDark: isDark,
-                ),
+                (att) => _AttachmentTile(attachment: att, isDark: isDark),
               ),
             ],
             const SizedBox(height: 32),
@@ -301,16 +390,16 @@ class _InfoRow extends StatelessWidget {
               Text(
                 label,
                 style: AppTypography.caption.copyWith(
-                  color: isDark
-                      ? AppColors.darkTextSecondary
-                      : AppColors.lightTextSecondary,
+                  color:
+                      isDark
+                          ? AppColors.darkTextSecondary
+                          : AppColors.lightTextSecondary,
                 ),
               ),
               Text(
                 value,
                 style: AppTypography.labelMedium.copyWith(
-                  color:
-                      isDark ? AppColors.darkText : AppColors.lightText,
+                  color: isDark ? AppColors.darkText : AppColors.lightText,
                 ),
               ),
             ],
@@ -326,22 +415,27 @@ class _AttachmentTile extends StatelessWidget {
   final AttachmentModel attachment;
   final bool isDark;
 
-  const _AttachmentTile(
-      {required this.attachment, required this.isDark});
+  const _AttachmentTile({required this.attachment, required this.isDark});
 
   IconData get _icon {
     switch (attachment.type) {
-      case AttachmentType.image:    return Icons.image_rounded;
-      case AttachmentType.pdf:      return Icons.picture_as_pdf_rounded;
-      case AttachmentType.document: return Icons.insert_drive_file_rounded;
+      case AttachmentType.image:
+        return Icons.image_rounded;
+      case AttachmentType.pdf:
+        return Icons.picture_as_pdf_rounded;
+      case AttachmentType.document:
+        return Icons.insert_drive_file_rounded;
     }
   }
 
   Color get _color {
     switch (attachment.type) {
-      case AttachmentType.image:    return AppColors.info;
-      case AttachmentType.pdf:      return AppColors.error;
-      case AttachmentType.document: return AppColors.accent;
+      case AttachmentType.image:
+        return AppColors.info;
+      case AttachmentType.pdf:
+        return AppColors.error;
+      case AttachmentType.document:
+        return AppColors.accent;
     }
   }
 
@@ -360,8 +454,7 @@ class _AttachmentTile extends StatelessWidget {
         if (attachment.url.isNotEmpty) {
           final uri = Uri.parse(attachment.url);
           if (await canLaunchUrl(uri)) {
-            await launchUrl(uri,
-                mode: LaunchMode.externalApplication);
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
           }
         }
       },
@@ -371,9 +464,7 @@ class _AttachmentTile extends StatelessWidget {
         decoration: BoxDecoration(
           color: isDark ? AppColors.darkCard : AppColors.lightCard,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: _color.withValues(alpha: 0.3),
-          ),
+          border: Border.all(color: _color.withValues(alpha: 0.3)),
         ),
         child: Row(
           children: [
@@ -394,9 +485,7 @@ class _AttachmentTile extends StatelessWidget {
                   Text(
                     attachment.name,
                     style: AppTypography.labelMedium.copyWith(
-                      color: isDark
-                          ? AppColors.darkText
-                          : AppColors.lightText,
+                      color: isDark ? AppColors.darkText : AppColors.lightText,
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -407,11 +496,7 @@ class _AttachmentTile extends StatelessWidget {
                 ],
               ),
             ),
-            Icon(
-              Icons.download_rounded,
-              color: _color,
-              size: 20,
-            ),
+            Icon(Icons.download_rounded, color: _color, size: 20),
           ],
         ),
       ),

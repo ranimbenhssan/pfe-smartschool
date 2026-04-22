@@ -5,11 +5,11 @@ import '../../../theme/theme.dart';
 import '../../../widgets/widgets.dart';
 import '../../../providers/providers.dart';
 import '../../../services/services.dart';
+import '../../../services/auth_service.dart';
 import '../../../models/models.dart';
 
 class AdminTeacherFormScreen extends ConsumerStatefulWidget {
   final String? teacherId;
-
   const AdminTeacherFormScreen({super.key, this.teacherId});
 
   @override
@@ -23,10 +23,11 @@ class _AdminTeacherFormScreenState
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  List<String> _selectedClassIds = [];
-  List<String> _selectedClassNames = [];
+  final _rfidController = TextEditingController();
+  final _subjectController = TextEditingController();
   bool _isLoading = false;
   bool _isEditing = false;
+  bool _obscurePassword = true;
 
   @override
   void initState() {
@@ -36,15 +37,19 @@ class _AdminTeacherFormScreenState
   }
 
   Future<void> _loadTeacher() async {
+    if (widget.teacherId == null) return;
+
+    // ─── Get teacher directly by doc ID ───
     final teacher = await ref
         .read(firestoreServiceProvider)
-        .getTeacher(widget.teacherId!);
+        .getTeacherById(widget.teacherId!);
+
     if (teacher != null && mounted) {
       setState(() {
         _nameController.text = teacher.name;
         _emailController.text = teacher.email;
-        _selectedClassIds = List.from(teacher.assignedClassIds);
-        _selectedClassNames = List.from(teacher.assignedClassNames);
+        _rfidController.text = teacher.rfidTag;
+        _subjectController.text = teacher.subject;
       });
     }
   }
@@ -54,45 +59,33 @@ class _AdminTeacherFormScreenState
     _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _rfidController.dispose();
+    _subjectController.dispose();
     super.dispose();
   }
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-
     setState(() => _isLoading = true);
 
     try {
       if (_isEditing) {
-        // ─── Update teacher ───
+        // ─── Update existing teacher ───
         await ref
             .read(firestoreServiceProvider)
             .updateTeacher(widget.teacherId!, {
               'name': _nameController.text.trim(),
-              'assignedClassIds': _selectedClassIds,
-              'assignedClassNames': _selectedClassNames,
+              'rfidTag': _rfidController.text.trim(),
+              'rfidEnabled': _rfidController.text.trim().isNotEmpty,
+              'subject': _subjectController.text.trim(),
             });
 
-        // ─── Update each assigned class ───
-        for (int i = 0; i < _selectedClassIds.length; i++) {
-          final cls = await ref
-              .read(firestoreServiceProvider)
-              .getClass(_selectedClassIds[i]);
-          if (cls != null) {
-            final teacherId = widget.teacherId!;
-            final teacherName = _nameController.text.trim();
-            if (!cls.teacherIds.contains(teacherId)) {
-              final updatedIds = [...cls.teacherIds, teacherId];
-              final updatedNames = [...cls.teacherNames, teacherName];
-              await ref.read(firestoreServiceProvider).updateClass(cls.id, {
-                'teacherIds': updatedIds,
-                'teacherNames': updatedNames,
-              });
-            }
-          }
-        }
+        // ─── Update user doc name ───
+        await ref.read(firestoreServiceProvider).updateUser(widget.teacherId!, {
+          'name': _nameController.text.trim(),
+        });
       } else {
-        // ─── Create auth user ───
+        // ─── Create new teacher ───
         final result = await ref
             .read(authServiceProvider)
             .createUser(
@@ -106,7 +99,7 @@ class _AdminTeacherFormScreenState
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text(result.errorMessage ?? 'Error creating user'),
+                content: Text(result.error ?? 'Error creating user'),
               ),
             );
           }
@@ -114,37 +107,20 @@ class _AdminTeacherFormScreenState
           return;
         }
 
-        // ─── Create teacher document ───
         final teacher = TeacherModel(
           id: result.userId!,
           userId: result.userId!,
           name: _nameController.text.trim(),
           email: _emailController.text.trim(),
-          assignedClassIds: _selectedClassIds,
-          assignedClassNames: _selectedClassNames,
+          subject: _subjectController.text.trim(),
+          assignedClassIds: [],
+          assignedClassNames: [],
+          rfidTag: _rfidController.text.trim(),
+          rfidEnabled: _rfidController.text.trim().isNotEmpty,
           createdAt: DateTime.now(),
         );
 
         await ref.read(firestoreServiceProvider).addTeacher(teacher);
-
-        // ─── Update each assigned class ───
-        for (int i = 0; i < _selectedClassIds.length; i++) {
-          final cls = await ref
-              .read(firestoreServiceProvider)
-              .getClass(_selectedClassIds[i]);
-          if (cls != null) {
-            final teacherId = result.userId!;
-            final teacherName = _nameController.text.trim();
-            if (!cls.teacherIds.contains(teacherId)) {
-              final updatedIds = [...cls.teacherIds, teacherId];
-              final updatedNames = [...cls.teacherNames, teacherName];
-              await ref.read(firestoreServiceProvider).updateClass(cls.id, {
-                'teacherIds': updatedIds,
-                'teacherNames': updatedNames,
-              });
-            }
-          }
-        }
       }
 
       if (mounted) {
@@ -166,26 +142,12 @@ class _AdminTeacherFormScreenState
         ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
-
     if (mounted) setState(() => _isLoading = false);
-  }
-
-  void _toggleClass(String classId, String className) {
-    setState(() {
-      if (_selectedClassIds.contains(classId)) {
-        _selectedClassIds.remove(classId);
-        _selectedClassNames.remove(className);
-      } else {
-        _selectedClassIds.add(classId);
-        _selectedClassNames.add(className);
-      }
-    });
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final classes = ref.watch(classesProvider);
 
     return Scaffold(
       backgroundColor:
@@ -202,210 +164,118 @@ class _AdminTeacherFormScreenState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ─── Avatar ───
-              Center(
-                child: Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    color: AppColors.teacherColor.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Icon(
-                    Icons.person_rounded,
-                    color: AppColors.teacherColor,
-                    size: 40,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 28),
-
               // ─── Name ───
               AppTextField(
-                label: 'Full Name',
-                hint: 'Enter teacher full name',
+                label: 'Full Name *',
+                hint: 'e.g. Mohamed Ali',
                 controller: _nameController,
-                prefixIcon: const Icon(Icons.person_outline_rounded, size: 18),
+                prefixIcon: const Icon(Icons.person_rounded, size: 18),
                 validator:
                     (v) => v == null || v.isEmpty ? 'Name is required' : null,
               ),
               const SizedBox(height: 16),
 
               // ─── Email ───
-              AppTextField(
-                label: 'Email',
-                hint: 'Enter teacher email',
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
-                prefixIcon: const Icon(Icons.email_outlined, size: 18),
-                enabled: !_isEditing,
-                validator: (v) {
-                  if (v == null || v.isEmpty) return 'Email is required';
-                  if (!v.contains('@')) return 'Invalid email';
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-
-              // ─── Password (new teacher only) ───
-              if (!_isEditing) ...[
+              if (!_isEditing)
                 AppTextField(
-                  label: 'Password',
-                  hint: 'Set initial password',
-                  controller: _passwordController,
-                  obscureText: true,
-                  prefixIcon: const Icon(Icons.lock_outline_rounded, size: 18),
+                  label: 'Email *',
+                  hint: 'teacher@school.com',
+                  controller: _emailController,
+                  prefixIcon: const Icon(Icons.email_rounded, size: 18),
                   validator: (v) {
                     if (v == null || v.isEmpty) {
-                      return 'Password is required';
+                      return 'Email is required';
                     }
-                    if (v.length < 6) return 'Minimum 6 characters';
+                    if (!v.contains('@')) {
+                      return 'Enter a valid email';
+                    }
                     return null;
                   },
                 ),
-                const SizedBox(height: 16),
-              ],
+              if (!_isEditing) const SizedBox(height: 16),
 
-              // ─── Assign Classes ───
-              Text(
-                'Assign Classes',
-                style: AppTypography.labelMedium.copyWith(
-                  color:
-                      isDark
-                          ? AppColors.darkTextSecondary
-                          : AppColors.lightTextSecondary,
-                ),
-              ),
-              const SizedBox(height: 8),
-              classes.when(
-                loading: () => const LoadingWidget(),
-                error:
-                    (e, _) => Text(
-                      'Error: $e',
-                      style: AppTypography.bodySmall.copyWith(
-                        color: AppColors.error,
-                      ),
+              // ─── Password ───
+              if (!_isEditing)
+                AppTextField(
+                  label: 'Password *',
+                  hint: 'Minimum 6 characters',
+                  controller: _passwordController,
+                  obscureText: _obscurePassword,
+                  prefixIcon: const Icon(Icons.lock_rounded, size: 18),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscurePassword
+                          ? Icons.visibility_rounded
+                          : Icons.visibility_off_rounded,
+                      size: 18,
                     ),
-                data:
-                    (classList) =>
-                        classList.isEmpty
-                            ? Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color:
-                                    isDark
-                                        ? AppColors.darkCard
-                                        : AppColors.lightCard,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color:
-                                      isDark
-                                          ? AppColors.darkBorder
-                                          : AppColors.lightBorder,
-                                ),
-                              ),
-                              child: Text(
-                                'No classes available. Add classes first.',
-                                style: AppTypography.bodySmall.copyWith(
-                                  color:
-                                      isDark
-                                          ? AppColors.darkTextSecondary
-                                          : AppColors.lightTextSecondary,
-                                ),
-                              ),
-                            )
-                            : Column(
-                              children:
-                                  classList.map((c) {
-                                    final isSelected = _selectedClassIds
-                                        .contains(c.id);
-                                    return GestureDetector(
-                                      onTap: () => _toggleClass(c.id, c.name),
-                                      child: Container(
-                                        padding: const EdgeInsets.all(14),
-                                        margin: const EdgeInsets.only(
-                                          bottom: 8,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color:
-                                              isSelected
-                                                  ? AppColors.teacherColor
-                                                      .withValues(alpha: 0.08)
-                                                  : isDark
-                                                  ? AppColors.darkCard
-                                                  : AppColors.lightCard,
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                          border: Border.all(
-                                            color:
-                                                isSelected
-                                                    ? AppColors.teacherColor
-                                                        .withValues(alpha: 0.4)
-                                                    : isDark
-                                                    ? AppColors.darkBorder
-                                                    : AppColors.lightBorder,
-                                          ),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Icon(
-                                              isSelected
-                                                  ? Icons.check_box_rounded
-                                                  : Icons
-                                                      .check_box_outline_blank_rounded,
-                                              color:
-                                                  isSelected
-                                                      ? AppColors.teacherColor
-                                                      : isDark
-                                                      ? AppColors.darkTextHint
-                                                      : AppColors.lightTextHint,
-                                              size: 20,
-                                            ),
-                                            const SizedBox(width: 12),
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    c.name,
-                                                    style: AppTypography
-                                                        .labelLarge
-                                                        .copyWith(
-                                                          color:
-                                                              isDark
-                                                                  ? AppColors
-                                                                      .darkText
-                                                                  : AppColors
-                                                                      .lightText,
-                                                        ),
-                                                  ),
-                                                  Text(
-                                                    'Grade: ${c.grade}',
-                                                    style:
-                                                        AppTypography.caption,
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    );
-                                  }).toList(),
-                            ),
+                    onPressed:
+                        () => setState(
+                          () => _obscurePassword = !_obscurePassword,
+                        ),
+                  ),
+                  validator: (v) {
+                    if (!_isEditing && (v == null || v.length < 6)) {
+                      return 'Password must be at least 6 characters';
+                    }
+                    return null;
+                  },
+                ),
+              if (!_isEditing) const SizedBox(height: 16),
+
+              // ─── Subject ───
+              AppTextField(
+                label: 'Subject (Optional)',
+                hint: 'e.g. Network, Mathematics',
+                controller: _subjectController,
+                prefixIcon: const Icon(Icons.menu_book_rounded, size: 18),
               ),
+              const SizedBox(height: 16),
+
+              // ─── RFID ───
+              AppTextField(
+                label: 'RFID Tag (Optional)',
+                hint: 'e.g. A1B2C3D4',
+                controller: _rfidController,
+                prefixIcon: const Icon(Icons.nfc_rounded, size: 18),
+              ),
+              if (_rfidController.text.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.success.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: AppColors.success.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.nfc_rounded,
+                        color: AppColors.success,
+                        size: 14,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'RFID will be enabled for this teacher',
+                        style: AppTypography.caption.copyWith(
+                          color: AppColors.success,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 32),
 
-              // ─── Save Button ───
               AppButton(
                 label: _isEditing ? 'Update Teacher' : 'Add Teacher',
                 onPressed: _save,
                 isLoading: _isLoading,
                 width: double.infinity,
-                icon:
-                    _isEditing ? Icons.save_rounded : Icons.person_add_rounded,
+                icon: _isEditing ? Icons.save_rounded : Icons.add_rounded,
               ),
             ],
           ),

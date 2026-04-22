@@ -22,11 +22,12 @@ class TeacherIotHistoryScreen extends ConsumerWidget {
       ),
       body: rooms.when(
         loading: () => const LoadingWidget(),
-        error: (e, _) => EmptyState(
-          title: 'Error',
-          message: e.toString(),
-          icon: Icons.error_outline_rounded,
-        ),
+        error:
+            (e, _) => EmptyState(
+              title: 'Error',
+              message: e.toString(),
+              icon: Icons.error_outline_rounded,
+            ),
         data: (list) {
           if (list.isEmpty) {
             return const EmptyState(
@@ -54,56 +55,59 @@ class _HistoryCharts extends ConsumerWidget {
 
     return history.when(
       loading: () => const LoadingWidget(),
-      error: (e, _) => EmptyState(
-        title: 'Error',
-        message: e.toString(),
-        icon: Icons.error_outline_rounded,
-      ),
-      data: (list) => list.isEmpty
-          ? const EmptyState(
-              title: 'No History',
-              message: 'No historical data available',
-              icon: Icons.history_rounded,
-            )
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Temperature', style: AppTypography.labelLarge),
-                  const SizedBox(height: 8),
-                  SensorChart(
-                    readings: list,
-                    type: 'temperature',
-                    color: AppColors.error,
+      error:
+          (e, _) => EmptyState(
+            title: 'Error',
+            message: e.toString(),
+            icon: Icons.error_outline_rounded,
+          ),
+      data:
+          (list) =>
+              list.isEmpty
+                  ? const EmptyState(
+                    title: 'No History',
+                    message: 'No historical data available',
+                    icon: Icons.history_rounded,
+                  )
+                  : SingleChildScrollView(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Temperature', style: AppTypography.labelLarge),
+                        const SizedBox(height: 8),
+                        SensorChart(
+                          readings: list,
+                          type: 'temperature',
+                          color: AppColors.error,
+                        ),
+                        const SizedBox(height: 16),
+                        Text('Humidity', style: AppTypography.labelLarge),
+                        const SizedBox(height: 8),
+                        SensorChart(
+                          readings: list,
+                          type: 'humidity',
+                          color: AppColors.info,
+                        ),
+                        const SizedBox(height: 16),
+                        Text('Light Level', style: AppTypography.labelLarge),
+                        const SizedBox(height: 8),
+                        SensorChart(
+                          readings: list,
+                          type: 'light',
+                          color: AppColors.warning,
+                        ),
+                        const SizedBox(height: 16),
+                        Text('Noise Level', style: AppTypography.labelLarge),
+                        const SizedBox(height: 8),
+                        SensorChart(
+                          readings: list,
+                          type: 'noise',
+                          color: AppColors.success,
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 16),
-                  Text('Humidity', style: AppTypography.labelLarge),
-                  const SizedBox(height: 8),
-                  SensorChart(
-                    readings: list,
-                    type: 'humidity',
-                    color: AppColors.info,
-                  ),
-                  const SizedBox(height: 16),
-                  Text('Light Level', style: AppTypography.labelLarge),
-                  const SizedBox(height: 8),
-                  SensorChart(
-                    readings: list,
-                    type: 'light',
-                    color: AppColors.warning,
-                  ),
-                  const SizedBox(height: 16),
-                  Text('Noise Level', style: AppTypography.labelLarge),
-                  const SizedBox(height: 8),
-                  SensorChart(
-                    readings: list,
-                    type: 'noise',
-                    color: AppColors.success,
-                  ),
-                ],
-              ),
-            ),
     );
   }
 }

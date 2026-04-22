@@ -18,7 +18,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
   final _emailController = TextEditingController();
   bool _isLoading = false;
   bool _emailSent = false;
-  String? _errorMessage;
+  String? _errormessage;
 
   @override
   void dispose() {
@@ -31,7 +31,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
 
     setState(() {
       _isLoading = true;
-      _errorMessage = null;
+      _errormessage = null;
     });
 
     final result = await ref
@@ -45,7 +45,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
       if (result.isSuccess) {
         _emailSent = true;
       } else {
-        _errorMessage = result.errorMessage;
+        _errormessage = result.error;
       }
     });
   }
@@ -128,7 +128,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
           ),
           const SizedBox(height: 16),
 
-          if (_errorMessage != null) ...[
+          if (_errormessage != null) ...[
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -148,7 +148,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      _errorMessage!,
+                      _errormessage!,
                       style: AppTypography.bodySmall.copyWith(
                         color: AppColors.error,
                       ),

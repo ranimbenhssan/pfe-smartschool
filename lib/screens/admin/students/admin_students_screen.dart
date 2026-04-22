@@ -99,64 +99,6 @@ class AdminStudentsScreen extends ConsumerWidget {
                                     () => context.push(
                                       '${AppRoutes.adminStudentProfile}/${student.id}',
                                     ),
-                                trailing: PopupMenuButton(
-                                  icon: Icon(
-                                    Icons.more_vert_rounded,
-                                    color:
-                                        isDark
-                                            ? AppColors.darkTextHint
-                                            : AppColors.lightTextHint,
-                                  ),
-                                  itemBuilder:
-                                      (_) => [
-                                        const PopupMenuItem(
-                                          value: 'edit',
-                                          child: Row(
-                                            children: [
-                                              Icon(
-                                                Icons.edit_rounded,
-                                                size: 16,
-                                              ),
-                                              SizedBox(width: 8),
-                                              Text('Edit'),
-                                            ],
-                                          ),
-                                        ),
-                                        const PopupMenuItem(
-                                          value: 'delete',
-                                          child: Row(
-                                            children: [
-                                              Icon(
-                                                Icons.delete_rounded,
-                                                size: 16,
-                                                color: AppColors.error,
-                                              ),
-                                              SizedBox(width: 8),
-                                              Text(
-                                                'Delete',
-                                                style: TextStyle(
-                                                  color: AppColors.error,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                  onSelected: (value) {
-                                    if (value == 'edit') {
-                                      context.push(
-                                        '${AppRoutes.adminStudentEdit}/${student.id}',
-                                      );
-                                    } else if (value == 'delete') {
-                                      _confirmDelete(
-                                        context,
-                                        ref,
-                                        student.id,
-                                        student.name,
-                                      );
-                                    }
-                                  },
-                                ),
                               );
                             },
                           ),

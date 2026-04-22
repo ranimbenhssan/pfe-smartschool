@@ -121,28 +121,15 @@ class AdminTeachersScreen extends ConsumerWidget {
                                         radius: 22,
                                         backgroundColor: AppColors.teacherColor
                                             .withValues(alpha: 0.15),
-                                        backgroundImage:
-                                            teacher.photoUrl != null
-                                                ? NetworkImage(
-                                                  teacher.photoUrl!,
-                                                )
-                                                : null,
-                                        child:
-                                            teacher.photoUrl == null
-                                                ? Text(
-                                                  teacher.name.isNotEmpty
-                                                      ? teacher.name[0]
-                                                          .toUpperCase()
-                                                      : '?',
-                                                  style: AppTypography
-                                                      .headingSmall
-                                                      .copyWith(
-                                                        color:
-                                                            AppColors
-                                                                .teacherColor,
-                                                      ),
-                                                )
-                                                : null,
+                                        child: Text(
+                                          teacher.name.isNotEmpty
+                                              ? teacher.name[0].toUpperCase()
+                                              : '?',
+                                          style: AppTypography.labelLarge
+                                              .copyWith(
+                                                color: AppColors.teacherColor,
+                                              ),
+                                        ),
                                       ),
                                       const SizedBox(width: 12),
                                       // Info

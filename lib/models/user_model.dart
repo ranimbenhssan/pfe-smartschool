@@ -7,7 +7,7 @@ class UserModel {
   final String name;
   final String email;
   final UserRole role;
-  final String? photoUrl;
+  final bool firstLogin;
   final DateTime createdAt;
 
   const UserModel({
@@ -15,34 +15,12 @@ class UserModel {
     required this.name,
     required this.email,
     required this.role,
-    this.photoUrl,
+    this.firstLogin = false,
     required this.createdAt,
   });
 
-  factory UserModel.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
-    return UserModel(
-      id: doc.id,
-      name: data['name'] ?? '',
-      email: data['email'] ?? '',
-      role: _parseRole(data['role']),
-      photoUrl: data['photoUrl'],
-      createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-    );
-  }
-
-  Map<String, dynamic> toFirestore() {
-    return {
-      'name': name,
-      'email': email,
-      'role': role.name,
-      'photoUrl': photoUrl,
-      'createdAt': Timestamp.fromDate(createdAt),
-    };
-  }
-
   static UserRole _parseRole(String? role) {
-    switch (role) {
+    switch (role?.trim().toLowerCase()) {
       case 'admin':
         return UserRole.admin;
       case 'teacher':
@@ -54,22 +32,25 @@ class UserModel {
     }
   }
 
-  UserModel copyWith({
-    String? name,
-    String? email,
-    UserRole? role,
-    String? photoUrl,
-  }) {
+  factory UserModel.fromFirestore(DocumentSnapshot doc) {
+    final raw = doc.data() as Map<String, dynamic>;
     return UserModel(
-      id: id,
-      name: name ?? this.name,
-      email: email ?? this.email,
-      role: role ?? this.role,
-      photoUrl: photoUrl ?? this.photoUrl,
-      createdAt: createdAt,
+      id: doc.id,
+      name: raw['name']?.toString().trim() ?? '',
+      email: raw['email']?.toString().trim() ?? '',
+      role: _parseRole(raw['role']?.toString()),
+      firstLogin: raw['first_login'] as bool? ?? false,
+      createdAt: (raw['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
   }
 
-  @override
-  String toString() => 'UserModel(id: $id, name: $name, role: ${role.name})';
+  Map<String, dynamic> toFirestore() {
+    return {
+      'name': name,
+      'email': email,
+      'role': role.name,
+      'first_login': firstLogin,
+      'createdAt': Timestamp.fromDate(createdAt),
+    };
+  }
 }

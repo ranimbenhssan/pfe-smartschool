@@ -28,11 +28,12 @@ class TeacherAlertDetailScreen extends ConsumerWidget {
       ),
       body: flags.when(
         loading: () => const LoadingWidget(),
-        error: (e, _) => EmptyState(
-          title: 'Error',
-          message: e.toString(),
-          icon: Icons.error_outline_rounded,
-        ),
+        error:
+            (e, _) => EmptyState(
+              title: 'Error',
+              message: e.toString(),
+              icon: Icons.error_outline_rounded,
+            ),
         data: (list) {
           final flag = list.where((f) => f.id == flagId).firstOrNull;
           if (flag == null) {
@@ -43,9 +44,10 @@ class TeacherAlertDetailScreen extends ConsumerWidget {
             );
           }
 
-          final color = flag.type == FlagType.frequentAbsent
-              ? AppColors.error
-              : flag.type == FlagType.latePattern
+          final color =
+              flag.type == FlagType.frequentAbsent
+                  ? AppColors.error
+                  : flag.type == FlagType.latePattern
                   ? AppColors.warning
                   : AppColors.info;
 
@@ -61,8 +63,7 @@ class TeacherAlertDetailScreen extends ConsumerWidget {
                   decoration: BoxDecoration(
                     color: color.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(16),
-                    border:
-                        Border.all(color: color.withValues(alpha: 0.3)),
+                    border: Border.all(color: color.withValues(alpha: 0.3)),
                   ),
                   child: Column(
                     children: [
@@ -77,8 +78,8 @@ class TeacherAlertDetailScreen extends ConsumerWidget {
                           flag.type == FlagType.frequentAbsent
                               ? Icons.event_busy_rounded
                               : flag.type == FlagType.latePattern
-                                  ? Icons.watch_later_rounded
-                                  : Icons.warning_amber_rounded,
+                              ? Icons.watch_later_rounded
+                              : Icons.warning_amber_rounded,
                           color: color,
                           size: 28,
                         ),
@@ -86,15 +87,17 @@ class TeacherAlertDetailScreen extends ConsumerWidget {
                       const SizedBox(height: 12),
                       Text(
                         flag.typeLabel,
-                        style: AppTypography.headingMedium
-                            .copyWith(color: color),
+                        style: AppTypography.headingMedium.copyWith(
+                          color: color,
+                        ),
                       ),
                       Text(
                         'Risk: ${(flag.riskScore * 100).toInt()}%',
                         style: AppTypography.bodySmall.copyWith(
-                          color: isDark
-                              ? AppColors.darkTextSecondary
-                              : AppColors.lightTextSecondary,
+                          color:
+                              isDark
+                                  ? AppColors.darkTextSecondary
+                                  : AppColors.lightTextSecondary,
                         ),
                       ),
                     ],
@@ -106,34 +109,34 @@ class TeacherAlertDetailScreen extends ConsumerWidget {
                 Text(
                   'Student',
                   style: AppTypography.headingMedium.copyWith(
-                    color:
-                        isDark ? AppColors.darkText : AppColors.lightText,
+                    color: isDark ? AppColors.darkText : AppColors.lightText,
                   ),
                 ),
                 const SizedBox(height: 8),
                 GestureDetector(
-                  onTap: () => context.push(
-                    '${AppRoutes.teacherStudentProfile}/${flag.studentId}',
-                  ),
+                  onTap:
+                      () => context.push(
+                        '${AppRoutes.teacherStudentProfile}/${flag.studentId}',
+                      ),
                   child: Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: isDark
-                          ? AppColors.darkCard
-                          : AppColors.lightCard,
+                      color: isDark ? AppColors.darkCard : AppColors.lightCard,
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
-                        color: isDark
-                            ? AppColors.darkBorder
-                            : AppColors.lightBorder,
+                        color:
+                            isDark
+                                ? AppColors.darkBorder
+                                : AppColors.lightBorder,
                       ),
                     ),
                     child: Row(
                       children: [
                         CircleAvatar(
                           radius: 20,
-                          backgroundColor:
-                              AppColors.accent.withValues(alpha: 0.15),
+                          backgroundColor: AppColors.accent.withValues(
+                            alpha: 0.15,
+                          ),
                           child: Text(
                             flag.studentName.isNotEmpty
                                 ? flag.studentName[0].toUpperCase()
@@ -148,9 +151,10 @@ class TeacherAlertDetailScreen extends ConsumerWidget {
                           child: Text(
                             flag.studentName,
                             style: AppTypography.labelLarge.copyWith(
-                              color: isDark
-                                  ? AppColors.darkText
-                                  : AppColors.lightText,
+                              color:
+                                  isDark
+                                      ? AppColors.darkText
+                                      : AppColors.lightText,
                             ),
                           ),
                         ),
@@ -169,8 +173,7 @@ class TeacherAlertDetailScreen extends ConsumerWidget {
                 Text(
                   'Details',
                   style: AppTypography.headingMedium.copyWith(
-                    color:
-                        isDark ? AppColors.darkText : AppColors.lightText,
+                    color: isDark ? AppColors.darkText : AppColors.lightText,
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -178,13 +181,11 @@ class TeacherAlertDetailScreen extends ConsumerWidget {
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color:
-                        isDark ? AppColors.darkCard : AppColors.lightCard,
+                    color: isDark ? AppColors.darkCard : AppColors.lightCard,
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
-                      color: isDark
-                          ? AppColors.darkBorder
-                          : AppColors.lightBorder,
+                      color:
+                          isDark ? AppColors.darkBorder : AppColors.lightBorder,
                     ),
                   ),
                   child: Column(
@@ -193,16 +194,16 @@ class TeacherAlertDetailScreen extends ConsumerWidget {
                       Text(
                         flag.details,
                         style: AppTypography.bodyMedium.copyWith(
-                          color: isDark
-                              ? AppColors.darkText
-                              : AppColors.lightText,
+                          color:
+                              isDark ? AppColors.darkText : AppColors.lightText,
                         ),
                       ),
                       const SizedBox(height: 8),
                       Text(
                         'Detected: ${DateFormat('dd MMM yyyy').format(flag.detectedAt)}',
-                        style: AppTypography.caption
-                            .copyWith(color: AppColors.accent),
+                        style: AppTypography.caption.copyWith(
+                          color: AppColors.accent,
+                        ),
                       ),
                     ],
                   ),

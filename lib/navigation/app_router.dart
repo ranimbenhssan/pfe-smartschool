@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../services/auth_service.dart';
@@ -29,8 +30,8 @@ import '../screens/admin/iot_monitor/admin_room_detail_screen.dart';
 import '../screens/admin/ai_alerts/admin_ai_alerts_screen.dart';
 import '../screens/admin/ai_alerts/admin_alert_detail_screen.dart';
 import '../screens/admin/ai_alerts/admin_alert_resolved_screen.dart';
-import '../screens/admin/notifications/admin_notifications_screen.dart';
-import '../screens/admin/notifications/admin_notification_send_screen.dart';
+import '../screens/admin/messages/admin_messages_screen.dart';
+import '../screens/admin/messages/admin_messages_send_screen.dart';
 import '../screens/admin/timetable/admin_timetable_screen.dart';
 import '../screens/admin/timetable/admin_timetable_form_screen.dart';
 import 'package:pfe_smartschool/screens/admin/settings/admin_settings_screen.dart';
@@ -55,11 +56,14 @@ import '../screens/student/timetable/student_timetable_screen.dart';
 import '../screens/student/iot_monitor/student_iot_screen.dart';
 import '../screens/student/iot_monitor/student_iot_history_screen.dart';
 import '../screens/admin/rooms/admin_rooms_screen.dart';
-import '../screens/student/notifications/student_notification_send_screen.dart';
-import '../screens/student/notifications/student_notifications_screen.dart';
-import '../screens/teacher/notifications/teacher_notifications_screen.dart';
-import '../screens/teacher/notifications/teacher_notification_send_screen.dart';
+import '../screens/student/messages/student_messages_send_screen.dart';
+import '../screens/student/messages/student_messages_screen.dart';
+import '../screens/teacher/messages/teacher_messages_screen.dart';
+import '../screens/teacher/messages/teacher_messages_send_screen.dart';
 import '../screens/shared/message_detail_screen.dart';
+import '../screens/shared/message_reply_screen.dart';
+import '../screens/shared/change_password_screen.dart';
+import '../screens/admin/import/admin_import_screen.dart';
 
 class PlaceholderScreen extends StatelessWidget {
   final String title;
@@ -77,19 +81,59 @@ class PlaceholderScreen extends StatelessWidget {
 }
 
 final appRouterProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authStateProvider);
+  final authUser = ref.read(authStateProvider).value;
 
   return GoRouter(
     initialLocation: AppRoutes.splash,
     debugLogDiagnostics: true,
-    redirect: (context, state) {
-      final isLoggedIn = authState.value != null;
-      final isAuthRoute =
-          state.matchedLocation == AppRoutes.login ||
-          state.matchedLocation == AppRoutes.forgotPassword ||
-          state.matchedLocation == AppRoutes.splash;
+    redirect: (context, state) async {
+      final authUser = ref.read(authStateProvider).value;
 
-      if (!isLoggedIn && !isAuthRoute) return AppRoutes.login;
+      final currentPath = state.matchedLocation;
+      final isLoginPage = currentPath == AppRoutes.login;
+      final isChangePassword = currentPath == AppRoutes.changePassword;
+      final isSplash = currentPath == AppRoutes.splash;
+
+      // ─── Not logged in ───
+      if (authUser == null) {
+        return isLoginPage ? null : AppRoutes.login;
+      }
+
+      // ─── Check first_login ───
+      try {
+        final userDoc =
+            await FirebaseFirestore.instance
+                .collection('users')
+                .doc(authUser.uid)
+                .get();
+
+        if (userDoc.exists) {
+          final firstLogin = userDoc.data()?['first_login'] as bool? ?? false;
+          if (firstLogin && !isChangePassword) {
+            return AppRoutes.changePassword;
+          }
+        }
+      } catch (e) {
+        debugPrint('Router redirect error: $e');
+      }
+
+      // ─── Already logged in — redirect away from login ───
+      if (isLoginPage || isSplash) {
+        final role = await ref
+            .read(authServiceProvider)
+            .getUserRole(authUser.uid);
+        switch (role) {
+          case UserRole.admin:
+            return AppRoutes.adminDashboard;
+          case UserRole.teacher:
+            return AppRoutes.teacherDashboard;
+          case UserRole.student:
+            return AppRoutes.studentDashboard;
+          default:
+            return null;
+        }
+      }
+
       return null;
     },
     routes: [
@@ -110,10 +154,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const ForgotPasswordScreen(),
       ),
       GoRoute(
+        path: AppRoutes.changePassword,
+        builder: (context, state) => const ChangePasswordScreen(),
+      ),
+      GoRoute(
         path: AppRoutes.messageDetail,
         builder:
-            (context, state) =>
-                MessageDetailScreen(message: state.extra as NotificationModel),
+            (context, state) => NotificationDetailscreen(
+              message: state.extra as NotificationModel,
+            ),
       ),
 
       // ─── Admin ───
@@ -273,14 +322,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const AdminAlertResolvedScreen(),
       ),
       GoRoute(
-        path: AppRoutes.adminNotifications,
-        name: 'admin-notifications',
-        builder: (context, state) => const AdminNotificationsScreen(),
+        path: AppRoutes.adminmessage,
+        name: 'admin-message',
+        builder: (context, state) => const AdminmessageScreen(),
       ),
       GoRoute(
-        path: AppRoutes.adminNotificationSend,
-        name: 'admin-notification-send',
-        builder: (context, state) => const AdminNotificationSendScreen(),
+        path: AppRoutes.adminmessageend,
+        name: 'admin-message-send',
+        builder: (context, state) => const AdminmessageendScreen(),
       ),
       GoRoute(
         path: AppRoutes.adminTimetable,
@@ -305,6 +354,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder:
             (context, state) =>
                 AdminTimetableFormScreen(entryId: state.extra as String?),
+      ),
+      GoRoute(
+        path: AppRoutes.adminImport,
+        builder: (context, state) => const AdminImportScreen(),
       ),
 
       GoRoute(
@@ -337,7 +390,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.teacherAttendance,
         name: 'teacher-attendance',
-        builder: (context, state) => const TeacherAttendanceScreen(),
+        builder:
+            (context, state) => const TeacherAttendanceScreen(className: ''),
       ),
       GoRoute(
         path: AppRoutes.teacherAttendanceToday,
@@ -346,11 +400,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       // ─── NEW: Name Call ───
       GoRoute(
-        path: AppRoutes.teacherAttendanceNameCall,
+        path: AppRoutes.teacherNameCall,
         name: 'teacher-attendance-namecall',
         builder: (context, state) {
           final extra = state.extra as Map<String, String>;
-          return TeacherNameCallScreen(
+          return TeacherNamecallScreen(
             classId: extra['classId']!,
             className: extra['className']!,
           );
@@ -362,8 +416,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const TeacherAttendanceByDateScreen(),
       ),
       GoRoute(
-        path: AppRoutes.teacherNotificationSend,
-        builder: (context, state) => const TeacherNotificationSendScreen(),
+        path: AppRoutes.teachermessageend,
+        builder: (context, state) => const TeachermessageendScreen(),
       ),
       GoRoute(
         path: AppRoutes.teacherAttendanceEdit,
@@ -424,9 +478,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const TeacherTimetableScreen(),
       ),
       GoRoute(
-        path: AppRoutes.teacherNotifications,
-        name: 'teacher-notifications',
-        builder: (context, state) => const TeacherNotificationsScreen(),
+        path: AppRoutes.teachermessage,
+        name: 'teacher-message',
+        builder: (context, state) => const TeachermessageScreen(),
       ),
 
       // ─── Student ───
@@ -466,13 +520,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const StudentIotHistoryScreen(),
       ),
       GoRoute(
-        path: AppRoutes.studentNotificationSend,
-        builder: (context, state) => const StudentNotificationSendScreen(),
+        path: AppRoutes.studentmessageend,
+        builder: (context, state) => const StudentmessageendScreen(),
       ),
       GoRoute(
-        path: AppRoutes.studentNotifications,
-        name: 'student-notifications',
-        builder: (context, state) => const StudentNotificationsScreen(),
+        path: AppRoutes.studentmessage,
+        name: 'student-message',
+        builder: (context, state) => const StudentmessageScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.messageReply,
+        builder:
+            (context, state) => MessageReplyScreen(
+              originalMessage: state.extra as NotificationModel,
+            ),
       ),
     ],
 

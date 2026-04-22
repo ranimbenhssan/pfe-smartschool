@@ -5,7 +5,6 @@ import 'package:intl/intl.dart';
 import '../../../theme/theme.dart';
 import '../../../widgets/widgets.dart';
 import '../../../providers/providers.dart';
-import '../../../models/models.dart';
 import '../../../navigation/app_routes.dart';
 
 class TeacherAttendanceTodayScreen extends ConsumerWidget {
@@ -27,86 +26,101 @@ class TeacherAttendanceTodayScreen extends ConsumerWidget {
       ),
       body: attendance.when(
         loading: () => const LoadingWidget(),
-        error: (e, _) => EmptyState(
-          title: 'Error',
-          message: e.toString(),
-          icon: Icons.error_outline_rounded,
-        ),
-        data: (list) => list.isEmpty
-            ? const EmptyState(
-                title: 'No Records',
-                message: 'No attendance recorded today yet',
-                icon: Icons.event_busy_rounded,
-              )
-            : ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: list.length,
-                itemBuilder: (context, index) {
-                  final record = list[index];
-                  return GestureDetector(
-                    onTap: () => context.push(
-                      AppRoutes.teacherAttendanceEdit,
-                      extra: record,
-                    ),
-                    child: Container(
-                      padding: const EdgeInsets.all(14),
-                      margin: const EdgeInsets.only(bottom: 8),
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? AppColors.darkCard
-                            : AppColors.lightCard,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: isDark
-                              ? AppColors.darkBorder
-                              : AppColors.lightBorder,
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          CircleAvatar(
-                            radius: 18,
-                            backgroundColor: AppColors.teacherColor
-                                .withValues(alpha: 0.15),
-                            child: Text(
-                              record.studentName.isNotEmpty
-                                  ? record.studentName[0].toUpperCase()
-                                  : '?',
-                              style: AppTypography.labelMedium.copyWith(
-                                color: AppColors.teacherColor,
+        error:
+            (e, _) => EmptyState(
+              title: 'Error',
+              message: e.toString(),
+              icon: Icons.error_outline_rounded,
+            ),
+        data:
+            (list) =>
+                list.isEmpty
+                    ? const EmptyState(
+                      title: 'No Records',
+                      message: 'No attendance recorded today yet',
+                      icon: Icons.event_busy_rounded,
+                    )
+                    : ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: list.length,
+                      itemBuilder: (context, index) {
+                        final record = list[index];
+                        return GestureDetector(
+                          onTap:
+                              () => context.push(
+                                AppRoutes.teacherAttendanceEdit,
+                                extra: record,
+                              ),
+                          child: Container(
+                            padding: const EdgeInsets.all(14),
+                            margin: const EdgeInsets.only(bottom: 8),
+                            decoration: BoxDecoration(
+                              color:
+                                  isDark
+                                      ? AppColors.darkCard
+                                      : AppColors.lightCard,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color:
+                                    isDark
+                                        ? AppColors.darkBorder
+                                        : AppColors.lightBorder,
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.start,
+                            child: Row(
                               children: [
-                                Text(
-                                  record.studentName,
-                                  style: AppTypography.labelLarge
-                                      .copyWith(
-                                    color: isDark
-                                        ? AppColors.darkText
-                                        : AppColors.lightText,
+                                CircleAvatar(
+                                  radius: 18,
+                                  backgroundColor: AppColors.teacherColor
+                                      .withValues(alpha: 0.15),
+                                  child: Text(
+                                    record.studentName.isNotEmpty
+                                        ? record.studentName[0].toUpperCase()
+                                        : '?',
+                                    style: AppTypography.labelMedium.copyWith(
+                                      color: AppColors.teacherColor,
+                                    ),
                                   ),
                                 ),
-                                if (record.entryTime != null)
-                                  Text(
-                                    'Entry: ${DateFormat('HH:mm').format(record.entryTime!)}',
-                                    style: AppTypography.caption,
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        record.studentName,
+                                        style: AppTypography.labelLarge
+                                            .copyWith(
+                                              color:
+                                                  isDark
+                                                      ? AppColors.darkText
+                                                      : AppColors.lightText,
+                                            ),
+                                      ),
+                                      if (record.entryTime != null)
+                                        Text(
+                                          'Entry: ${DateFormat('HH:mm').format(record.entryTime!)}',
+                                          style: AppTypography.caption,
+                                        ),
+                                    ],
                                   ),
+                                ),
+                                AttendanceDetailCard(
+                                  record: record,
+                                  isDark: isDark,
+                                  onTap:
+                                      () => context.push(
+                                        AppRoutes.teacherAttendanceEdit,
+                                        extra: record,
+                                      ),
+                                ),
                               ],
                             ),
                           ),
-                          AttendanceBadge(status: record.status),
-                        ],
-                      ),
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
       ),
     );
   }

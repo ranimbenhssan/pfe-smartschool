@@ -83,21 +83,18 @@ class AdminTeacherProfileScreen extends ConsumerWidget {
                     backgroundColor: AppColors.teacherColor.withValues(
                       alpha: 0.2,
                     ),
-                    backgroundImage:
-                        teacher.photoUrl != null
-                            ? NetworkImage(teacher.photoUrl!)
-                            : null,
-                    child:
-                        teacher.photoUrl == null
-                            ? Text(
-                              teacher.name.isNotEmpty
-                                  ? teacher.name[0].toUpperCase()
-                                  : '?',
-                              style: AppTypography.displayMedium.copyWith(
-                                color: AppColors.teacherColor,
-                              ),
-                            )
-                            : null,
+                  ),
+                  CircleAvatar(
+                    radius: 22,
+                    backgroundColor: AppColors.teacherColor.withValues(alpha: 0.15),
+                    child: Text(
+                      teacher.name.isNotEmpty
+                          ? teacher.name[0].toUpperCase()
+                          : '?',
+                      style: AppTypography.labelLarge.copyWith(
+                        color: AppColors.teacherColor,
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   Text(

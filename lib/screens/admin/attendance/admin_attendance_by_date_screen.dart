@@ -77,34 +77,41 @@ class AdminAttendanceByDateScreen extends ConsumerWidget {
 
           // ─── Stats ───
           attendance.whenData((list) {
-            final present = list
-                .where((a) => a.status == AttendanceStatus.present)
-                .length;
-            final absent = list
-                .where((a) => a.status == AttendanceStatus.absent)
-                .length;
-            final late =
-                list.where((a) => a.status == AttendanceStatus.late).length;
-            return Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  _MiniStat(
-                      label: 'Present',
-                      value: present,
-                      color: AppColors.present),
-                  const SizedBox(width: 8),
-                  _MiniStat(
-                      label: 'Absent',
-                      value: absent,
-                      color: AppColors.absent),
-                  const SizedBox(width: 8),
-                  _MiniStat(
-                      label: 'Late', value: late, color: AppColors.late),
-                ],
-              ),
-            );
-          }).value ??
+                final present =
+                    list
+                        .where((a) => a.status == AttendanceStatus.present)
+                        .length;
+                final absent =
+                    list
+                        .where((a) => a.status == AttendanceStatus.absent)
+                        .length;
+                final late =
+                    list.where((a) => a.status == AttendanceStatus.late).length;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      _MiniStat(
+                        label: 'Present',
+                        value: present,
+                        color: AppColors.present,
+                      ),
+                      const SizedBox(width: 8),
+                      _MiniStat(
+                        label: 'Absent',
+                        value: absent,
+                        color: AppColors.absent,
+                      ),
+                      const SizedBox(width: 8),
+                      _MiniStat(
+                        label: 'Late',
+                        value: late,
+                        color: AppColors.late,
+                      ),
+                    ],
+                  ),
+                );
+              }).value ??
               const SizedBox.shrink(),
 
           const SizedBox(height: 12),
@@ -113,73 +120,88 @@ class AdminAttendanceByDateScreen extends ConsumerWidget {
           Expanded(
             child: attendance.when(
               loading: () => const LoadingWidget(),
-              error: (e, _) => EmptyState(
-                title: 'Error',
-                message: e.toString(),
-                icon: Icons.error_outline_rounded,
-              ),
-              data: (list) => list.isEmpty
-                  ? const EmptyState(
-                      title: 'No Records',
-                      message: 'No attendance records for this date',
-                      icon: Icons.event_busy_rounded,
-                    )
-                  : ListView.builder(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: list.length,
-                      itemBuilder: (context, index) {
-                        final record = list[index];
-                        return GestureDetector(
-                          onTap: () => context.push(
-                            AppRoutes.adminAttendanceEdit,
-                            extra: record,
-                          ),
-                          child: Container(
-                            padding: const EdgeInsets.all(14),
-                            margin: const EdgeInsets.only(bottom: 8),
-                            decoration: BoxDecoration(
-                              color: isDark
-                                  ? AppColors.darkCard
-                                  : AppColors.lightCard,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: isDark
-                                    ? AppColors.darkBorder
-                                    : AppColors.lightBorder,
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+              error:
+                  (e, _) => EmptyState(
+                    title: 'Error',
+                    message: e.toString(),
+                    icon: Icons.error_outline_rounded,
+                  ),
+              data:
+                  (list) =>
+                      list.isEmpty
+                          ? const EmptyState(
+                            title: 'No Records',
+                            message: 'No attendance records for this date',
+                            icon: Icons.event_busy_rounded,
+                          )
+                          : ListView.builder(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            itemCount: list.length,
+                            itemBuilder: (context, index) {
+                              final record = list[index];
+                              return GestureDetector(
+                                onTap:
+                                    () => context.push(
+                                      AppRoutes.adminAttendanceEdit,
+                                      extra: record,
+                                    ),
+                                child: Container(
+                                  padding: const EdgeInsets.all(14),
+                                  margin: const EdgeInsets.only(bottom: 8),
+                                  decoration: BoxDecoration(
+                                    color:
+                                        isDark
+                                            ? AppColors.darkCard
+                                            : AppColors.lightCard,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color:
+                                          isDark
+                                              ? AppColors.darkBorder
+                                              : AppColors.lightBorder,
+                                    ),
+                                  ),
+                                  child: Row(
                                     children: [
-                                      Text(
-                                        record.studentName,
-                                        style: AppTypography.labelLarge
-                                            .copyWith(
-                                          color: isDark
-                                              ? AppColors.darkText
-                                              : AppColors.lightText,
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              record.studentName,
+                                              style: AppTypography.labelLarge
+                                                  .copyWith(
+                                                    color:
+                                                        isDark
+                                                            ? AppColors.darkText
+                                                            : AppColors
+                                                                .lightText,
+                                                  ),
+                                            ),
+                                            if (record.entryTime != null)
+                                              Text(
+                                                'Entry: ${DateFormat('HH:mm').format(record.entryTime!)}',
+                                                style: AppTypography.caption,
+                                              ),
+                                          ],
                                         ),
                                       ),
-                                      if (record.entryTime != null)
-                                        Text(
-                                          'Entry: ${DateFormat('HH:mm').format(record.entryTime!)}',
-                                          style: AppTypography.caption,
-                                        ),
+                                      AttendanceDetailCard(
+                                        record: record,
+                                        isDark: isDark,
+                                        onTap:
+                                            () => context.push(
+                                              AppRoutes.adminAttendanceEdit,
+                                              extra: record,
+                                            ),
+                                      ),
                                     ],
                                   ),
                                 ),
-                                AttendanceBadge(status: record.status),
-                              ],
-                            ),
+                              );
+                            },
                           ),
-                        );
-                      },
-                    ),
             ),
           ),
         ],
@@ -213,8 +235,7 @@ class _MiniStat extends StatelessWidget {
           children: [
             Text(
               value.toString(),
-              style:
-                  AppTypography.headingMedium.copyWith(color: color),
+              style: AppTypography.headingMedium.copyWith(color: color),
             ),
             Text(label, style: AppTypography.caption),
           ],

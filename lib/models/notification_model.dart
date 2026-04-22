@@ -47,6 +47,9 @@ class NotificationModel {
   final String message;
   final MessageType messageType;
   final List<AttachmentModel> attachments;
+  final String recipientLabel;
+  final String replyToId;
+  final String replyToTitle;
   final bool isRead;
   final DateTime createdAt;
 
@@ -60,9 +63,14 @@ class NotificationModel {
     required this.message,
     required this.messageType,
     required this.attachments,
+    required this.recipientLabel,
+    this.replyToId = '',
+    this.replyToTitle = '',
     required this.isRead,
     required this.createdAt,
   });
+
+  bool get isReply => replyToId.isNotEmpty;
 
   factory NotificationModel.fromFirestore(DocumentSnapshot doc) {
     final raw = doc.data() as Map<String, dynamic>;
@@ -90,6 +98,9 @@ class NotificationModel {
         orElse: () => MessageType.general,
       ),
       attachments: parseAttachments(),
+      recipientLabel: raw['recipientLabel']?.toString() ?? '',
+      replyToId: raw['replyToId']?.toString() ?? '',
+      replyToTitle: raw['replyToTitle']?.toString() ?? '',
       isRead: raw['isRead'] as bool? ?? false,
       createdAt: (raw['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
@@ -104,6 +115,9 @@ class NotificationModel {
     'message': message,
     'messageType': messageType.name,
     'attachments': attachments.map((a) => a.toMap()).toList(),
+    'recipientLabel': recipientLabel,
+    'replyToId': replyToId,
+    'replyToTitle': replyToTitle,
     'isRead': isRead,
     'createdAt': Timestamp.fromDate(createdAt),
   };

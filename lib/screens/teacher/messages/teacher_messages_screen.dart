@@ -5,11 +5,10 @@ import '../../../theme/theme.dart';
 import '../../../widgets/widgets.dart';
 import '../../../providers/providers.dart';
 import '../../../services/services.dart';
-import '../../../services/auth_service.dart';
 import '../../../navigation/app_routes.dart';
 
-class StudentNotificationsScreen extends ConsumerWidget {
-  const StudentNotificationsScreen({super.key});
+class TeachermessageScreen extends ConsumerWidget {
+  const TeachermessageScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -20,16 +19,14 @@ class StudentNotificationsScreen extends ConsumerWidget {
       backgroundColor:
           isDark ? AppColors.darkBackground : AppColors.lightBackground,
       appBar: AppBar(
-        title: const Text('Messages'),
+        title: const Text('message'),
         backgroundColor:
             isDark ? AppColors.darkSurface : AppColors.lightSurface,
         actions: [
-          // ─── Send button — always visible ───
           IconButton(
             icon: const Icon(Icons.edit_rounded),
-            onPressed: () => context.push(AppRoutes.studentNotificationSend),
+            onPressed: () => context.push(AppRoutes.teachermessageend),
           ),
-          // ─── Mark all read ───
           currentUser.when(
             loading: () => const SizedBox.shrink(),
             error: (_, __) => const SizedBox.shrink(),
@@ -61,11 +58,11 @@ class StudentNotificationsScreen extends ConsumerWidget {
             return const EmptyState(
               title: 'Not logged in',
               message: 'Please log in',
-              icon: Icons.notifications_off_rounded,
+              icon: Icons.message_rounded,
             );
           }
-          final notifications = ref.watch(notificationsProvider(user.id));
-          return notifications.when(
+          final message = ref.watch(notificationsProvider(user.id));
+          return message.when(
             loading: () => const LoadingWidget(),
             error:
                 (e, _) => EmptyState(
@@ -77,25 +74,25 @@ class StudentNotificationsScreen extends ConsumerWidget {
                 (list) =>
                     list.isEmpty
                         ? const EmptyState(
-                          title: 'No Notifications',
-                          message: 'No notifications yet',
-                          icon: Icons.notifications_none_rounded,
+                          title: 'No message',
+                          message: 'No message yet',
+                          icon: Icons.message_rounded,
                         )
                         : ListView.builder(
                           padding: const EdgeInsets.all(16),
                           itemCount: list.length,
                           itemBuilder: (context, index) {
-                            final notification = list[index];
-                            return NotificationTile(
-                              notification: notification,
+                            final message = list[index];
+                            return MessagesTile(
+                              message: message,
                               onTap: () async {
                                 await ref
                                     .read(firestoreServiceProvider)
-                                    .markNotificationRead(notification.id);
+                                    .markNotificationRead(message.id);
                                 if (context.mounted) {
                                   context.push(
                                     AppRoutes.messageDetail,
-                                    extra: notification,
+                                    extra: message,
                                   );
                                 }
                               },
