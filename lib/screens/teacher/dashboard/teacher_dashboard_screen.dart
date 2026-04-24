@@ -164,7 +164,6 @@ class _TeacherDashboardScreenState
 class _DashboardBody extends ConsumerWidget {
   const _DashboardBody();
 
-
   Widget _buildRecentmessage(BuildContext context, bool isDark, WidgetRef ref) {
     final currentUser = ref.watch(currentUserProvider);
 
@@ -235,7 +234,8 @@ class _DashboardBody extends ConsumerWidget {
       },
     );
   }
- @override
+
+  @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final currentUser = ref.watch(currentUserProvider);
@@ -1090,8 +1090,9 @@ class _ProfileBottomSheet extends ConsumerWidget {
           AppButton(
             label: 'Sign Out',
             onPressed: () async {
+              Navigator.of(context).pop(); // close bottom sheet first
               await ref.read(authServiceProvider).logout();
-              if (context.mounted) context.go(AppRoutes.login);
+              // ─── Router redirect handles going to login ───
             },
             isOutlined: true,
             icon: Icons.logout_rounded,

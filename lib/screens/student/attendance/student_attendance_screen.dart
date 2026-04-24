@@ -7,7 +7,6 @@ import '../../../widgets/widgets.dart';
 import '../../../providers/providers.dart';
 import '../../../models/models.dart';
 import '../../../navigation/app_routes.dart';
-import '../../../services/auth_service.dart';
 
 class StudentAttendanceScreen extends ConsumerWidget {
   const StudentAttendanceScreen({super.key});

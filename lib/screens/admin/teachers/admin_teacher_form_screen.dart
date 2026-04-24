@@ -3,9 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../theme/theme.dart';
 import '../../../widgets/widgets.dart';
-import '../../../providers/providers.dart';
 import '../../../services/services.dart';
-import '../../../services/auth_service.dart';
 import '../../../models/models.dart';
 
 class AdminTeacherFormScreen extends ConsumerStatefulWidget {

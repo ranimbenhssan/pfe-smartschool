@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
 import '../../../theme/theme.dart';
 import '../../../widgets/widgets.dart';
-import '../../../providers/providers.dart';
 import '../../../services/services.dart';
 import '../../../models/models.dart';
 

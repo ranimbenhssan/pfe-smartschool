@@ -1,7 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/models.dart';
-import 'package:flutter/foundation.dart';
 
 // ─── All students ───
 final studentsProvider = StreamProvider<List<StudentModel>>((ref) {

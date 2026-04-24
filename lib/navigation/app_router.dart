@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../services/auth_service.dart';
@@ -81,76 +80,54 @@ class PlaceholderScreen extends StatelessWidget {
 }
 
 final appRouterProvider = Provider<GoRouter>((ref) {
-  final authUser = ref.read(authStateProvider).value;
+  final authState = ref.watch(authStateProvider);
 
   return GoRouter(
     initialLocation: AppRoutes.splash,
-    debugLogDiagnostics: true,
-    redirect: (context, state) async {
-      final authUser = ref.read(authStateProvider).value;
-
+    // ─── NO async redirect — use simple sync logic ───
+    redirect: (context, state) {
       final currentPath = state.matchedLocation;
-      final isLoginPage = currentPath == AppRoutes.login;
-      final isChangePassword = currentPath == AppRoutes.changePassword;
-      final isSplash = currentPath == AppRoutes.splash;
+      final isLoggedIn = authState.value != null;
+      final isLoading = authState.isLoading;
 
-      // ─── Not logged in ───
-      if (authUser == null) {
-        return isLoginPage ? null : AppRoutes.login;
+      // ─── While loading auth state — stay on splash ───
+      if (isLoading) {
+        return currentPath == AppRoutes.splash ? null : AppRoutes.splash;
       }
 
-      // ─── Check first_login ───
-      try {
-        final userDoc =
-            await FirebaseFirestore.instance
-                .collection('users')
-                .doc(authUser.uid)
-                .get();
+      final publicRoutes = [
+        AppRoutes.splash,
+        AppRoutes.login,
+        AppRoutes.forgotPassword,
+        AppRoutes.changePassword,
+      ];
 
-        if (userDoc.exists) {
-          final firstLogin = userDoc.data()?['first_login'] as bool? ?? false;
-          if (firstLogin && !isChangePassword) {
-            return AppRoutes.changePassword;
-          }
-        }
-      } catch (e) {
-        debugPrint('Router redirect error: $e');
+      final isOnPublicRoute = publicRoutes.contains(currentPath);
+
+      // ─── Not logged in → go to login ───
+      if (!isLoggedIn) {
+        return isOnPublicRoute ? null : AppRoutes.login;
       }
 
-      // ─── Already logged in — redirect away from login ───
-      if (isLoginPage || isSplash) {
-        final role = await ref
-            .read(authServiceProvider)
-            .getUserRole(authUser.uid);
-        switch (role) {
-          case UserRole.admin:
-            return AppRoutes.adminDashboard;
-          case UserRole.teacher:
-            return AppRoutes.teacherDashboard;
-          case UserRole.student:
-            return AppRoutes.studentDashboard;
-          default:
-            return null;
-        }
+      // ─── Logged in and on splash/login → go to splash
+      //     which handles role-based redirect ───
+      if (currentPath == AppRoutes.login || currentPath == AppRoutes.splash) {
+        return AppRoutes.splash;
       }
 
       return null;
     },
     routes: [
-      // ─── Shared ───
       GoRoute(
         path: AppRoutes.splash,
-        name: 'splash',
         builder: (context, state) => const SplashScreen(),
       ),
       GoRoute(
         path: AppRoutes.login,
-        name: 'login',
         builder: (context, state) => const LoginScreen(),
       ),
       GoRoute(
         path: AppRoutes.forgotPassword,
-        name: 'forgot-password',
         builder: (context, state) => const ForgotPasswordScreen(),
       ),
       GoRoute(
@@ -401,13 +378,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // ─── NEW: Name Call ───
       GoRoute(
         path: AppRoutes.teacherNameCall,
-        name: 'teacher-attendance-namecall',
         builder: (context, state) {
-          final extra = state.extra as Map<String, String>;
-          return TeacherNamecallScreen(
-            classId: extra['classId']!,
-            className: extra['className']!,
-          );
+          final classId = state.extra as String; // ← CORRECT
+          return TeacherNamecallScreen(classId: classId);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.teacherNameCall,
+        builder: (context, state) {
+          final extra = state.extra;
+          final classId = extra is String ? extra : '';
+          if (classId.isEmpty) {
+            return const Scaffold(
+              body: Center(child: Text('Error: Invalid class ID')),
+            );
+          }
+          return TeacherNamecallScreen(classId: classId);
         },
       ),
       GoRoute(

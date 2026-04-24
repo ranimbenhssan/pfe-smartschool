@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../theme/theme.dart';
 import '../../../widgets/widgets.dart';
 import '../../../providers/providers.dart';
-import '../../../services/auth_service.dart';
 import '../../../models/models.dart';
 
 class TeacherTimetableScreen extends ConsumerStatefulWidget {

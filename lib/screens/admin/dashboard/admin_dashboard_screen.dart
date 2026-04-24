@@ -1302,8 +1302,9 @@ class _ProfileBottomSheet extends ConsumerWidget {
           AppButton(
             label: 'Sign Out',
             onPressed: () async {
+              Navigator.of(context).pop(); // close bottom sheet first
               await ref.read(authServiceProvider).logout();
-              if (context.mounted) context.go(AppRoutes.login);
+              // ─── Router redirect handles going to login ───
             },
             isOutlined: true,
             icon: Icons.logout_rounded,
