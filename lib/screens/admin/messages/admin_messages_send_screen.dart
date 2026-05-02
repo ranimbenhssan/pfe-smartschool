@@ -245,98 +245,87 @@ class _AdminmessageendScreenState extends ConsumerState<AdminmessageendScreen> {
     );
   }
 
+  // REPLACE _buildClassSelector:
   Widget _buildClassSelector(bool isDark) {
     final classes = ref.watch(classesProvider);
-    return SelectorSection(
-      isDark: isDark,
-      title: 'Select Class(es)',
-      child: classes.when(
-        loading: () => const LoadingWidget(),
-        error: (e, _) => Text('Error: $e'),
-        data:
-            (list) => Column(
-              children:
-                  list.map((cls) {
-                    final isSelected = _selectedClassIds.contains(cls.id);
-                    return SelectTile(
-                      isDark: isDark,
-                      label: cls.displayName,
-                      isSelected: isSelected,
-                      onTap:
-                          () => setState(
-                            () =>
-                                isSelected
-                                    ? _selectedClassIds.remove(cls.id)
-                                    : _selectedClassIds.add(cls.id),
-                          ),
-                    );
-                  }).toList(),
-            ),
-      ),
+    return classes.when(
+      loading: () => const LoadingWidget(),
+      error: (e, _) => Text('Error: $e'),
+      data:
+          (list) => SearchableSelector<ClassModel>(
+            isDark: isDark,
+            title: 'Select Class(es)',
+            hint: 'Search by class name or grade...',
+            items: list,
+            labelOf: (c) => c.displayName,
+            subtitleOf: (c) => c.grade,
+            idOf: (c) => c.id,
+            selectedIds: _selectedClassIds,
+            activeColor: AppColors.accent,
+            onToggle:
+                (cls, isSelected) => setState(
+                  () =>
+                      isSelected
+                          ? _selectedClassIds.remove(cls.id)
+                          : _selectedClassIds.add(cls.id),
+                ),
+          ),
     );
   }
 
+  // REPLACE _buildStudentSelector:
   Widget _buildStudentSelector(bool isDark) {
     final students = ref.watch(studentsProvider);
-    return SelectorSection(
-      isDark: isDark,
-      title: 'Select Student(s)',
-      child: students.when(
-        loading: () => const LoadingWidget(),
-        error: (e, _) => Text('Error: $e'),
-        data:
-            (list) => Column(
-              children:
-                  list.map((s) {
-                    final isSelected = _selectedStudentIds.contains(s.id);
-                    return SelectTile(
-                      isDark: isDark,
-                      label: s.name,
-                      subtitle: s.className,
-                      isSelected: isSelected,
-                      onTap:
-                          () => setState(
-                            () =>
-                                isSelected
-                                    ? _selectedStudentIds.remove(s.id)
-                                    : _selectedStudentIds.add(s.id),
-                          ),
-                    );
-                  }).toList(),
-            ),
-      ),
+    return students.when(
+      loading: () => const LoadingWidget(),
+      error: (e, _) => Text('Error: $e'),
+      data:
+          (list) => SearchableSelector<StudentModel>(
+            isDark: isDark,
+            title: 'Select Student(s)',
+            hint: 'Search by name or class...',
+            items: list,
+            labelOf: (s) => s.name,
+            subtitleOf: (s) => s.classDisplay,
+            idOf: (s) => s.id,
+            selectedIds: _selectedStudentIds,
+            activeColor: AppColors.studentColor,
+            onToggle:
+                (s, isSelected) => setState(
+                  () =>
+                      isSelected
+                          ? _selectedStudentIds.remove(s.id)
+                          : _selectedStudentIds.add(s.id),
+                ),
+          ),
     );
   }
 
+  // REPLACE _buildTeacherSelector:
   Widget _buildTeacherSelector(bool isDark) {
     final teachers = ref.watch(teachersProvider);
-    return SelectorSection(
-      isDark: isDark,
-      title: 'Select Teacher(s)',
-      child: teachers.when(
-        loading: () => const LoadingWidget(),
-        error: (e, _) => Text('Error: $e'),
-        data:
-            (list) => Column(
-              children:
-                  list.map((t) {
-                    final isSelected = _selectedTeacherIds.contains(t.id);
-                    return SelectTile(
-                      isDark: isDark,
-                      label: t.name,
-                      subtitle: t.assignedClassNames.join(', '),
-                      isSelected: isSelected,
-                      onTap:
-                          () => setState(
-                            () =>
-                                isSelected
-                                    ? _selectedTeacherIds.remove(t.id)
-                                    : _selectedTeacherIds.add(t.id),
-                          ),
-                    );
-                  }).toList(),
-            ),
-      ),
+    return teachers.when(
+      loading: () => const LoadingWidget(),
+      error: (e, _) => Text('Error: $e'),
+      data:
+          (list) => SearchableSelector<TeacherModel>(
+            isDark: isDark,
+            title: 'Select Teacher(s)',
+            hint: 'Search by name or subject...',
+            items: list,
+            labelOf: (t) => t.name,
+            subtitleOf: (t) => t.assignedClassNames.join(', '),
+            idOf: (t) => t.id,
+            selectedIds: _selectedTeacherIds,
+            activeColor: AppColors.teacherColor,
+            onToggle:
+                (t, isSelected) => setState(
+                  () =>
+                      isSelected
+                          ? _selectedTeacherIds.remove(t.id)
+                          : _selectedTeacherIds.add(t.id),
+                ),
+          ),
     );
   }
 }

@@ -427,9 +427,10 @@ class _WeekGrid extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.accent.withValues(alpha: 0.08),
       ),
-      child: Column(
+      child: // FIND _entryCell and REPLACE the Column children:
+          Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text(
             entry.subject,
@@ -447,28 +448,27 @@ class _WeekGrid extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               maxLines: 1,
             ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              GestureDetector(
-                onTap: onEdit,
-                child: const Icon(
-                  Icons.edit_rounded,
-                  size: 12,
-                  color: AppColors.info,
+          if (entry.roomName.isNotEmpty)
+            Row(
+              children: [
+                const Icon(
+                  Icons.meeting_room_rounded,
+                  size: 10,
+                  color: AppColors.accent,
                 ),
-              ),
-              const SizedBox(width: 4),
-              GestureDetector(
-                onTap: onDelete,
-                child: const Icon(
-                  Icons.delete_outline_rounded,
-                  size: 12,
-                  color: AppColors.error,
+                const SizedBox(width: 2),
+                Expanded(
+                  child: Text(
+                    entry.roomName,
+                    style: AppTypography.caption.copyWith(
+                      color: AppColors.accent,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
         ],
       ),
     );
@@ -540,6 +540,7 @@ class _AdminEntryCard extends StatelessWidget {
           const SizedBox(width: 12),
 
           // ─── Info ───
+          // FIND and REPLACE the info Expanded column:
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -553,7 +554,20 @@ class _AdminEntryCard extends StatelessWidget {
                 if (entry.teacherName.isNotEmpty)
                   Text(entry.teacherName, style: AppTypography.caption),
                 if (entry.roomName.isNotEmpty)
-                  Text('📍 ${entry.roomName}', style: AppTypography.caption),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.meeting_room_rounded,
+                        size: 11,
+                        color:
+                            isDark
+                                ? AppColors.darkTextHint
+                                : AppColors.lightTextHint,
+                      ),
+                      const SizedBox(width: 3),
+                      Text(entry.roomName, style: AppTypography.caption),
+                    ],
+                  ),
               ],
             ),
           ),

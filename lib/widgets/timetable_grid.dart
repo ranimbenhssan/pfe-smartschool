@@ -183,6 +183,8 @@ class _TimetableCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
+
+          // FIND the info column inside _TimetableCard and REPLACE:
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -196,7 +198,20 @@ class _TimetableCard extends StatelessWidget {
                 if (entry.teacherName.isNotEmpty)
                   Text(entry.teacherName, style: AppTypography.caption),
                 if (entry.roomName.isNotEmpty)
-                  Text('📍 ${entry.roomName}', style: AppTypography.caption),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.meeting_room_rounded,
+                        size: 11,
+                        color:
+                            isDark
+                                ? AppColors.darkTextHint
+                                : AppColors.lightTextHint,
+                      ),
+                      const SizedBox(width: 3),
+                      Text(entry.roomName, style: AppTypography.caption),
+                    ],
+                  ),
               ],
             ),
           ),

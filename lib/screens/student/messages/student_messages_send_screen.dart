@@ -1,77 +1,100 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../theme/theme.dart';
 import '../../../widgets/widgets.dart';
 import '../../../providers/providers.dart';
-import '../../../services/services.dart';
+import '../../../services/auth_service.dart';
+import '../../../services/services.dart';        // ← notificationServiceProvider
+import '../../../services/notification_service.dart'; // ← if not in services.dart
 import '../../../models/models.dart';
 
-class StudentmessageendScreen extends ConsumerStatefulWidget {
-  const StudentmessageendScreen({super.key});
+class StudentNotificationSendScreen extends ConsumerStatefulWidget {
+  const StudentNotificationSendScreen({super.key});
 
   @override
-  ConsumerState<StudentmessageendScreen> createState() =>
-      _StudentmessageendScreenState();
+  ConsumerState<StudentNotificationSendScreen> createState() =>
+      _StudentNotificationSendScreenState();
 }
 
-class _StudentmessageendScreenState
-    extends ConsumerState<StudentmessageendScreen> {
+class _StudentNotificationSendScreenState
+    extends ConsumerState<StudentNotificationSendScreen> {
+  final _titleController = TextEditingController();
+  final _messageController = TextEditingController();
   bool _isLoading = false;
   String _targetType = 'teacher';
   List<String> _selectedTeacherIds = [];
   List<String> _selectedStudentIds = [];
 
-  Future<void> _send(
-    String title,
-    String message,
-    MessageType messageType,
-    List<AttachmentModel> attachments,
-  ) async {
-    final currentUser = await ref.read(currentUserProvider.future);
-    if (currentUser == null) return;
-    if (!mounted) return;
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _messageController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    if (_titleController.text.trim().isEmpty ||
+        _messageController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill in title and message')),
+      );
+      return;
+    }
 
     if (_targetType == 'teacher' && _selectedTeacherIds.isEmpty) {
-      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select at least one teacher')),
       );
       return;
     }
+
     if (_targetType == 'student' && _selectedStudentIds.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select at least one student')),
+        const SnackBar(content: Text('Please select at least one classmate')),
       );
       return;
     }
 
     setState(() => _isLoading = true);
-    final service = ref.read(notificationServiceProvider);
-    final attMaps = attachments.map((a) => a.toMap()).toList();
+
+    final currentUser = await ref.read(currentUserProvider.future);
+    if (currentUser == null) {
+      setState(() => _isLoading = false);
+      return;
+    }
 
     try {
-      Future<bool> sendToUser(String userId) => service.sendToUser(
-        userId,
-        title,
-        message,
-        type: messageType.name,
-        senderId: currentUser.id,
-        senderName: currentUser.name,
-        senderRole: 'student',
-        attachments: attMaps,
-      );
+      final title = _titleController.text.trim();
+      final message = _messageController.text.trim();
+
+      Future<void> sendToUser(String userId) async {
+        await ref
+            .read(notificationServiceProvider)
+            .sendToUser(
+              userId,
+              title,
+              message,
+              type: MessageType.general.name,
+              senderId: currentUser.id,
+              senderName: currentUser.name,
+              senderRole: 'student',
+              recipientLabel: '',
+            );
+      }
 
       if (_targetType == 'teacher' || _targetType == 'mixed') {
         for (final id in _selectedTeacherIds) {
           await sendToUser(id);
         }
       }
+
       if (_targetType == 'student' || _targetType == 'mixed') {
         for (final studentId in _selectedStudentIds) {
           final student = await ref
               .read(firestoreServiceProvider)
               .getStudent(studentId);
-          if (student?.userId != null && student!.userId.isNotEmpty) {
+          if (student != null && student.userId.isNotEmpty) {
             await sendToUser(student.userId);
           }
         }
@@ -79,12 +102,17 @@ class _StudentmessageendScreenState
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('message sent successfully ✅')),
+          const SnackBar(
+            content: Text('Message sent successfully ✅'),
+            backgroundColor: AppColors.success,
+          ),
         );
         setState(() {
           _targetType = 'teacher';
           _selectedTeacherIds = [];
           _selectedStudentIds = [];
+          _titleController.clear();
+          _messageController.clear();
         });
       }
     } catch (e) {
@@ -94,19 +122,19 @@ class _StudentmessageendScreenState
         ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
+
     if (mounted) setState(() => _isLoading = false);
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final currentUser = ref.watch(currentUserProvider);
 
     return Scaffold(
       backgroundColor:
           isDark ? AppColors.darkBackground : AppColors.lightBackground,
       appBar: AppBar(
-        title: const Text('Send message'),
+        title: const Text('Send Message'),
         backgroundColor:
             isDark ? AppColors.darkSurface : AppColors.lightSurface,
       ),
@@ -115,7 +143,7 @@ class _StudentmessageendScreenState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ─── Target ───
+            // ─── Target type chips ───
             Text(
               'Send To',
               style: AppTypography.labelMedium.copyWith(
@@ -146,58 +174,45 @@ class _StudentmessageendScreenState
             if (_targetType == 'teacher' || _targetType == 'mixed')
               _buildTeacherSelector(isDark),
 
-            // ─── Student selector (classmates only) ───
+            // ─── Classmates selector ───
             if (_targetType == 'student' || _targetType == 'mixed')
-              currentUser.when(
-                loading: () => const LoadingWidget(),
-                error: (_, __) => const SizedBox.shrink(),
-                data: (user) {
-                  if (user == null) return const SizedBox.shrink();
-                  final classmates = ref.watch(
-                    studentsByClassProvider(user.id),
-                  );
-                  return SelectorSection(
-                    isDark: isDark,
-                    title: 'Select Classmate(s)',
-                    child: classmates.when(
-                      loading: () => const LoadingWidget(),
-                      error: (e, _) => Text('Error: $e'),
-                      data:
-                          (list) => Column(
-                            children:
-                                list.where((s) => s.userId != user.id).map((s) {
-                                  final isSelected = _selectedStudentIds
-                                      .contains(s.id);
-                                  return SelectTile(
-                                    isDark: isDark,
-                                    label: s.name,
-                                    isSelected: isSelected,
-                                    onTap:
-                                        () => setState(
-                                          () =>
-                                              isSelected
-                                                  ? _selectedStudentIds.remove(
-                                                    s.id,
-                                                  )
-                                                  : _selectedStudentIds.add(
-                                                    s.id,
-                                                  ),
-                                        ),
-                                  );
-                                }).toList(),
-                          ),
-                    ),
-                  );
-                },
+              _buildClassmatesSelector(isDark),
+
+            // ─── Title ───
+            TextField(
+              controller: _titleController,
+              decoration: InputDecoration(
+                labelText: 'Title',
+                hintText: 'Message title',
+                prefixIcon: const Icon(Icons.title_rounded, size: 18),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
+            ),
+            const SizedBox(height: 12),
 
-            const SizedBox(height: 8),
+            // ─── Message ───
+            TextField(
+              controller: _messageController,
+              maxLines: 4,
+              decoration: InputDecoration(
+                labelText: 'Message',
+                hintText: 'Write your message here...',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
 
-            // ─── Compose ───
-            MessageComposeWidget(
-              allowedTypes: ['report', 'general'],
+            // ─── Send button ───
+            AppButton(
+              label: _isLoading ? 'Sending...' : 'Send Message',
+              onPressed: _isLoading ? () {} : _send,
               isLoading: _isLoading,
-              onSend: _send,
+              width: double.infinity,
+              icon: Icons.send_rounded,
             ),
           ],
         ),
@@ -205,6 +220,7 @@ class _StudentmessageendScreenState
     );
   }
 
+  // ─── Target type chip ───
   Widget _chip(bool isDark, String value, String label, IconData icon) {
     final isSelected = _targetType == value;
     return GestureDetector(
@@ -254,35 +270,112 @@ class _StudentmessageendScreenState
     );
   }
 
+  // ─── Teacher selector with search ───
   Widget _buildTeacherSelector(bool isDark) {
     final teachers = ref.watch(teachersProvider);
-    return SelectorSection(
-      isDark: isDark,
-      title: 'Select Teacher(s)',
-      child: teachers.when(
-        loading: () => const LoadingWidget(),
-        error: (e, _) => Text('Error: $e'),
-        data:
-            (list) => Column(
-              children:
-                  list.map((t) {
-                    final isSelected = _selectedTeacherIds.contains(t.id);
-                    return SelectTile(
-                      isDark: isDark,
-                      label: t.name,
-                      subtitle: t.assignedClassNames.join(', '),
-                      isSelected: isSelected,
-                      onTap:
-                          () => setState(
-                            () =>
-                                isSelected
-                                    ? _selectedTeacherIds.remove(t.id)
-                                    : _selectedTeacherIds.add(t.id),
-                          ),
-                    );
-                  }).toList(),
-            ),
-      ),
+    return teachers.when(
+      loading: () => const LoadingWidget(),
+      error: (e, _) => Text('Error: $e'),
+      data:
+          (list) => SearchableSelector<TeacherModel>(
+            isDark: isDark,
+            title: 'Select Teacher(s)',
+            hint: 'Search teacher by name or subject...',
+            items: list,
+            labelOf: (t) => t.name,
+            subtitleOf:
+                (t) =>
+                    t.subject.isNotEmpty
+                        ? t.subject
+                        : t.assignedClassNames.join(', '),
+            idOf: (t) => t.id,
+            selectedIds: _selectedTeacherIds,
+            activeColor: AppColors.studentColor,
+            onToggle:
+                (t, isSelected) => setState(
+                  () =>
+                      isSelected
+                          ? _selectedTeacherIds.remove(t.id)
+                          : _selectedTeacherIds.add(t.id),
+                ),
+          ),
+    );
+  }
+
+  // ─── Classmates selector with search ───
+  Widget _buildClassmatesSelector(bool isDark) {
+    final currentUser = ref.watch(currentUserProvider);
+    return currentUser.when(
+      loading: () => const LoadingWidget(),
+      error: (e, _) => Text('Error: $e'),
+      data: (user) {
+        if (user == null) return const SizedBox.shrink();
+        final classmates = ref.watch(studentsByClassProvider(user.id));
+        return classmates.when(
+          loading: () => const LoadingWidget(),
+          error: (e, _) => Text('Error: $e'),
+          data: (list) {
+            // ─── Exclude current user ───
+            final others = list.where((s) => s.userId != user.id).toList();
+
+            if (others.isEmpty) {
+              return Container(
+                padding: const EdgeInsets.all(14),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: isDark ? AppColors.darkCard : AppColors.lightCard,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color:
+                        isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.people_outline_rounded,
+                      color:
+                          isDark
+                              ? AppColors.darkTextHint
+                              : AppColors.lightTextHint,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      'No classmates found in your class',
+                      style: AppTypography.bodySmall.copyWith(
+                        color:
+                            isDark
+                                ? AppColors.darkTextSecondary
+                                : AppColors.lightTextSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            return SearchableSelector<StudentModel>(
+              isDark: isDark,
+              title: 'Select Classmate(s)',
+              hint: 'Search classmate by name...',
+              items: others,
+              labelOf: (s) => s.name,
+              subtitleOf: (s) => s.classDisplay,
+              idOf: (s) => s.id,
+              selectedIds: _selectedStudentIds,
+              activeColor: AppColors.studentColor,
+              onToggle:
+                  (s, isSelected) => setState(
+                    () =>
+                        isSelected
+                            ? _selectedStudentIds.remove(s.id)
+                            : _selectedStudentIds.add(s.id),
+                  ),
+            );
+          },
+        );
+      },
     );
   }
 }

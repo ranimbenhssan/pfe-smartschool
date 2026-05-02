@@ -34,9 +34,9 @@ class _TeachermessageendScreenState
 
     if (_targetType == 'class' && _selectedClassIds.isEmpty) {
       if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select at least one class')),
-      );
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please select at least one class')),
+        );
       }
       return;
     }
@@ -296,66 +296,79 @@ class _TeachermessageendScreenState
     );
   }
 
+  // REPLACE _buildTeacherSelector:
   Widget _buildTeacherSelector(bool isDark) {
     final teachers = ref.watch(teachersProvider);
-    return SelectorSection(
-      isDark: isDark,
-      title: 'Select Teacher(s)',
-      child: teachers.when(
-        loading: () => const LoadingWidget(),
-        error: (e, _) => Text('Error: $e'),
-        data:
-            (list) => Column(
-              children:
-                  list.map((t) {
-                    final isSelected = _selectedTeacherIds.contains(t.id);
-                    return SelectTile(
-                      isDark: isDark,
-                      label: t.name,
-                      isSelected: isSelected,
-                      onTap:
-                          () => setState(
-                            () =>
-                                isSelected
-                                    ? _selectedTeacherIds.remove(t.id)
-                                    : _selectedTeacherIds.add(t.id),
-                          ),
-                    );
-                  }).toList(),
-            ),
-      ),
+    return teachers.when(
+      loading: () => const LoadingWidget(),
+      error: (e, _) => Text('Error: $e'),
+      data:
+          (list) => SearchableSelector<TeacherModel>(
+            isDark: isDark,
+            title: 'Select Teacher(s)',
+            hint: 'Search by name...',
+            items: list,
+            labelOf: (t) => t.name,
+            subtitleOf: (t) => t.subject.isNotEmpty ? t.subject : '',
+            idOf: (t) => t.id,
+            selectedIds: _selectedTeacherIds,
+            activeColor: AppColors.teacherColor,
+            onToggle:
+                (t, isSelected) => setState(
+                  () =>
+                      isSelected
+                          ? _selectedTeacherIds.remove(t.id)
+                          : _selectedTeacherIds.add(t.id),
+                ),
+          ),
     );
   }
 
+  // REPLACE _buildStudentSelector (or class selector):
   Widget _buildStudentSelector(bool isDark) {
     final students = ref.watch(studentsProvider);
-    return SelectorSection(
+    return students.when(
+      loading: () => const LoadingWidget(),
+      error: (e, _) => Text('Error: $e'),
+      data:
+          (list) => SearchableSelector<StudentModel>(
+            isDark: isDark,
+            title: 'Select Student(s)',
+            hint: 'Search by name or class...',
+            items: list,
+            labelOf: (s) => s.name,
+            subtitleOf: (s) => s.classDisplay,
+            idOf: (s) => s.id,
+            selectedIds: _selectedStudentIds,
+            activeColor: AppColors.studentColor,
+            onToggle:
+                (s, isSelected) => setState(
+                  () =>
+                      isSelected
+                          ? _selectedStudentIds.remove(s.id)
+                          : _selectedStudentIds.add(s.id),
+                ),
+          ),
+    );
+  }
+  Widget _buildClassSelector(bool isDark, List<ClassModel> myClasses) {
+    return SearchableSelector<ClassModel>(
       isDark: isDark,
-      title: 'Select Student(s)',
-      child: students.when(
-        loading: () => const LoadingWidget(),
-        error: (e, _) => Text('Error: $e'),
-        data:
-            (list) => Column(
-              children:
-                  list.map((s) {
-                    final isSelected = _selectedStudentIds.contains(s.id);
-                    return SelectTile(
-                      isDark: isDark,
-                      label: s.name,
-                      subtitle: s.className,
-                      isSelected: isSelected,
-                      onTap:
-                          () => setState(
-                            () =>
-                                isSelected
-                                    ? _selectedStudentIds.remove(s.id)
-                                    : _selectedStudentIds.add(s.id),
-                          ),
-                    );
-                  }).toList(),
-            ),
-      ),
+      title: 'Select Class(es)',
+      hint: 'Search by class name...',
+      items: myClasses,
+      labelOf: (c) => c.displayName,
+      subtitleOf: (c) => c.grade,
+      idOf: (c) => c.id,
+      selectedIds: _selectedClassIds,
+      activeColor: AppColors.teacherColor,
+      onToggle:
+          (cls, isSelected) => setState(
+            () =>
+                isSelected
+                    ? _selectedClassIds.remove(cls.id)
+                    : _selectedClassIds.add(cls.id),
+          ),
     );
   }
 }

@@ -507,7 +507,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.studentmessageend,
-        builder: (context, state) => const StudentmessageendScreen(),
+        builder: (context, state) => const StudentNotificationSendScreen(),
       ),
       GoRoute(
         path: AppRoutes.studentmessage,

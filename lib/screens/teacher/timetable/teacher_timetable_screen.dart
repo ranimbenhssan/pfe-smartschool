@@ -513,6 +513,8 @@ class _TeacherEntryCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
+
+          // FIND and REPLACE the info Expanded column:
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -528,8 +530,23 @@ class _TeacherEntryCard extends StatelessWidget {
                     'Class: ${entry.className}',
                     style: AppTypography.caption,
                   ),
+                if (entry.teacherName.isNotEmpty)
+                  Text(entry.teacherName, style: AppTypography.caption),
                 if (entry.roomName.isNotEmpty)
-                  Text('📍 ${entry.roomName}', style: AppTypography.caption),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.meeting_room_rounded,
+                        size: 11,
+                        color:
+                            isDark
+                                ? AppColors.darkTextHint
+                                : AppColors.lightTextHint,
+                      ),
+                      const SizedBox(width: 3),
+                      Text(entry.roomName, style: AppTypography.caption),
+                    ],
+                  ),
               ],
             ),
           ),

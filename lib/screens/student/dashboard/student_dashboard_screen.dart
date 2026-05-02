@@ -597,124 +597,189 @@ class _DashboardBody extends ConsumerWidget {
       error: (_, __) => const SizedBox.shrink(),
       data: (user) {
         if (user == null) return const SizedBox.shrink();
-        final timetable = ref.watch(todayTimetableProvider(user.id));
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        final students = ref.watch(studentsProvider);
+
+        return students.when(
+          loading: () => const LoadingWidget(),
+          error: (_, __) => const SizedBox.shrink(),
+          data: (list) {
+            final student = list.where((s) => s.userId == user.id).firstOrNull;
+            if (student == null) return const SizedBox.shrink();
+
+            final timetable = ref.watch(
+              timetableByClassProvider(student.classId),
+            );
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  "Today's Classes",
-                  style: AppTypography.headingMedium.copyWith(
-                    color: isDark ? AppColors.darkText : AppColors.lightText,
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      "Today's Classes",
+                      style: AppTypography.headingMedium.copyWith(
+                        color:
+                            isDark ? AppColors.darkText : AppColors.lightText,
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => context.push(AppRoutes.studentTimetable),
+                      child: const Text('Full schedule'),
+                    ),
+                  ],
                 ),
-                TextButton(
-                  onPressed: () => context.push(AppRoutes.studentTimetable),
-                  child: const Text('Full schedule'),
+                const SizedBox(height: 8),
+                timetable.when(
+                  data:
+                      (list) =>
+                          list.isEmpty
+                              ? Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color:
+                                      isDark
+                                          ? AppColors.darkCard
+                                          : AppColors.lightCard,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color:
+                                        isDark
+                                            ? AppColors.darkBorder
+                                            : AppColors.lightBorder,
+                                  ),
+                                ),
+                                child: Text(
+                                  'No classes today',
+                                  style: AppTypography.bodySmall.copyWith(
+                                    color:
+                                        isDark
+                                            ? AppColors.darkTextSecondary
+                                            : AppColors.lightTextSecondary,
+                                  ),
+                                ),
+                              )
+                              : Column(
+                                children:
+                                    list.map((entry) {
+                                      return Container(
+                                        padding: const EdgeInsets.all(14),
+                                        margin: const EdgeInsets.only(
+                                          bottom: 8,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color:
+                                              isDark
+                                                  ? AppColors.darkCard
+                                                  : AppColors.lightCard,
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          border: Border.all(
+                                            color: AppColors.studentColor
+                                                .withValues(alpha: 0.3),
+                                          ),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              width: 40,
+                                              height: 40,
+                                              decoration: BoxDecoration(
+                                                color: AppColors.studentColor
+                                                    .withValues(alpha: 0.12),
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
+                                              ),
+                                              child: const Icon(
+                                                Icons.book_rounded,
+                                                color: AppColors.studentColor,
+                                                size: 18,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
+                                                children: [
+                                                  Text(
+                                                    entry.subject,
+                                                    style: AppTypography
+                                                        .labelSmall
+                                                        .copyWith(
+                                                          color:
+                                                              isDark
+                                                                  ? AppColors
+                                                                      .darkText
+                                                                  : AppColors
+                                                                      .lightText,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                        ),
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    maxLines: 1,
+                                                  ),
+                                                  if (entry
+                                                      .teacherName
+                                                      .isNotEmpty)
+                                                    Text(
+                                                      entry.teacherName,
+                                                      style:
+                                                          AppTypography.caption,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                      maxLines: 1,
+                                                    ),
+                                                  if (entry.roomName.isNotEmpty)
+                                                    Row(
+                                                      children: [
+                                                        Icon(
+                                                          Icons
+                                                              .meeting_room_rounded,
+                                                          size: 10,
+                                                          color:
+                                                              AppColors
+                                                                  .studentColor,
+                                                        ),
+                                                        const SizedBox(
+                                                          width: 2,
+                                                        ),
+                                                        Expanded(
+                                                          child: Text(
+                                                            entry.roomName,
+                                                            style: AppTypography
+                                                                .caption
+                                                                .copyWith(
+                                                                  color:
+                                                                      AppColors
+                                                                          .studentColor,
+                                                                ),
+                                                            overflow:
+                                                                TextOverflow
+                                                                    .ellipsis,
+                                                            maxLines: 1,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    }).toList(),
+                              ),
+                  loading: () => const LoadingWidget(),
+                  error: (_, __) => const SizedBox.shrink(),
                 ),
               ],
-            ),
-            const SizedBox(height: 8),
-            timetable.when(
-              data:
-                  (list) =>
-                      list.isEmpty
-                          ? Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color:
-                                  isDark
-                                      ? AppColors.darkCard
-                                      : AppColors.lightCard,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color:
-                                    isDark
-                                        ? AppColors.darkBorder
-                                        : AppColors.lightBorder,
-                              ),
-                            ),
-                            child: Text(
-                              'No classes today',
-                              style: AppTypography.bodySmall.copyWith(
-                                color:
-                                    isDark
-                                        ? AppColors.darkTextSecondary
-                                        : AppColors.lightTextSecondary,
-                              ),
-                            ),
-                          )
-                          : Column(
-                            children:
-                                list.map((entry) {
-                                  return Container(
-                                    padding: const EdgeInsets.all(14),
-                                    margin: const EdgeInsets.only(bottom: 8),
-                                    decoration: BoxDecoration(
-                                      color:
-                                          isDark
-                                              ? AppColors.darkCard
-                                              : AppColors.lightCard,
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: AppColors.studentColor
-                                            .withValues(alpha: 0.3),
-                                      ),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Container(
-                                          width: 40,
-                                          height: 40,
-                                          decoration: BoxDecoration(
-                                            color: AppColors.studentColor
-                                                .withValues(alpha: 0.12),
-                                            borderRadius: BorderRadius.circular(
-                                              10,
-                                            ),
-                                          ),
-                                          child: const Icon(
-                                            Icons.book_rounded,
-                                            color: AppColors.studentColor,
-                                            size: 18,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                entry.subject,
-                                                style: AppTypography.labelLarge
-                                                    .copyWith(
-                                                      color:
-                                                          isDark
-                                                              ? AppColors
-                                                                  .darkText
-                                                              : AppColors
-                                                                  .lightText,
-                                                    ),
-                                              ),
-                                              Text(
-                                                '${entry.startTime} - ${entry.endTime} • ${entry.roomName}',
-                                                style: AppTypography.caption,
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                }).toList(),
-                          ),
-              loading: () => const LoadingWidget(),
-              error: (_, __) => const SizedBox.shrink(),
-            ),
-          ],
+            );
+          },
         );
       },
     );
