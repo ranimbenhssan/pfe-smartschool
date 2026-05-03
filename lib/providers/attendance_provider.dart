@@ -49,16 +49,17 @@ final todayAttendanceProvider = StreamProvider<List<AttendanceModel>>((ref) {
   return ref.watch(firestoreServiceProvider).getAttendanceByDate(today);
 });
 
+// ─── Today's Present Count Stream ───
+final todayPresentCountStreamProvider = StreamProvider<int>((ref) {
+  final today = ref.watch(todayStringProvider);
+  return ref.watch(firestoreServiceProvider).getPresentCountByDate(today);
+});
+
 // ─── Today's Present Count ───
 final todayPresentCountProvider = Provider<int>((ref) {
   return ref
-      .watch(todayAttendanceProvider)
-      .maybeWhen(
-        data:
-            (list) =>
-                list.where((a) => a.status == AttendanceStatus.present).length,
-        orElse: () => 0,
-      );
+      .watch(todayPresentCountStreamProvider)
+      .maybeWhen(data: (count) => count, orElse: () => 0);
 });
 
 // ─── Today's Absent Count ───

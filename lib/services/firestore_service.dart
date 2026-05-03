@@ -331,6 +331,22 @@ class FirestoreService {
         );
   }
 
+  // Get present count by date (sum across classes)
+  Stream<int> getPresentCountByDate(String date) {
+    return _firestore
+        .collection('attendance_counts')
+        .where('date', isEqualTo: date)
+        .snapshots()
+        .map((snap) {
+          var total = 0;
+          for (final doc in snap.docs) {
+            final data = doc.data();
+            total += (data['presentCount'] as num?)?.toInt() ?? 0;
+          }
+          return total;
+        });
+  }
+
   // Get attendance by date and class
   Stream<List<AttendanceModel>> getAttendanceByDateAndClass(
     String date,

@@ -86,6 +86,21 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
     if (mounted) setState(() => _isLoadingExisting = false);
   }
 
+  Future<void> _updatePresentCount(int delta) async {
+    if (delta == 0) return;
+
+    final docRef = FirebaseFirestore.instance
+        .collection('attendance_counts')
+        .doc('${_dateStr}_${widget.classId}');
+
+    await docRef.set({
+      'date': _dateStr,
+      'classId': widget.classId,
+      'className': widget.className,
+      'presentCount': FieldValue.increment(delta),
+    }, SetOptions(merge: true));
+  }
+
   // ─────────────────────────────────────────
   //  Resolve timetable slot for the target date's day of week.
   //
@@ -164,13 +179,24 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
   Future<void> _saveStudentAttendance(
     StudentModel student,
     AttendanceStatus status,
+    AttendanceStatus previousStatus,
     String teacherName,
     String teacherId,
   ) async {
     setState(() => _savingMap[student.id] = true);
 
+    final presentDelta =
+        previousStatus == AttendanceStatus.present &&
+                status != AttendanceStatus.present
+            ? -1
+            : previousStatus != AttendanceStatus.present &&
+                status == AttendanceStatus.present
+            ? 1
+            : 0;
+
     if (status == AttendanceStatus.present) {
       try {
+        await _updatePresentCount(presentDelta);
         final existing =
             await FirebaseFirestore.instance
                 .collection('attendance')
@@ -187,6 +213,14 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
 
       if (mounted) setState(() => _savingMap[student.id] = false);
       return;
+    }
+
+    if (presentDelta != 0) {
+      try {
+        await _updatePresentCount(presentDelta);
+      } catch (e) {
+        debugPrint('Error updating present count: $e');
+      }
     }
 
     final now = DateTime.now();
@@ -413,6 +447,9 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
                                   isSaving: isSaving,
                                   isSubmitted: _isSubmitted,
                                   onStatusChanged: (newStatus) async {
+                                    final previousStatus =
+                                        _attendanceMap[student.id] ??
+                                        AttendanceStatus.absent;
                                     setState(
                                       () =>
                                           _attendanceMap[student.id] =
@@ -421,6 +458,7 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
                                     await _saveStudentAttendance(
                                       student,
                                       newStatus,
+                                      previousStatus,
                                       user.name,
                                       user.id,
                                     );
