@@ -27,14 +27,22 @@ class TeacherNamecallScreen extends ConsumerStatefulWidget {
 }
 
 class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
+  /// Current status shown in the UI for each student.
   final Map<String, AttendanceStatus> _attendanceMap = {};
+
+  /// Status BEFORE the last tap — used to determine counter direction.
+  final Map<String, AttendanceStatus> _previousStatusMap = {};
+
   final Map<String, bool> _savingMap = {};
   bool _isSubmitted = false;
-  bool _isLoadingExisting = true;
+  bool _isLoadingInit = true;
 
+  // ─── Date resolution ───
   late String _dateStr;
   late DateTime _dateTime;
   late bool _isPastDate;
+
+  /// Timetable slot fetched once in initState — works for today AND past dates.
   TimetableModel? _resolvedSlot;
 
   static const _weekdays = [
@@ -51,6 +59,7 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
   String _fmt(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
+  // ─────────────────────────────────────────
   @override
   void initState() {
     super.initState();
@@ -75,13 +84,13 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
 
   Future<void> _initData() async {
     await Future.wait([_resolveTimetableSlot(), _loadExistingAttendance()]);
-    if (mounted) setState(() => _isLoadingExisting = false);
+    if (mounted) setState(() => _isLoadingInit = false);
   }
 
   // ─────────────────────────────────────────
-  //  Resolve timetable slot for the target date.
-  //  Today:     prefer active slot, fall back to first.
-  //  Past date: use first slot for that day of week.
+  //  Resolve timetable slot.
+  //  Today:     active window first, then first slot of day.
+  //  Past date: first slot for that day of week.
   // ─────────────────────────────────────────
   Future<void> _resolveTimetableSlot() async {
     if (widget.classId.isEmpty) return;
@@ -113,13 +122,14 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
         }
       }
 
+      // Fallback: first slot for the day
       _resolvedSlot = TimetableModel.fromFirestore(snap.docs.first);
     } catch (e) {
-      debugPrint('_resolveTimetableSlot error: $e');
+      debugPrint('_resolveTimetableSlot: $e');
     }
   }
 
-  // ─── Pre-fill status map from existing records ───
+  // ─── Pre-fill map from existing Firestore records ───
   Future<void> _loadExistingAttendance() async {
     try {
       final snap =
@@ -141,22 +151,59 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
       }
       if (mounted) _attendanceMap.addAll(preloaded);
     } catch (e) {
-      debugPrint('_loadExistingAttendance error: $e');
+      debugPrint('_loadExistingAttendance: $e');
     }
   }
 
   // ─────────────────────────────────────────
-  //  SAVE — two data paths
+  //  Resolve className from the class document.
+  //  Guarantees "Level Name Grade" format (e.g. "3 IOT 1")
+  //  regardless of what is cached on the student doc.
+  // ─────────────────────────────────────────
+  Future<String> _resolveClassName(String classId, String fallback) async {
+    try {
+      final doc =
+          await FirebaseFirestore.instance
+              .collection('classes')
+              .doc(classId)
+              .get();
+      if (!doc.exists) return fallback;
+      final d = doc.data()!;
+      final lvl = d['level']?.toString().trim() ?? '';
+      final nm = d['name']?.toString().trim() ?? '';
+      final gr = d['grade']?.toString().trim() ?? '';
+      final parts = <String>[];
+      if (lvl.isNotEmpty) parts.add(lvl);
+      if (nm.isNotEmpty) parts.add(nm);
+      if (gr.isNotEmpty) parts.add(gr);
+      return parts.isNotEmpty ? parts.join(' ') : fallback;
+    } catch (_) {
+      return fallback;
+    }
+  }
+
+  // ─────────────────────────────────────────
+  //  SAVE ATTENDANCE
   //
-  //  PRESENT   → increment presenceCount, delete absence doc if any
-  //  ABSENT/LATE → write full 5-field doc, decrement counter if was present
+  //  Two data paths — governed by newStatus vs previousStatus:
   //
-  //  className resolved from class doc at save time → "3 IOT 1" format.
-  //  WriteBatch keeps counter + document atomic.
+  //  ┌─────────────────┬──────────────────────────────────────────────────┐
+  //  │ New status      │ Action                                           │
+  //  ├─────────────────┼──────────────────────────────────────────────────┤
+  //  │ present         │ increment presenceCount (+1)                     │
+  //  │                 │ delete any existing absence doc for this date    │
+  //  │                 │ (no attendance document written)                 │
+  //  ├─────────────────┼──────────────────────────────────────────────────┤
+  //  │ absent / late   │ write full 5-field absence document              │
+  //  │  ↑ from present │ + decrement presenceCount (-1) first             │
+  //  │  ↑ from absent  │ (no counter change — just update doc status)     │
+  //  └─────────────────┴──────────────────────────────────────────────────┘
+  //
+  //  WriteBatch makes counter + doc atomic.
   // ─────────────────────────────────────────
   Future<void> _saveStudentAttendance(
     StudentModel student,
-    AttendanceStatus status,
+    AttendanceStatus newStatus,
     String teacherName,
     String teacherId,
   ) async {
@@ -165,27 +212,16 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
     final db = FirebaseFirestore.instance;
     final now = DateTime.now();
 
-    // ─── 1. Resolve className from class doc ───
-    String resolvedClassName = student.className;
-    try {
-      final classDoc =
-          await db.collection('classes').doc(student.classId).get();
-      if (classDoc.exists) {
-        final cd = classDoc.data()!;
-        final lvl = cd['level']?.toString().trim() ?? '';
-        final nm = cd['name']?.toString().trim() ?? '';
-        final gr = cd['grade']?.toString().trim() ?? '';
-        final parts = <String>[];
-        if (lvl.isNotEmpty) parts.add(lvl);
-        if (nm.isNotEmpty) parts.add(nm);
-        if (gr.isNotEmpty) parts.add(gr);
-        if (parts.isNotEmpty) resolvedClassName = parts.join(' ');
-      }
-    } catch (e) {
-      debugPrint('className resolve: $e');
-    }
+    // The status BEFORE this tap — captured by the call site before setState.
+    final previousStatus = _previousStatusMap[student.id];
 
-    // ─── 2. Session context ───
+    // ─── Resolve className ───
+    final resolvedClassName = await _resolveClassName(
+      student.classId,
+      student.className,
+    );
+
+    // ─── Session context ───
     final slot = _resolvedSlot;
     final subject = slot?.subject ?? '';
     final roomId = slot?.roomId ?? '';
@@ -195,7 +231,7 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
     final sessionName =
         slot != null ? '$subject ($scheduledStart – $scheduledEnd)' : '';
 
-    // ─── 3. Existing doc ───
+    // ─── Find existing attendance doc for this student + date ───
     QuerySnapshot<Map<String, dynamic>> existingSnap;
     try {
       existingSnap =
@@ -213,26 +249,30 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
 
     final existingDoc =
         existingSnap.docs.isNotEmpty ? existingSnap.docs.first : null;
-    final previousStatus =
-        existingDoc != null
-            ? AttendanceStatus.values.firstWhere(
-              (s) =>
-                  s.name ==
-                  (existingDoc.data()['status']?.toString() ?? 'absent'),
-              orElse: () => AttendanceStatus.absent,
-            )
-            : null;
 
     final studentRef = db.collection('students').doc(student.id);
     final batch = db.batch();
 
     try {
-      if (status == AttendanceStatus.present) {
-        // PATH A: PRESENT
-        if (existingDoc != null) batch.delete(existingDoc.reference);
-        batch.update(studentRef, {'presenceCount': FieldValue.increment(1)});
+      // ═══════════════════════════════════════════════════════════════
+      //  PATH A — PRESENT
+      // ═══════════════════════════════════════════════════════════════
+      if (newStatus == AttendanceStatus.present) {
+        // Delete absence doc if correcting absent/late → present
+        if (existingDoc != null) {
+          batch.delete(existingDoc.reference);
+        }
+
+        // Only increment if not already present (guards against re-tap)
+        if (previousStatus != AttendanceStatus.present) {
+          batch.update(studentRef, {'presenceCount': FieldValue.increment(1)});
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        //  PATH B — ABSENT / LATE
+        // ═══════════════════════════════════════════════════════════════
       } else {
-        // PATH B: ABSENT / LATE
+        // Decrement ONLY when transitioning FROM present
         if (previousStatus == AttendanceStatus.present) {
           batch.update(studentRef, {'presenceCount': FieldValue.increment(-1)});
         }
@@ -249,20 +289,25 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
           'studentId': student.id,
           'studentName': student.name,
           'classId': student.classId,
-          'className': resolvedClassName,
+          'className': resolvedClassName, // "3 IOT 1"
           'date': _dateStr,
-          'status': status.name,
+          'status': newStatus.name, // 'absent' | 'late'
+          // ── Field 1: Subject ────────────────────
           'subject': subject,
+          // ── Field 2: Teacher ────────────────────
           'teacherId': teacherId,
           'teacherName': teacherName,
+          // ── Field 3: Room ───────────────────────
           'roomId': roomId,
           'roomName': roomName,
+          // ── Field 4: Scheduled Class Time ───────
           'scheduledStartTime': scheduledStart,
           'scheduledEndTime': scheduledEnd,
           'sessionName': sessionName,
+          // ── Field 5: Time of Absence ────────────
           'recordedAt': Timestamp.fromDate(now),
           'entryTime':
-              status == AttendanceStatus.late
+              newStatus == AttendanceStatus.late
                   ? Timestamp.fromDate(_isPastDate ? entryTimeForPast : now)
                   : null,
           'exitTime': null,
@@ -270,8 +315,10 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
         };
 
         if (existingDoc != null) {
+          // Update existing record (e.g. absent → late)
           batch.update(existingDoc.reference, absencePayload);
         } else {
+          // Create new absence record
           final newRef = db.collection('attendance').doc();
           batch.set(newRef, {
             ...absencePayload,
@@ -353,7 +400,7 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
         ],
       ),
       body:
-          _isLoadingExisting
+          _isLoadingInit
               ? const LoadingWidget()
               : currentUser.when(
                 loading: () => const LoadingWidget(),
@@ -379,11 +426,12 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
                         return const EmptyState(
                           title: 'No Students',
                           message:
-                              'No students found in this class.\nMake sure students are assigned to this class.',
+                              'No students found in this class.\nMake sure students are assigned.',
                           icon: Icons.people_outline_rounded,
                         );
                       }
 
+                      // Default any unseen student to absent
                       for (final s in studentList) {
                         _attendanceMap.putIfAbsent(
                           s.id,
@@ -393,12 +441,14 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
 
                       return Column(
                         children: [
+                          // ─── Past-date banner ───
                           if (_isPastDate)
                             _PastDateBanner(
                               dateLabel: dateLabel,
                               isDark: isDark,
                             ),
 
+                          // ─── Session context banner ───
                           _SlotBanner(
                             slot: _resolvedSlot,
                             isDark: isDark,
@@ -406,6 +456,7 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
                             isPast: _isPastDate,
                           ),
 
+                          // ─── Stats bar ───
                           _StatsBar(
                             attendanceMap: _attendanceMap,
                             total: studentList.length,
@@ -413,6 +464,7 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
                           ),
                           const SizedBox(height: 4),
 
+                          // ─── Student list ───
                           Expanded(
                             child: ListView.builder(
                               padding: const EdgeInsets.symmetric(
@@ -435,11 +487,17 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
                                   isSaving: isSaving,
                                   isSubmitted: _isSubmitted,
                                   onStatusChanged: (newStatus) async {
+                                    // ── Capture previous BEFORE setState ──
+                                    _previousStatusMap[student.id] =
+                                        _attendanceMap[student.id] ??
+                                        AttendanceStatus.absent;
+
                                     setState(
                                       () =>
                                           _attendanceMap[student.id] =
                                               newStatus,
                                     );
+
                                     await _saveStudentAttendance(
                                       student,
                                       newStatus,
@@ -452,6 +510,7 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
                             ),
                           ),
 
+                          // ─── Submit / Done button ───
                           Padding(
                             padding: const EdgeInsets.all(16),
                             child:
@@ -591,7 +650,7 @@ class _SlotBanner extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'No timetable slot found. Attendance will save without session context.',
+                'No timetable slot found — absence records will save without session context.',
                 style: AppTypography.caption,
               ),
             ),
@@ -613,6 +672,7 @@ class _SlotBanner extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ─── Header row ───
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -660,6 +720,8 @@ class _SlotBanner extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
+
+          // ─── Row 1: Subject + Teacher ───
           Row(
             children: [
               Expanded(
@@ -683,6 +745,8 @@ class _SlotBanner extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
+
+          // ─── Row 2: Room + Scheduled Time ───
           Row(
             children: [
               Expanded(
@@ -696,7 +760,7 @@ class _SlotBanner extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: _DetailItem(
-                  icon: Icons.schedule_rounded,
+                  icon: Icons.access_time_rounded,
                   label: 'Scheduled',
                   value: '${slot!.startTime} – ${slot!.endTime}',
                   color: AppColors.accent,
@@ -705,6 +769,8 @@ class _SlotBanner extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
+
+          // ─── Row 3: Time of Absence — full width ───
           _DetailItem(
             icon: Icons.access_time_filled_rounded,
             label: 'Time of Absence',
@@ -890,6 +956,7 @@ class _StudentCard extends StatelessWidget {
       ),
       child: Row(
         children: [
+          // ─── Avatar ───
           CircleAvatar(
             radius: 20,
             backgroundColor: AppColors.teacherColor.withValues(alpha: 0.15),
@@ -901,6 +968,8 @@ class _StudentCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
+
+          // ─── Name + class display ───
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -911,10 +980,16 @@ class _StudentCard extends StatelessWidget {
                     color: isDark ? AppColors.darkText : AppColors.lightText,
                   ),
                 ),
-                Text(student.classDisplay, style: AppTypography.caption),
+                Text(
+                  // classDisplay = "level className" e.g. "3 IOT"
+                  student.classDisplay,
+                  style: AppTypography.caption,
+                ),
               ],
             ),
           ),
+
+          // ─── Saving indicator / submitted badge / status buttons ───
           if (isSaving)
             const SizedBox(
               width: 24,
