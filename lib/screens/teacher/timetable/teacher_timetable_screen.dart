@@ -20,7 +20,12 @@ class _TeacherTimetableScreenState
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final currentUser = ref.watch(currentUserProvider);
+
+    // ─── FIX: use currentTeacherProvider (direct doc fetch by UID) ───
+    // Old code scanned all teachers then checked assignedClassIds,
+    // then loaded timetable by classId — returning ALL subjects for that class.
+    // New code: fetch teacher doc directly, then query timetable WHERE teacherId == uid.
+    final teacherAsync = ref.watch(currentTeacherProvider);
 
     return Scaffold(
       backgroundColor:
@@ -30,7 +35,6 @@ class _TeacherTimetableScreenState
         backgroundColor:
             isDark ? AppColors.darkSurface : AppColors.lightSurface,
         actions: [
-          // ─── Day / Week toggle ───
           Container(
             margin: const EdgeInsets.only(right: 8),
             decoration: BoxDecoration(
@@ -60,7 +64,7 @@ class _TeacherTimetableScreenState
           ),
         ],
       ),
-      body: currentUser.when(
+      body: teacherAsync.when(
         loading: () => const LoadingWidget(),
         error:
             (e, _) => EmptyState(
@@ -68,48 +72,43 @@ class _TeacherTimetableScreenState
               message: e.toString(),
               icon: Icons.error_outline_rounded,
             ),
-        data: (user) {
-          if (user == null) return const SizedBox.shrink();
+        data: (teacher) {
+          if (teacher == null) {
+            return const EmptyState(
+              title: 'Profile Not Found',
+              message: 'Teacher profile could not be loaded. Contact admin.',
+              icon: Icons.person_off_rounded,
+            );
+          }
 
-          final teachers = ref.watch(teachersProvider);
-          return teachers.when(
+          // ─── FIX: query by teacherId — not by classId ───
+          // This correctly scopes results to only THIS teacher's sessions,
+          // regardless of whether assignedClassIds is populated.
+          final timetableAsync = ref.watch(
+            timetableByTeacherProvider(teacher.id),
+          );
+
+          return timetableAsync.when(
             loading: () => const LoadingWidget(),
             error:
                 (e, _) => EmptyState(
-                  title: 'Error',
+                  title: 'Error loading timetable',
                   message: e.toString(),
                   icon: Icons.error_outline_rounded,
                 ),
-            data: (list) {
-              final teacher =
-                  list.where((t) => t.userId == user.id).firstOrNull;
-
-              if (teacher == null || teacher.assignedClassIds.isEmpty) {
-                return const EmptyState(
-                  title: 'No Classes',
-                  message: 'No classes assigned yet',
-                  icon: Icons.class_outlined,
-                );
-              }
-
-              // ─── Load timetable for all assigned classes ───
-              final allEntries = <TimetableModel>[];
-              for (final classId in teacher.assignedClassIds) {
-                final timetable = ref.watch(timetableByClassProvider(classId));
-                timetable.whenData((entries) => allEntries.addAll(entries));
-              }
-
-              if (allEntries.isEmpty) {
-                return const EmptyState(
-                  title: 'No Timetable',
-                  message: 'No schedule available yet',
+            data: (entries) {
+              if (entries.isEmpty) {
+                return EmptyState(
+                  title: 'No Timetable Yet',
+                  message:
+                      'No schedule has been assigned to you.\nContact admin to set up your timetable.',
                   icon: Icons.calendar_today_rounded,
                 );
               }
 
               return _isWeekView
-                  ? _TeacherWeekGrid(entries: allEntries, isDark: isDark)
-                  : _TeacherDayView(entries: allEntries, isDark: isDark);
+                  ? _TeacherWeekGrid(entries: entries, isDark: isDark)
+                  : _TeacherDayView(entries: entries, isDark: isDark);
             },
           );
         },
@@ -162,13 +161,7 @@ class _TeacherDayView extends StatefulWidget {
 }
 
 class _TeacherDayViewState extends State<_TeacherDayView> {
-  final List<String> _days = [
-    'Monday',
-    'Tuesday',
-    'Wednesday',
-    'Thursday',
-    'Friday',
-  ];
+  static const _days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
   late String _selectedDay;
 
   @override
@@ -190,69 +183,47 @@ class _TeacherDayViewState extends State<_TeacherDayView> {
 
     return Column(
       children: [
-        // ─── Day selector ───
+        // ─── Day selector chips ───
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
           child: Row(
             children:
                 _days.map((day) {
-                  final isSelected = _selectedDay == day;
-                  final hasClasses = widget.entries.any(
-                    (e) => e.dayOfWeek.toLowerCase() == day.toLowerCase(),
-                  );
+                  final isActive = day == _selectedDay;
                   return GestureDetector(
                     onTap: () => setState(() => _selectedDay = day),
                     child: Container(
                       margin: const EdgeInsets.only(right: 8),
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 10,
+                        horizontal: 14,
+                        vertical: 8,
                       ),
                       decoration: BoxDecoration(
                         color:
-                            isSelected
+                            isActive
                                 ? AppColors.teacherColor
-                                : widget.isDark
-                                ? AppColors.darkCard
-                                : AppColors.lightCard,
-                        borderRadius: BorderRadius.circular(10),
+                                : AppColors.teacherColor.withValues(
+                                  alpha: 0.08,
+                                ),
+                        borderRadius: BorderRadius.circular(20),
                         border: Border.all(
                           color:
-                              isSelected
+                              isActive
                                   ? AppColors.teacherColor
-                                  : widget.isDark
-                                  ? AppColors.darkBorder
-                                  : AppColors.lightBorder,
+                                  : AppColors.teacherColor.withValues(
+                                    alpha: 0.3,
+                                  ),
                         ),
                       ),
-                      child: Column(
-                        children: [
-                          Text(
-                            day.substring(0, 3),
-                            style: AppTypography.labelMedium.copyWith(
-                              color:
-                                  isSelected
-                                      ? Colors.white
-                                      : widget.isDark
-                                      ? AppColors.darkText
-                                      : AppColors.lightText,
-                            ),
-                          ),
-                          if (hasClasses)
-                            Container(
-                              width: 4,
-                              height: 4,
-                              margin: const EdgeInsets.only(top: 2),
-                              decoration: BoxDecoration(
-                                color:
-                                    isSelected
-                                        ? Colors.white
-                                        : AppColors.teacherColor,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                        ],
+                      child: Text(
+                        day.substring(0, 3),
+                        style: AppTypography.labelSmall.copyWith(
+                          color:
+                              isActive ? Colors.white : AppColors.teacherColor,
+                          fontWeight:
+                              isActive ? FontWeight.bold : FontWeight.normal,
+                        ),
                       ),
                     ),
                   );
@@ -260,7 +231,7 @@ class _TeacherDayViewState extends State<_TeacherDayView> {
           ),
         ),
 
-        // ─── Entries ───
+        // ─── Entries or empty ───
         Expanded(
           child:
               dayEntries.isEmpty
@@ -344,63 +315,59 @@ class _TeacherWeekGrid extends StatelessWidget {
                 ..._days.map((d) => _headerCell(d.substring(0, 3))),
               ],
             ),
-
-            // ─── Rows ───
+            // ─── Time rows ───
             ...timeSlots.map((slot) {
               final parts = slot.split('-');
               final start = parts[0];
-              final end = parts[1];
+              final end = parts.length > 1 ? parts[1] : '';
 
               return TableRow(
                 decoration: BoxDecoration(
-                  color: isDark ? AppColors.darkCard : AppColors.lightCard,
+                  color:
+                      isDark
+                          ? AppColors.darkBackground
+                          : AppColors.lightBackground,
                 ),
                 children: [
+                  // Time label cell
                   Padding(
                     padding: const EdgeInsets.all(8),
                     child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           start,
                           style: AppTypography.labelSmall.copyWith(
-                            color: AppColors.teacherColor,
-                            fontWeight: FontWeight.bold,
+                            color:
+                                isDark
+                                    ? AppColors.darkText
+                                    : AppColors.lightText,
                           ),
-                          textAlign: TextAlign.center,
                         ),
-                        Text(
-                          end,
-                          style: AppTypography.caption,
-                          textAlign: TextAlign.center,
-                        ),
+                        if (end.isNotEmpty)
+                          Text(end, style: AppTypography.caption),
                       ],
                     ),
                   ),
+                  // Day cells
                   ..._days.map((day) {
-                    final entry =
-                        entries
-                            .where(
-                              (e) =>
-                                  e.dayOfWeek.toLowerCase() ==
-                                      day.toLowerCase() &&
-                                  e.startTime == start &&
-                                  e.endTime == end,
-                            )
-                            .firstOrNull;
-
-                    if (entry == null) {
+                    final match = entries.where(
+                      (e) =>
+                          e.dayOfWeek.toLowerCase() == day.toLowerCase() &&
+                          e.startTime == start,
+                    );
+                    if (match.isEmpty) {
                       return Container(
-                        height: 72,
+                        height: 70,
                         color:
                             isDark
                                 ? AppColors.darkBackground
                                 : AppColors.lightBackground,
                       );
                     }
-
+                    final entry = match.first;
                     return Container(
-                      height: 72,
+                      height: 70,
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
                         color: AppColors.teacherColor.withValues(alpha: 0.08),
@@ -412,11 +379,11 @@ class _TeacherWeekGrid extends StatelessWidget {
                           Text(
                             entry.subject,
                             style: AppTypography.labelSmall.copyWith(
+                              fontWeight: FontWeight.bold,
                               color:
                                   isDark
                                       ? AppColors.darkText
                                       : AppColors.lightText,
-                              fontWeight: FontWeight.bold,
                             ),
                             overflow: TextOverflow.ellipsis,
                             maxLines: 1,
@@ -424,6 +391,15 @@ class _TeacherWeekGrid extends StatelessWidget {
                           if (entry.roomName.isNotEmpty)
                             Text(
                               entry.roomName,
+                              style: AppTypography.caption.copyWith(
+                                color: AppColors.teacherColor,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          if (entry.className.isNotEmpty)
+                            Text(
+                              entry.className,
                               style: AppTypography.caption,
                               overflow: TextOverflow.ellipsis,
                               maxLines: 1,
@@ -479,9 +455,9 @@ class _TeacherEntryCard extends StatelessWidget {
       ),
       child: Row(
         children: [
+          // ─── Time badge ───
           Container(
-            width: 58,
-            padding: const EdgeInsets.symmetric(vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             decoration: BoxDecoration(
               color: AppColors.teacherColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
@@ -490,31 +466,23 @@ class _TeacherEntryCard extends StatelessWidget {
               children: [
                 Text(
                   entry.startTime,
-                  style: AppTypography.labelSmall.copyWith(
+                  style: AppTypography.labelMedium.copyWith(
                     color: AppColors.teacherColor,
                     fontWeight: FontWeight.bold,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                Text(
-                  '|',
-                  style: AppTypography.caption.copyWith(
-                    color: AppColors.teacherColor,
                   ),
                 ),
                 Text(
                   entry.endTime,
-                  style: AppTypography.labelSmall.copyWith(
+                  style: AppTypography.caption.copyWith(
                     color: AppColors.teacherColor,
                   ),
-                  textAlign: TextAlign.center,
                 ),
               ],
             ),
           ),
           const SizedBox(width: 12),
 
-          // FIND and REPLACE the info Expanded column:
+          // ─── Subject + class + room ───
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -527,24 +495,29 @@ class _TeacherEntryCard extends StatelessWidget {
                 ),
                 if (entry.className.isNotEmpty)
                   Text(
-                    'Class: ${entry.className}',
-                    style: AppTypography.caption,
+                    entry.className,
+                    style: AppTypography.bodySmall.copyWith(
+                      color:
+                          isDark
+                              ? AppColors.darkTextSecondary
+                              : AppColors.lightTextSecondary,
+                    ),
                   ),
-                if (entry.teacherName.isNotEmpty)
-                  Text(entry.teacherName, style: AppTypography.caption),
                 if (entry.roomName.isNotEmpty)
                   Row(
                     children: [
-                      Icon(
+                      const Icon(
                         Icons.meeting_room_rounded,
-                        size: 11,
-                        color:
-                            isDark
-                                ? AppColors.darkTextHint
-                                : AppColors.lightTextHint,
+                        size: 12,
+                        color: AppColors.teacherColor,
                       ),
-                      const SizedBox(width: 3),
-                      Text(entry.roomName, style: AppTypography.caption),
+                      const SizedBox(width: 4),
+                      Text(
+                        entry.roomName,
+                        style: AppTypography.caption.copyWith(
+                          color: AppColors.teacherColor,
+                        ),
+                      ),
                     ],
                   ),
               ],

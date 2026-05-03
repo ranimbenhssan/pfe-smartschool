@@ -150,6 +150,14 @@ class FirestoreService {
     }
   }
 
+  Stream<TeacherModel?> getTeacherStream(String teacherId) {
+    return _firestore
+        .collection('teachers')
+        .doc(teacherId)
+        .snapshots()
+        .map((doc) => doc.exists ? TeacherModel.fromFirestore(doc) : null);
+  }
+
   Future<void> addTeacher(TeacherModel teacher) async {
     debugPrint('📝 Adding teacher: ${teacher.id}');
     await _firestore
