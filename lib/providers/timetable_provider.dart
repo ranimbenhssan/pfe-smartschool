@@ -35,6 +35,17 @@ final classesByTeacherProvider =
       return ref.watch(firestoreServiceProvider).getClassesByTeacher(teacherId);
     });
 
+final classesByTeacherAndDayProvider = StreamProvider.family<
+    List<ClassModel>,
+    ({String teacherId, String dayName})>((ref, params) {
+  if (params.teacherId.isEmpty || params.dayName.isEmpty) {
+    return Stream.value([]);
+  }
+  return ref
+      .watch(firestoreServiceProvider)
+      .getClassesByTeacherAndDay(params.teacherId, params.dayName);
+});
+
 // ─── Selected Day Filter ───
 final selectedDayProvider = StateProvider<int?>((ref) => null);
 

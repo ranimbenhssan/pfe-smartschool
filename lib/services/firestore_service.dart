@@ -149,35 +149,72 @@ class FirestoreService {
       return null;
     }
   }
- 
+
   Stream<List<ClassModel>> getClassesByTeacher(String teacherId) {
     if (teacherId.isEmpty) return Stream.value([]);
- 
+
     return _firestore
         .collection('timetable')
         .where('teacherId', isEqualTo: teacherId)
         .snapshots()
         .asyncMap((snap) async {
-      final classIds = snap.docs
-          .map((d) => d.data()['classId']?.toString() ?? '')
-          .where((id) => id.isNotEmpty)
-          .toSet()
-          .toList();
- 
-      if (classIds.isEmpty) return <ClassModel>[];
- 
-      final docs = await Future.wait(
-        classIds.map((id) => _firestore.collection('classes').doc(id).get()),
-      );
- 
-      return docs
-          .where((d) => d.exists)
-          .map((d) => ClassModel.fromFirestore(d))
-          .toList()
-        ..sort((a, b) => a.name.compareTo(b.name));
-    });
+          final classIds =
+              snap.docs
+                  .map((d) => d.data()['classId']?.toString() ?? '')
+                  .where((id) => id.isNotEmpty)
+                  .toSet()
+                  .toList();
+
+          if (classIds.isEmpty) return <ClassModel>[];
+
+          final docs = await Future.wait(
+            classIds.map(
+              (id) => _firestore.collection('classes').doc(id).get(),
+            ),
+          );
+
+          return docs
+              .where((d) => d.exists)
+              .map((d) => ClassModel.fromFirestore(d))
+              .toList()
+            ..sort((a, b) => a.name.compareTo(b.name));
+        });
   }
- 
+
+  Stream<List<ClassModel>> getClassesByTeacherAndDay(
+    String teacherId,
+    String dayName,
+  ) {
+    if (teacherId.isEmpty || dayName.isEmpty) return Stream.value([]);
+
+    return _firestore
+        .collection('timetable')
+        .where('teacherId', isEqualTo: teacherId)
+        .where('dayOfWeek', isEqualTo: dayName)
+        .snapshots()
+        .asyncMap((snap) async {
+          final classIds =
+              snap.docs
+                  .map((d) => d.data()['classId']?.toString() ?? '')
+                  .where((id) => id.isNotEmpty)
+                  .toSet()
+                  .toList();
+
+          if (classIds.isEmpty) return <ClassModel>[];
+
+          final docs = await Future.wait(
+            classIds.map(
+              (id) => _firestore.collection('classes').doc(id).get(),
+            ),
+          );
+
+          return docs
+              .where((d) => d.exists)
+              .map((d) => ClassModel.fromFirestore(d))
+              .toList()
+            ..sort((a, b) => a.name.compareTo(b.name));
+        });
+  }
 
   Stream<TeacherModel?> getTeacherStream(String teacherId) {
     return _firestore
