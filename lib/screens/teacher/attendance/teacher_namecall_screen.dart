@@ -11,7 +11,7 @@ class TeacherNamecallScreen extends ConsumerStatefulWidget {
   final String classId;
   final String className;
 
-  /// Target date in 'yyyy-MM-dd' format. Empty = today.
+  /// Target date 'yyyy-MM-dd'. Empty = today.
   final String targetDate;
 
   const TeacherNamecallScreen({
@@ -32,17 +32,12 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
   bool _isSubmitted = false;
   bool _isLoadingExisting = true;
 
-  // ─── Resolved date values ───
-  late final String _dateStr;
-  late final DateTime _dateTime;
-  late final bool _isPastDate;
-  late final String _dayName; // "Monday" … "Friday"
-
-  // ─── Cached timetable slot for _dateStr's day ───
-  // Fetched once in initState; used for ALL student saves on this screen.
+  late String _dateStr;
+  late DateTime _dateTime;
+  late bool _isPastDate;
   TimetableModel? _resolvedSlot;
 
-  static const _days = [
+  static const _weekdays = [
     '',
     'Monday',
     'Tuesday',
@@ -67,7 +62,7 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
       try {
         _dateTime = DateTime.parse(widget.targetDate);
       } catch (_) {
-        _dateTime = now; // fallback
+        _dateTime = now;
       }
     } else {
       _dateStr = today;
@@ -75,57 +70,36 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
     }
 
     _isPastDate = _dateStr != today;
-    _dayName = _days[_dateTime.weekday]; // weekday is 1-7
-
-    // ─── Load existing attendance + timetable slot in parallel ───
     _initData();
   }
 
   Future<void> _initData() async {
-    await Future.wait([_loadExistingAttendance(), _resolveTimetableSlot()]);
+    await Future.wait([_resolveTimetableSlot(), _loadExistingAttendance()]);
     if (mounted) setState(() => _isLoadingExisting = false);
   }
 
-  Future<void> _updatePresentCount(int delta) async {
-    if (delta == 0) return;
-
-    final docRef = FirebaseFirestore.instance
-        .collection('attendance_counts')
-        .doc('${_dateStr}_${widget.classId}');
-
-    await docRef.set({
-      'date': _dateStr,
-      'classId': widget.classId,
-      'className': widget.className,
-      'presentCount': FieldValue.increment(delta),
-    }, SetOptions(merge: true));
-  }
-
   // ─────────────────────────────────────────
-  //  Resolve timetable slot for the target date's day of week.
-  //
-  //  For TODAY: if there is an active live slot (within startTime–endTime)
-  //  we prefer that. Otherwise fall back to the first slot for the day.
-  //  For PAST DATES: always use the first slot for that day — no time filter.
+  //  Resolve timetable slot for the target date.
+  //  Today:     prefer active slot, fall back to first.
+  //  Past date: use first slot for that day of week.
   // ─────────────────────────────────────────
   Future<void> _resolveTimetableSlot() async {
     if (widget.classId.isEmpty) return;
     try {
+      final dayName = _weekdays[_dateTime.weekday];
       final snap =
           await FirebaseFirestore.instance
               .collection('timetable')
               .where('classId', isEqualTo: widget.classId)
-              .where('dayOfWeek', isEqualTo: _dayName)
+              .where('dayOfWeek', isEqualTo: dayName)
               .get();
 
       if (snap.docs.isEmpty) return;
 
       if (!_isPastDate) {
-        // ─── Today: try to find the currently-active slot ───
         final now = DateTime.now();
         final currentTime =
             '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
-
         for (final doc in snap.docs) {
           final d = doc.data();
           final start = d['startTime']?.toString() ?? '';
@@ -139,14 +113,13 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
         }
       }
 
-      // ─── Past date OR no active slot today → use the first slot for the day ───
       _resolvedSlot = TimetableModel.fromFirestore(snap.docs.first);
     } catch (e) {
       debugPrint('_resolveTimetableSlot error: $e');
     }
   }
 
-  // ─── Pre-fill status map from existing Firestore records ───
+  // ─── Pre-fill status map from existing records ───
   Future<void> _loadExistingAttendance() async {
     try {
       final snap =
@@ -158,12 +131,11 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
 
       final preloaded = <String, AttendanceStatus>{};
       for (final doc in snap.docs) {
-        final data = doc.data();
-        final sid = data['studentId']?.toString() ?? '';
-        final statusStr = data['status']?.toString() ?? 'absent';
+        final d = doc.data();
+        final sid = d['studentId']?.toString() ?? '';
         if (sid.isEmpty) continue;
         preloaded[sid] = AttendanceStatus.values.firstWhere(
-          (s) => s.name == statusStr,
+          (s) => s.name == (d['status']?.toString() ?? 'absent'),
           orElse: () => AttendanceStatus.absent,
         );
       }
@@ -174,12 +146,17 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
   }
 
   // ─────────────────────────────────────────
-  //  Save / update a record — ALL 5 FIELDS guaranteed
+  //  SAVE — two data paths
+  //
+  //  PRESENT   → increment presenceCount, delete absence doc if any
+  //  ABSENT/LATE → write full 5-field doc, decrement counter if was present
+  //
+  //  className resolved from class doc at save time → "3 IOT 1" format.
+  //  WriteBatch keeps counter + document atomic.
   // ─────────────────────────────────────────
   Future<void> _saveStudentAttendance(
     StudentModel student,
     AttendanceStatus status,
-    AttendanceStatus previousStatus,
     String teacherName,
     String teacherId,
   ) async {
@@ -187,54 +164,79 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
 
     final db = FirebaseFirestore.instance;
     final now = DateTime.now();
-    final slot = _resolvedSlot;
 
-    // ─── Session context (all 5 fields) ───
+    // ─── 1. Resolve className from class doc ───
+    String resolvedClassName = student.className;
+    try {
+      final classDoc =
+          await db.collection('classes').doc(student.classId).get();
+      if (classDoc.exists) {
+        final cd = classDoc.data()!;
+        final lvl = cd['level']?.toString().trim() ?? '';
+        final nm = cd['name']?.toString().trim() ?? '';
+        final gr = cd['grade']?.toString().trim() ?? '';
+        final parts = <String>[];
+        if (lvl.isNotEmpty) parts.add(lvl);
+        if (nm.isNotEmpty) parts.add(nm);
+        if (gr.isNotEmpty) parts.add(gr);
+        if (parts.isNotEmpty) resolvedClassName = parts.join(' ');
+      }
+    } catch (e) {
+      debugPrint('className resolve: $e');
+    }
+
+    // ─── 2. Session context ───
+    final slot = _resolvedSlot;
     final subject = slot?.subject ?? '';
     final roomId = slot?.roomId ?? '';
     final roomName = slot?.roomName ?? '';
     final scheduledStart = slot?.startTime ?? '';
     final scheduledEnd = slot?.endTime ?? '';
     final sessionName =
-        slot != null ? '${slot.subject} ($scheduledStart – $scheduledEnd)' : '';
-    final studentRef = db.collection('students').doc(student.id);
+        slot != null ? '$subject ($scheduledStart – $scheduledEnd)' : '';
 
+    // ─── 3. Existing doc ───
+    QuerySnapshot<Map<String, dynamic>> existingSnap;
     try {
-      // ─── 1. Find any existing attendance doc for this student + date ───
-      final existingSnap =
+      existingSnap =
           await db
               .collection('attendance')
               .where('studentId', isEqualTo: student.id)
               .where('date', isEqualTo: _dateStr)
               .limit(1)
               .get();
+    } catch (e) {
+      debugPrint('Query error: $e');
+      if (mounted) setState(() => _savingMap[student.id] = false);
+      return;
+    }
 
-      final existingDoc =
-          existingSnap.docs.isNotEmpty ? existingSnap.docs.first : null;
+    final existingDoc =
+        existingSnap.docs.isNotEmpty ? existingSnap.docs.first : null;
+    final previousStatus =
+        existingDoc != null
+            ? AttendanceStatus.values.firstWhere(
+              (s) =>
+                  s.name ==
+                  (existingDoc.data()['status']?.toString() ?? 'absent'),
+              orElse: () => AttendanceStatus.absent,
+            )
+            : null;
 
-      final batch = db.batch();
+    final studentRef = db.collection('students').doc(student.id);
+    final batch = db.batch();
 
-      // ─── PATH A: PRESENT ─────────────────────────────────────────────────
+    try {
       if (status == AttendanceStatus.present) {
-        // Delete absence doc if it exists (teacher correcting absent → present)
-        if (existingDoc != null) {
-          batch.delete(existingDoc.reference);
-        }
-
-        // Increment counter.
-        // If previously absent/late, we are converting → net effect: +1.
-        // If no previous record, first-time present → +1.
-        // If already present (re-tap), guard in UI prevents this path.
+        // PATH A: PRESENT
+        if (existingDoc != null) batch.delete(existingDoc.reference);
         batch.update(studentRef, {'presenceCount': FieldValue.increment(1)});
-
-        // ─── PATH B: ABSENT / LATE ────────────────────────────────────────────
       } else {
-        // If the previous record was present, decrement the counter.
+        // PATH B: ABSENT / LATE
         if (previousStatus == AttendanceStatus.present) {
           batch.update(studentRef, {'presenceCount': FieldValue.increment(-1)});
         }
 
-        // Build the absence payload (all 5 detail fields).
         final entryTimeForPast = DateTime(
           _dateTime.year,
           _dateTime.month,
@@ -243,28 +245,22 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
           0,
         );
 
-        final absencePayload = {
+        final absencePayload = <String, dynamic>{
           'studentId': student.id,
           'studentName': student.name,
           'classId': student.classId,
-          'className': student.className,
+          'className': resolvedClassName,
           'date': _dateStr,
-          'status': status.name, // 'absent' or 'late'
-          // ── Field 1: Subject ──
+          'status': status.name,
           'subject': subject,
-          // ── Field 2: Teacher ──
           'teacherId': teacherId,
           'teacherName': teacherName,
-          // ── Field 3: Room ──
           'roomId': roomId,
           'roomName': roomName,
-          // ── Field 4: Scheduled Class Time ──
           'scheduledStartTime': scheduledStart,
           'scheduledEndTime': scheduledEnd,
           'sessionName': sessionName,
-          // ── Field 5: Time of Absence ──
           'recordedAt': Timestamp.fromDate(now),
-          // Other fields
           'entryTime':
               status == AttendanceStatus.late
                   ? Timestamp.fromDate(_isPastDate ? entryTimeForPast : now)
@@ -274,10 +270,8 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
         };
 
         if (existingDoc != null) {
-          // ─── Update existing absence record ───
           batch.update(existingDoc.reference, absencePayload);
         } else {
-          // ─── Create new absence record ───
           final newRef = db.collection('attendance').doc();
           batch.set(newRef, {
             ...absencePayload,
@@ -288,12 +282,23 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
 
       await batch.commit();
     } catch (e) {
-      debugPrint('Error saving attendance: $e');
+      debugPrint('Batch commit error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Save failed: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
     }
 
     if (mounted) setState(() => _savingMap[student.id] = false);
   }
 
+  // ─────────────────────────────────────────
+  //  BUILD
+  // ─────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -301,9 +306,7 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
     final students = ref.watch(studentsByClassIdProvider(widget.classId));
 
     final dateLabel =
-        _isPastDate
-            ? DateFormat('EEEE, d MMM yyyy').format(_dateTime)
-            : 'Today';
+        _isPastDate ? DateFormat('EEE d MMM yyyy').format(_dateTime) : 'Today';
 
     return Scaffold(
       backgroundColor:
@@ -375,7 +378,8 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
                       if (studentList.isEmpty) {
                         return const EmptyState(
                           title: 'No Students',
-                          message: 'No students found in this class.',
+                          message:
+                              'No students found in this class.\nMake sure students are assigned to this class.',
                           icon: Icons.people_outline_rounded,
                         );
                       }
@@ -389,14 +393,12 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
 
                       return Column(
                         children: [
-                          // ─── Past-date banner ───
                           if (_isPastDate)
                             _PastDateBanner(
                               dateLabel: dateLabel,
                               isDark: isDark,
                             ),
 
-                          // ─── Session context banner ───
                           _SlotBanner(
                             slot: _resolvedSlot,
                             isDark: isDark,
@@ -404,7 +406,6 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
                             isPast: _isPastDate,
                           ),
 
-                          // ─── Stats ───
                           _StatsBar(
                             attendanceMap: _attendanceMap,
                             total: studentList.length,
@@ -412,7 +413,6 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
                           ),
                           const SizedBox(height: 4),
 
-                          // ─── Student list ───
                           Expanded(
                             child: ListView.builder(
                               padding: const EdgeInsets.symmetric(
@@ -435,9 +435,6 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
                                   isSaving: isSaving,
                                   isSubmitted: _isSubmitted,
                                   onStatusChanged: (newStatus) async {
-                                    final previousStatus =
-                                        _attendanceMap[student.id] ??
-                                        AttendanceStatus.absent;
                                     setState(
                                       () =>
                                           _attendanceMap[student.id] =
@@ -446,7 +443,6 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
                                     await _saveStudentAttendance(
                                       student,
                                       newStatus,
-                                      previousStatus,
                                       user.name,
                                       user.id,
                                     );
@@ -456,12 +452,45 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
                             ),
                           ),
 
-                          // ─── Submit / Done ───
                           Padding(
                             padding: const EdgeInsets.all(16),
                             child:
                                 _isSubmitted
-                                    ? _SubmitDone(isPast: _isPastDate)
+                                    ? Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.all(14),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.success.withValues(
+                                          alpha: 0.1,
+                                        ),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: AppColors.success.withValues(
+                                            alpha: 0.3,
+                                          ),
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          const Icon(
+                                            Icons.check_circle_rounded,
+                                            color: AppColors.success,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            _isPastDate
+                                                ? 'Past attendance saved ✅'
+                                                : 'Attendance saved — synced in real-time ✅',
+                                            style: AppTypography.labelMedium
+                                                .copyWith(
+                                                  color: AppColors.success,
+                                                ),
+                                          ),
+                                        ],
+                                      ),
+                                    )
                                     : AppButton(
                                       label:
                                           _isPastDate
@@ -486,7 +515,47 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
 }
 
 // ─────────────────────────────────────────
-//  SLOT BANNER — shows all 5 fields from resolved slot
+//  PAST DATE BANNER
+// ─────────────────────────────────────────
+class _PastDateBanner extends StatelessWidget {
+  final String dateLabel;
+  final bool isDark;
+  const _PastDateBanner({required this.dateLabel, required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppColors.warning.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.history_edu_rounded,
+            color: AppColors.warning,
+            size: 16,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Editing past attendance for $dateLabel',
+              style: AppTypography.labelSmall.copyWith(
+                color: AppColors.warning,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────
+//  SLOT BANNER
 // ─────────────────────────────────────────
 class _SlotBanner extends StatelessWidget {
   final TimetableModel? slot;
@@ -531,23 +600,19 @@ class _SlotBanner extends StatelessWidget {
       );
     }
 
+    final accent = isPast ? AppColors.warning : AppColors.teacherColor;
+
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 10, 16, 4),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: (isPast ? AppColors.warning : AppColors.teacherColor).withValues(
-          alpha: 0.08,
-        ),
+        color: accent.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: (isPast ? AppColors.warning : AppColors.teacherColor)
-              .withValues(alpha: 0.3),
-        ),
+        border: Border.all(color: accent.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ─── Header row ───
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -595,12 +660,10 @@ class _SlotBanner extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-
-          // ─── 2×2 grid: Subject / Teacher / Room / Scheduled Time ───
           Row(
             children: [
               Expanded(
-                child: _DetailTile(
+                child: _DetailItem(
                   icon: Icons.menu_book_rounded,
                   label: 'Subject',
                   value: slot!.subject.isNotEmpty ? slot!.subject : '—',
@@ -609,7 +672,7 @@ class _SlotBanner extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: _DetailTile(
+                child: _DetailItem(
                   icon: Icons.person_rounded,
                   label: 'Teacher',
                   value:
@@ -623,7 +686,7 @@ class _SlotBanner extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: _DetailTile(
+                child: _DetailItem(
                   icon: Icons.meeting_room_rounded,
                   label: 'Room',
                   value: slot!.roomName.isNotEmpty ? slot!.roomName : '—',
@@ -632,9 +695,9 @@ class _SlotBanner extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: _DetailTile(
+                child: _DetailItem(
                   icon: Icons.schedule_rounded,
-                  label: 'Scheduled Time',
+                  label: 'Scheduled',
                   value: '${slot!.startTime} – ${slot!.endTime}',
                   color: AppColors.accent,
                 ),
@@ -642,9 +705,7 @@ class _SlotBanner extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-
-          // ─── Time of Absence (5th field) — full width ───
-          _DetailTile(
+          _DetailItem(
             icon: Icons.access_time_filled_rounded,
             label: 'Time of Absence',
             value: DateFormat('HH:mm  –  dd/MM/yyyy').format(DateTime.now()),
@@ -658,16 +719,16 @@ class _SlotBanner extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────
-//  DETAIL TILE
+//  DETAIL ITEM
 // ─────────────────────────────────────────
-class _DetailTile extends StatelessWidget {
+class _DetailItem extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
   final Color color;
   final bool fullWidth;
 
-  const _DetailTile({
+  const _DetailItem({
     required this.icon,
     required this.label,
     required this.value,
@@ -718,78 +779,6 @@ class _DetailTile extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────
-//  PAST DATE BANNER
-// ─────────────────────────────────────────
-class _PastDateBanner extends StatelessWidget {
-  final String dateLabel;
-  final bool isDark;
-  const _PastDateBanner({required this.dateLabel, required this.isDark});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: AppColors.warning.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.history_edu_rounded,
-            color: AppColors.warning,
-            size: 16,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'Editing past attendance for $dateLabel',
-              style: AppTypography.labelSmall.copyWith(
-                color: AppColors.warning,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────
-//  SUBMIT DONE
-// ─────────────────────────────────────────
-class _SubmitDone extends StatelessWidget {
-  final bool isPast;
-  const _SubmitDone({required this.isPast});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.success.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.check_circle_rounded, color: AppColors.success),
-          const SizedBox(width: 8),
-          Text(
-            isPast ? 'Past attendance saved ✅' : 'Attendance saved ✅',
-            style: AppTypography.labelMedium.copyWith(color: AppColors.success),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────
 //  STATS BAR
 // ─────────────────────────────────────────
 class _StatsBar extends StatelessWidget {
@@ -825,11 +814,11 @@ class _StatsBar extends StatelessWidget {
         ),
         child: Row(
           children: [
-            _Pill('Present', present, AppColors.present),
+            _StatPill('Present', present, AppColors.present),
             const SizedBox(width: 8),
-            _Pill('Late', late, AppColors.late),
+            _StatPill('Late', late, AppColors.late),
             const SizedBox(width: 8),
-            _Pill('Absent', absent, AppColors.absent),
+            _StatPill('Absent', absent, AppColors.absent),
             const Spacer(),
             Text('$total students', style: AppTypography.caption),
           ],
@@ -839,11 +828,11 @@ class _StatsBar extends StatelessWidget {
   }
 }
 
-class _Pill extends StatelessWidget {
+class _StatPill extends StatelessWidget {
   final String label;
   final int count;
   final Color color;
-  const _Pill(this.label, this.count, this.color);
+  const _StatPill(this.label, this.count, this.color);
 
   @override
   Widget build(BuildContext context) {
@@ -922,52 +911,49 @@ class _StudentCard extends StatelessWidget {
                     color: isDark ? AppColors.darkText : AppColors.lightText,
                   ),
                 ),
-                Text(student.className, style: AppTypography.caption),
+                Text(student.classDisplay, style: AppTypography.caption),
               ],
             ),
           ),
           if (isSaving)
             const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: AppColors.teacherColor,
+              ),
             )
-          else if (!isSubmitted)
+          else if (isSubmitted)
+            AttendanceBadge(status: status)
+          else
             Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                _Btn(
-                  'P',
-                  AppColors.present,
-                  status == AttendanceStatus.present,
-                  () => onStatusChanged(AttendanceStatus.present),
+                _StatusBtn(
+                  icon: Icons.check_circle_rounded,
+                  color: AppColors.present,
+                  isActive: status == AttendanceStatus.present,
+                  tooltip: 'Present',
+                  onTap: () => onStatusChanged(AttendanceStatus.present),
                 ),
-                const SizedBox(width: 6),
-                _Btn(
-                  'L',
-                  AppColors.late,
-                  status == AttendanceStatus.late,
-                  () => onStatusChanged(AttendanceStatus.late),
+                const SizedBox(width: 4),
+                _StatusBtn(
+                  icon: Icons.watch_later_rounded,
+                  color: AppColors.late,
+                  isActive: status == AttendanceStatus.late,
+                  tooltip: 'Late',
+                  onTap: () => onStatusChanged(AttendanceStatus.late),
                 ),
-                const SizedBox(width: 6),
-                _Btn(
-                  'A',
-                  AppColors.absent,
-                  status == AttendanceStatus.absent,
-                  () => onStatusChanged(AttendanceStatus.absent),
+                const SizedBox(width: 4),
+                _StatusBtn(
+                  icon: Icons.cancel_rounded,
+                  color: AppColors.absent,
+                  isActive: status == AttendanceStatus.absent,
+                  tooltip: 'Absent',
+                  onTap: () => onStatusChanged(AttendanceStatus.absent),
                 ),
               ],
-            )
-          else
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: sc.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                status.name.toUpperCase(),
-                style: AppTypography.caption.copyWith(color: sc),
-              ),
             ),
         ],
       ),
@@ -975,35 +961,41 @@ class _StudentCard extends StatelessWidget {
   }
 }
 
-class _Btn extends StatelessWidget {
-  final String label;
+// ─────────────────────────────────────────
+//  STATUS BUTTON
+// ─────────────────────────────────────────
+class _StatusBtn extends StatelessWidget {
+  final IconData icon;
   final Color color;
   final bool isActive;
+  final String tooltip;
   final VoidCallback onTap;
-  const _Btn(this.label, this.color, this.isActive, this.onTap);
+
+  const _StatusBtn({
+    required this.icon,
+    required this.color,
+    required this.isActive,
+    required this.tooltip,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          color: isActive ? color : color.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: isActive ? color : color.withValues(alpha: 0.3),
-          ),
-        ),
-        child: Center(
-          child: Text(
-            label,
-            style: AppTypography.labelSmall.copyWith(
-              color: isActive ? Colors.white : color,
-              fontWeight: FontWeight.bold,
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: isActive ? color : color.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isActive ? color : color.withValues(alpha: 0.3),
             ),
           ),
+          child: Icon(icon, size: 18, color: isActive ? Colors.white : color),
         ),
       ),
     );
