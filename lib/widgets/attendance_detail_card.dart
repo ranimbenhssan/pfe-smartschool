@@ -4,18 +4,20 @@ import '../models/models.dart';
 import '../theme/theme.dart';
 import 'attendance_badge.dart';
 
-/// Reusable card that displays a full attendance record with all
-/// 5 timetable-mapped fields:
+/// Shared card that displays all 5 timetable-mapped fields:
 ///   1. Subject
 ///   2. Teacher
 ///   3. Room
-///   4. Time of Absence (recordedAt)
-///   5. Scheduled Class Time (scheduledStartTime – scheduledEndTime)
+///   4. Scheduled Class Time  (scheduledStartTime – scheduledEndTime)
+///   5. Time of Absence       (recordedAt)
+///
+/// Backward-safe: `scheduledTimeRange` falls back to parsing `sessionName`
+/// for records written before the scheduledStartTime/End fields were added.
 class AttendanceDetailCard extends StatelessWidget {
   final AttendanceModel record;
   final bool isDark;
 
-  /// Set true when shown in admin/teacher views (shows student name row)
+  /// Show student name row (used in admin / teacher views)
   final bool showStudent;
 
   const AttendanceDetailCard({
@@ -25,16 +27,16 @@ class AttendanceDetailCard extends StatelessWidget {
     this.showStudent = false,
   });
 
-  String _formatDate(String dateStr) {
+  String _fmtDate(String s) {
     try {
-      final p = dateStr.split('-');
-      return p.length == 3 ? '${p[2]}/${p[1]}/${p[0]}' : dateStr;
+      final p = s.split('-');
+      return p.length == 3 ? '${p[2]}/${p[1]}/${p[0]}' : s;
     } catch (_) {
-      return dateStr;
+      return s;
     }
   }
 
-  bool get _hasDetails =>
+  bool get _hasContext =>
       record.subject.isNotEmpty ||
       record.teacherName.isNotEmpty ||
       record.roomName.isNotEmpty ||
@@ -43,7 +45,7 @@ class AttendanceDetailCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statusColor =
+    final sc =
         record.status == AttendanceStatus.present
             ? AppColors.present
             : record.status == AttendanceStatus.late
@@ -56,19 +58,19 @@ class AttendanceDetailCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: isDark ? AppColors.darkCard : AppColors.lightCard,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: statusColor.withValues(alpha: 0.3)),
+        border: Border.all(color: sc.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ─── Header row: date + status badge ───
+          // ─── Header row ───
           Row(
             children: [
               Container(
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.12),
+                  color: sc.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
@@ -77,7 +79,7 @@ class AttendanceDetailCard extends StatelessWidget {
                       : record.status == AttendanceStatus.late
                       ? Icons.watch_later_rounded
                       : Icons.cancel_rounded,
-                  color: statusColor,
+                  color: sc,
                   size: 20,
                 ),
               ),
@@ -87,7 +89,7 @@ class AttendanceDetailCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _formatDate(record.date),
+                      _fmtDate(record.date),
                       style: AppTypography.labelLarge.copyWith(
                         color:
                             isDark ? AppColors.darkText : AppColors.lightText,
@@ -112,8 +114,8 @@ class AttendanceDetailCard extends StatelessWidget {
             ],
           ),
 
-          // ─── Timetable detail grid ───
-          if (_hasDetails) ...[
+          // ─── 5-field detail grid ───
+          if (_hasContext) ...[
             const SizedBox(height: 10),
             Container(
               width: double.infinity,
@@ -158,7 +160,7 @@ class AttendanceDetailCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
 
-                  // ─── Row 2: Room + Scheduled Class Time ───
+                  // ─── Row 2: Room + Scheduled Time ───
                   Row(
                     children: [
                       Expanded(
@@ -178,6 +180,8 @@ class AttendanceDetailCard extends StatelessWidget {
                         child: _FieldTile(
                           icon: Icons.schedule_rounded,
                           label: 'Scheduled Time',
+                          // scheduledTimeRange handles both new fields
+                          // and backward-compat regex parsing of sessionName
                           value:
                               record.scheduledTimeRange.isNotEmpty
                                   ? record.scheduledTimeRange
@@ -190,7 +194,7 @@ class AttendanceDetailCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
 
-                  // ─── Row 3: Time of Absence (full width) ───
+                  // ─── Row 3: Time of Absence — full width ───
                   _FieldTile(
                     icon: Icons.access_time_filled_rounded,
                     label: 'Time of Absence',
@@ -204,17 +208,30 @@ class AttendanceDetailCard extends StatelessWidget {
                               'HH:mm  –  dd/MM/yyyy',
                             ).format(record.entryTime!)
                             : '—',
-                    color:
-                        record.status == AttendanceStatus.absent
-                            ? AppColors.absent
-                            : record.status == AttendanceStatus.late
-                            ? AppColors.late
-                            : AppColors.present,
+                    color: sc,
                     isDark: isDark,
                     fullWidth: true,
                   ),
                 ],
               ),
+            ),
+          ],
+
+          // ─── Note (manual entry / past date marker) ───
+          if (record.note != null && record.note!.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                const Icon(
+                  Icons.note_rounded,
+                  size: 12,
+                  color: AppColors.warning,
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(record.note!, style: AppTypography.caption),
+                ),
+              ],
             ),
           ],
         ],
@@ -245,7 +262,7 @@ class _FieldTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final widget = Container(
+    final tile = Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.07),
@@ -283,7 +300,6 @@ class _FieldTile extends StatelessWidget {
         ],
       ),
     );
-
-    return fullWidth ? SizedBox(width: double.infinity, child: widget) : widget;
+    return fullWidth ? SizedBox(width: double.infinity, child: tile) : tile;
   }
 }

@@ -11,9 +11,7 @@ class TeacherNamecallScreen extends ConsumerStatefulWidget {
   final String classId;
   final String className;
 
-  /// The date this name call is for (format: 'yyyy-MM-dd').
-  /// Defaults to today if not provided. Pass a past date to edit
-  /// historical attendance records.
+  /// Target date in 'yyyy-MM-dd' format. Empty = today.
   final String targetDate;
 
   const TeacherNamecallScreen({
@@ -32,29 +30,44 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
   final Map<String, AttendanceStatus> _attendanceMap = {};
   final Map<String, bool> _savingMap = {};
   bool _isSubmitted = false;
-  bool _isLoadingExisting =
-      true; // loading spinner while pre-filling past records
+  bool _isLoadingExisting = true;
 
-  // ─── Resolved date: use widget.targetDate if set, else today ───
+  // ─── Resolved date values ───
   late final String _dateStr;
   late final DateTime _dateTime;
   late final bool _isPastDate;
+  late final String _dayName; // "Monday" … "Friday"
 
-  String _formatDate(DateTime date) =>
-      '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  // ─── Cached timetable slot for _dateStr's day ───
+  // Fetched once in initState; used for ALL student saves on this screen.
+  TimetableModel? _resolvedSlot;
+
+  static const _days = [
+    '',
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
+  ];
+
+  String _fmt(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   @override
   void initState() {
     super.initState();
     final now = DateTime.now();
-    final today = _formatDate(now);
+    final today = _fmt(now);
 
     if (widget.targetDate.isNotEmpty) {
       _dateStr = widget.targetDate;
       try {
         _dateTime = DateTime.parse(widget.targetDate);
       } catch (_) {
-        _dateTime = now;
+        _dateTime = now; // fallback
       }
     } else {
       _dateStr = today;
@@ -62,12 +75,63 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
     }
 
     _isPastDate = _dateStr != today;
+    _dayName = _days[_dateTime.weekday]; // weekday is 1-7
 
-    // ─── Pre-load existing records for the target date ───
-    _loadExistingAttendance();
+    // ─── Load existing attendance + timetable slot in parallel ───
+    _initData();
   }
 
-  // ─── Query attendance WHERE classId + date → pre-fill status map ───
+  Future<void> _initData() async {
+    await Future.wait([_loadExistingAttendance(), _resolveTimetableSlot()]);
+    if (mounted) setState(() => _isLoadingExisting = false);
+  }
+
+  // ─────────────────────────────────────────
+  //  Resolve timetable slot for the target date's day of week.
+  //
+  //  For TODAY: if there is an active live slot (within startTime–endTime)
+  //  we prefer that. Otherwise fall back to the first slot for the day.
+  //  For PAST DATES: always use the first slot for that day — no time filter.
+  // ─────────────────────────────────────────
+  Future<void> _resolveTimetableSlot() async {
+    if (widget.classId.isEmpty) return;
+    try {
+      final snap =
+          await FirebaseFirestore.instance
+              .collection('timetable')
+              .where('classId', isEqualTo: widget.classId)
+              .where('dayOfWeek', isEqualTo: _dayName)
+              .get();
+
+      if (snap.docs.isEmpty) return;
+
+      if (!_isPastDate) {
+        // ─── Today: try to find the currently-active slot ───
+        final now = DateTime.now();
+        final currentTime =
+            '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+
+        for (final doc in snap.docs) {
+          final d = doc.data();
+          final start = d['startTime']?.toString() ?? '';
+          final end = d['endTime']?.toString() ?? '';
+          if (start.isEmpty || end.isEmpty) continue;
+          if (currentTime.compareTo(start) >= 0 &&
+              currentTime.compareTo(end) <= 0) {
+            _resolvedSlot = TimetableModel.fromFirestore(doc);
+            return;
+          }
+        }
+      }
+
+      // ─── Past date OR no active slot today → use the first slot for the day ───
+      _resolvedSlot = TimetableModel.fromFirestore(snap.docs.first);
+    } catch (e) {
+      debugPrint('_resolveTimetableSlot error: $e');
+    }
+  }
+
+  // ─── Pre-fill status map from existing Firestore records ───
   Future<void> _loadExistingAttendance() async {
     try {
       final snap =
@@ -77,52 +141,53 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
               .where('date', isEqualTo: _dateStr)
               .get();
 
-      if (mounted) {
-        final preloaded = <String, AttendanceStatus>{};
-        for (final doc in snap.docs) {
-          final data = doc.data();
-          final studentId = data['studentId']?.toString() ?? '';
-          final statusStr = data['status']?.toString() ?? 'absent';
-          if (studentId.isEmpty) continue;
-          preloaded[studentId] = AttendanceStatus.values.firstWhere(
-            (s) => s.name == statusStr,
-            orElse: () => AttendanceStatus.absent,
-          );
-        }
-        setState(() {
-          _attendanceMap.addAll(preloaded);
-          _isLoadingExisting = false;
-        });
+      final preloaded = <String, AttendanceStatus>{};
+      for (final doc in snap.docs) {
+        final data = doc.data();
+        final sid = data['studentId']?.toString() ?? '';
+        final statusStr = data['status']?.toString() ?? 'absent';
+        if (sid.isEmpty) continue;
+        preloaded[sid] = AttendanceStatus.values.firstWhere(
+          (s) => s.name == statusStr,
+          orElse: () => AttendanceStatus.absent,
+        );
       }
+      if (mounted) _attendanceMap.addAll(preloaded);
     } catch (e) {
-      debugPrint('Error loading existing attendance: $e');
-      if (mounted) setState(() => _isLoadingExisting = false);
+      debugPrint('_loadExistingAttendance error: $e');
     }
   }
 
-  // ─── Save / update a single student record for _dateStr ───
+  // ─────────────────────────────────────────
+  //  Save / update a record — ALL 5 FIELDS guaranteed
+  // ─────────────────────────────────────────
   Future<void> _saveStudentAttendance(
     StudentModel student,
     AttendanceStatus status,
-    TimetableModel? slot,
     String teacherName,
     String teacherId,
   ) async {
     setState(() => _savingMap[student.id] = true);
 
+    final now = DateTime.now();
+    final slot = _resolvedSlot;
+
+    // ─── 1. Subject ───
     final subject = slot?.subject ?? '';
-    final scheduledStartTime = slot?.startTime ?? '';
-    final scheduledEndTime = slot?.endTime ?? '';
-    final sessionName =
-        slot != null
-            ? '${slot.subject} (${slot.startTime} – ${slot.endTime})'
-            : '';
+
+    // ─── 2. Teacher — passed in from currentUser ───
+    // (already in parameters)
+
+    // ─── 3. Room ───
     final roomId = slot?.roomId ?? '';
     final roomName = slot?.roomName ?? '';
 
-    // For past-date edits, recordedAt = now (time of correction).
-    // entryTime = noon on the target date (placeholder for past records).
-    final now = DateTime.now();
+    // ─── 4. Scheduled Class Time ───
+    final scheduledStartTime = slot?.startTime ?? '';
+    final scheduledEndTime = slot?.endTime ?? '';
+
+    // ─── 5. Time of Absence = recordedAt (now) ───
+    // entryTime for past records = 08:00 on the target date
     final entryTimeForPast = DateTime(
       _dateTime.year,
       _dateTime.month,
@@ -130,6 +195,12 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
       8,
       0,
     );
+    final effectiveEntryTime = _isPastDate ? entryTimeForPast : now;
+
+    final sessionName =
+        slot != null
+            ? '${slot.subject} ($scheduledStartTime – $scheduledEndTime)'
+            : '';
 
     try {
       final existing =
@@ -140,46 +211,38 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
               .limit(1)
               .get();
 
+      // ─── Payload with ALL 5 fields ───
+      final fullPayload = {
+        'status': status.name,
+        'teacherId': teacherId,
+        'teacherName': teacherName, // Teacher
+        'subject': subject, // Subject
+        'roomId': roomId,
+        'roomName': roomName, // Room
+        'sessionName': sessionName,
+        'scheduledStartTime': scheduledStartTime, // Scheduled Start
+        'scheduledEndTime': scheduledEndTime, // Scheduled End
+        'recordedAt': Timestamp.fromDate(now), // Time of Absence
+      };
+
       if (existing.docs.isNotEmpty) {
-        // ─── Update existing record ───
-        await existing.docs.first.reference.update({
-          'status': status.name,
-          'teacherId': teacherId,
-          'teacherName': teacherName,
-          'subject': subject,
-          'sessionName': sessionName,
-          'roomId': roomId,
-          'roomName': roomName,
-          'scheduledStartTime': scheduledStartTime,
-          'scheduledEndTime': scheduledEndTime,
-          'recordedAt': Timestamp.fromDate(now),
-        });
+        await existing.docs.first.reference.update(fullPayload);
       } else {
-        // ─── Create new record ───
         await FirebaseFirestore.instance.collection('attendance').add({
           'studentId': student.id,
           'studentName': student.name,
           'classId': student.classId,
           'className': student.className,
           'date': _dateStr,
-          'status': status.name,
           'entryTime':
               (status == AttendanceStatus.present ||
                       status == AttendanceStatus.late)
-                  ? Timestamp.fromDate(_isPastDate ? entryTimeForPast : now)
+                  ? Timestamp.fromDate(effectiveEntryTime)
                   : null,
           'exitTime': null,
-          'teacherId': teacherId,
-          'teacherName': teacherName,
-          'subject': subject,
-          'sessionName': sessionName,
-          'roomId': roomId,
-          'roomName': roomName,
-          'scheduledStartTime': scheduledStartTime,
-          'scheduledEndTime': scheduledEndTime,
-          'recordedAt': Timestamp.fromDate(now),
           'note': _isPastDate ? 'Manually entered for $_dateStr' : '',
           'createdAt': FieldValue.serverTimestamp(),
+          ...fullPayload,
         });
       }
     } catch (e) {
@@ -194,13 +257,6 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final currentUser = ref.watch(currentUserProvider);
     final students = ref.watch(studentsByClassIdProvider(widget.classId));
-
-    // ─── For today: use live timetable slot ───
-    // ─── For past dates: slot is null (no live session), show static banner ───
-    final currentSlot =
-        _isPastDate
-            ? const AsyncValue.data(null)
-            : ref.watch(currentTimetableSlotProvider(widget.classId));
 
     final dateLabel =
         _isPastDate
@@ -218,7 +274,6 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
         ),
         backgroundColor:
             isDark ? AppColors.darkSurface : AppColors.lightSurface,
-        // ─── Past-date chip in app bar ───
         actions: [
           if (_isPastDate)
             Container(
@@ -283,7 +338,6 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
                         );
                       }
 
-                      // Init absent for any student not already in map
                       for (final s in studentList) {
                         _attendanceMap.putIfAbsent(
                           s.id,
@@ -293,30 +347,22 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
 
                       return Column(
                         children: [
-                          // ─── Past-date warning banner ───
+                          // ─── Past-date banner ───
                           if (_isPastDate)
                             _PastDateBanner(
                               dateLabel: dateLabel,
                               isDark: isDark,
                             ),
 
-                          // ─── Session context (today only) ───
-                          if (!_isPastDate)
-                            currentSlot.when(
-                              loading: () => const SizedBox(height: 8),
-                              error: (_, __) => const SizedBox.shrink(),
-                              data:
-                                  (slot) =>
-                                      slot == null
-                                          ? _NoSessionBanner(isDark: isDark)
-                                          : _SessionBanner(
-                                            slot: slot,
-                                            isDark: isDark,
-                                            teacherName: user.name,
-                                          ),
-                            ),
+                          // ─── Session context banner ───
+                          _SlotBanner(
+                            slot: _resolvedSlot,
+                            isDark: isDark,
+                            teacherName: user.name,
+                            isPast: _isPastDate,
+                          ),
 
-                          // ─── Stats bar ───
+                          // ─── Stats ───
                           _StatsBar(
                             attendanceMap: _attendanceMap,
                             total: studentList.length,
@@ -355,7 +401,6 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
                                     await _saveStudentAttendance(
                                       student,
                                       newStatus,
-                                      currentSlot.value,
                                       user.name,
                                       user.id,
                                     );
@@ -365,46 +410,12 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
                             ),
                           ),
 
-                          // ─── Submit / Done button ───
+                          // ─── Submit / Done ───
                           Padding(
                             padding: const EdgeInsets.all(16),
                             child:
                                 _isSubmitted
-                                    ? Container(
-                                      width: double.infinity,
-                                      padding: const EdgeInsets.all(14),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.success.withValues(
-                                          alpha: 0.1,
-                                        ),
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(
-                                          color: AppColors.success.withValues(
-                                            alpha: 0.3,
-                                          ),
-                                        ),
-                                      ),
-                                      child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          const Icon(
-                                            Icons.check_circle_rounded,
-                                            color: AppColors.success,
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Text(
-                                            _isPastDate
-                                                ? 'Past attendance saved ✅'
-                                                : 'Attendance saved — synced ✅',
-                                            style: AppTypography.labelMedium
-                                                .copyWith(
-                                                  color: AppColors.success,
-                                                ),
-                                          ),
-                                        ],
-                                      ),
-                                    )
+                                    ? _SubmitDone(isPast: _isPastDate)
                                     : AppButton(
                                       label:
                                           _isPastDate
@@ -429,19 +440,250 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
 }
 
 // ─────────────────────────────────────────
+//  SLOT BANNER — shows all 5 fields from resolved slot
+// ─────────────────────────────────────────
+class _SlotBanner extends StatelessWidget {
+  final TimetableModel? slot;
+  final bool isDark;
+  final String teacherName;
+  final bool isPast;
+
+  const _SlotBanner({
+    required this.slot,
+    required this.isDark,
+    required this.teacherName,
+    required this.isPast,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (slot == null) {
+      return Container(
+        margin: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.warning.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.warning_amber_rounded,
+              color: AppColors.warning,
+              size: 18,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'No timetable slot found. Attendance will save without session context.',
+                style: AppTypography.caption,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: (isPast ? AppColors.warning : AppColors.teacherColor).withValues(
+          alpha: 0.08,
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: (isPast ? AppColors.warning : AppColors.teacherColor)
+              .withValues(alpha: 0.3),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ─── Header row ───
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                isPast ? 'Session Context (from timetable)' : 'Current Session',
+                style: AppTypography.labelLarge.copyWith(
+                  color: isDark ? AppColors.darkText : AppColors.lightText,
+                ),
+              ),
+              if (!isPast)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.success.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: AppColors.success.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: const BoxDecoration(
+                          color: AppColors.success,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'LIVE',
+                        style: AppTypography.caption.copyWith(
+                          color: AppColors.success,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          // ─── 2×2 grid: Subject / Teacher / Room / Scheduled Time ───
+          Row(
+            children: [
+              Expanded(
+                child: _DetailTile(
+                  icon: Icons.menu_book_rounded,
+                  label: 'Subject',
+                  value: slot!.subject.isNotEmpty ? slot!.subject : '—',
+                  color: AppColors.info,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _DetailTile(
+                  icon: Icons.person_rounded,
+                  label: 'Teacher',
+                  value:
+                      teacherName.isNotEmpty ? teacherName : slot!.teacherName,
+                  color: AppColors.teacherColor,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _DetailTile(
+                  icon: Icons.meeting_room_rounded,
+                  label: 'Room',
+                  value: slot!.roomName.isNotEmpty ? slot!.roomName : '—',
+                  color: AppColors.success,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _DetailTile(
+                  icon: Icons.schedule_rounded,
+                  label: 'Scheduled Time',
+                  value: '${slot!.startTime} – ${slot!.endTime}',
+                  color: AppColors.accent,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+
+          // ─── Time of Absence (5th field) — full width ───
+          _DetailTile(
+            icon: Icons.access_time_filled_rounded,
+            label: 'Time of Absence',
+            value: DateFormat('HH:mm  –  dd/MM/yyyy').format(DateTime.now()),
+            color: AppColors.warning,
+            fullWidth: true,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────
+//  DETAIL TILE
+// ─────────────────────────────────────────
+class _DetailTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+  final bool fullWidth;
+
+  const _DetailTile({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+    this.fullWidth = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final tile = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: AppTypography.caption.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: AppTypography.labelSmall,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+    return fullWidth ? SizedBox(width: double.infinity, child: tile) : tile;
+  }
+}
+
+// ─────────────────────────────────────────
 //  PAST DATE BANNER
 // ─────────────────────────────────────────
 class _PastDateBanner extends StatelessWidget {
   final String dateLabel;
   final bool isDark;
-
   const _PastDateBanner({required this.dateLabel, required this.isDark});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 10, 16, 4),
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: AppColors.warning.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
@@ -452,24 +694,15 @@ class _PastDateBanner extends StatelessWidget {
           const Icon(
             Icons.history_edu_rounded,
             color: AppColors.warning,
-            size: 18,
+            size: 16,
           ),
           const SizedBox(width: 8),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Editing past attendance',
-                  style: AppTypography.labelSmall.copyWith(
-                    color: AppColors.warning,
-                  ),
-                ),
-                Text(
-                  'Records for $dateLabel will be created or updated.',
-                  style: AppTypography.caption,
-                ),
-              ],
+            child: Text(
+              'Editing past attendance for $dateLabel',
+              style: AppTypography.labelSmall.copyWith(
+                color: AppColors.warning,
+              ),
             ),
           ),
         ],
@@ -479,219 +712,30 @@ class _PastDateBanner extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────
-//  SESSION BANNER (today only)
+//  SUBMIT DONE
 // ─────────────────────────────────────────
-class _SessionBanner extends StatelessWidget {
-  final TimetableModel slot;
-  final bool isDark;
-  final String teacherName;
-
-  const _SessionBanner({
-    required this.slot,
-    required this.isDark,
-    required this.teacherName,
-  });
+class _SubmitDone extends StatelessWidget {
+  final bool isPast;
+  const _SubmitDone({required this.isPast});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+      width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.teacherColor.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: AppColors.teacherColor.withValues(alpha: 0.3),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Current Session',
-                style: AppTypography.labelLarge.copyWith(
-                  color: isDark ? AppColors.darkText : AppColors.lightText,
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: AppColors.success.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: AppColors.success.withValues(alpha: 0.3),
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: const BoxDecoration(
-                        color: AppColors.success,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      'LIVE',
-                      style: AppTypography.caption.copyWith(
-                        color: AppColors.success,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: _DetailItem(
-                  icon: Icons.menu_book_rounded,
-                  label: 'Subject',
-                  value: slot.subject,
-                  color: AppColors.info,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _DetailItem(
-                  icon: Icons.person_rounded,
-                  label: 'Teacher',
-                  value:
-                      teacherName.isNotEmpty ? teacherName : slot.teacherName,
-                  color: AppColors.teacherColor,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: _DetailItem(
-                  icon: Icons.meeting_room_rounded,
-                  label: 'Room',
-                  value: slot.roomName.isNotEmpty ? slot.roomName : '—',
-                  color: AppColors.success,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _DetailItem(
-                  icon: Icons.schedule_rounded,
-                  label: 'Scheduled',
-                  value: '${slot.startTime} – ${slot.endTime}',
-                  color: AppColors.accent,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────
-//  NO SESSION BANNER
-// ─────────────────────────────────────────
-class _NoSessionBanner extends StatelessWidget {
-  final bool isDark;
-  const _NoSessionBanner({required this.isDark});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 10, 16, 4),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.warning.withValues(alpha: 0.08),
+        color: AppColors.success.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+        border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
       ),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(
-            Icons.warning_amber_rounded,
-            color: AppColors.warning,
-            size: 18,
-          ),
+          const Icon(Icons.check_circle_rounded, color: AppColors.success),
           const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'No active timetable slot',
-                  style: AppTypography.labelSmall.copyWith(
-                    color: AppColors.warning,
-                  ),
-                ),
-                Text(
-                  'Attendance will be saved without session context.',
-                  style: AppTypography.caption,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────
-//  DETAIL ITEM
-// ─────────────────────────────────────────
-class _DetailItem extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color color;
-
-  const _DetailItem({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.15)),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: AppTypography.caption.copyWith(color: color),
-                ),
-                Text(
-                  value,
-                  style: AppTypography.labelSmall,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
+          Text(
+            isPast ? 'Past attendance saved ✅' : 'Attendance saved ✅',
+            style: AppTypography.labelMedium.copyWith(color: AppColors.success),
           ),
         ],
       ),
@@ -735,11 +779,11 @@ class _StatsBar extends StatelessWidget {
         ),
         child: Row(
           children: [
-            _StatPill('Present', present, AppColors.present),
+            _Pill('Present', present, AppColors.present),
             const SizedBox(width: 8),
-            _StatPill('Late', late, AppColors.late),
+            _Pill('Late', late, AppColors.late),
             const SizedBox(width: 8),
-            _StatPill('Absent', absent, AppColors.absent),
+            _Pill('Absent', absent, AppColors.absent),
             const Spacer(),
             Text('$total students', style: AppTypography.caption),
           ],
@@ -749,12 +793,11 @@ class _StatsBar extends StatelessWidget {
   }
 }
 
-class _StatPill extends StatelessWidget {
+class _Pill extends StatelessWidget {
   final String label;
   final int count;
   final Color color;
-
-  const _StatPill(this.label, this.count, this.color);
+  const _Pill(this.label, this.count, this.color);
 
   @override
   Widget build(BuildContext context) {
@@ -795,7 +838,7 @@ class _StudentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statusColor =
+    final sc =
         status == AttendanceStatus.present
             ? AppColors.present
             : status == AttendanceStatus.late
@@ -808,7 +851,7 @@ class _StudentCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: isDark ? AppColors.darkCard : AppColors.lightCard,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: statusColor.withValues(alpha: 0.3)),
+        border: Border.all(color: sc.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
@@ -846,21 +889,21 @@ class _StudentCard extends StatelessWidget {
           else if (!isSubmitted)
             Row(
               children: [
-                _StatusBtn(
+                _Btn(
                   'P',
                   AppColors.present,
                   status == AttendanceStatus.present,
                   () => onStatusChanged(AttendanceStatus.present),
                 ),
                 const SizedBox(width: 6),
-                _StatusBtn(
+                _Btn(
                   'L',
                   AppColors.late,
                   status == AttendanceStatus.late,
                   () => onStatusChanged(AttendanceStatus.late),
                 ),
                 const SizedBox(width: 6),
-                _StatusBtn(
+                _Btn(
                   'A',
                   AppColors.absent,
                   status == AttendanceStatus.absent,
@@ -872,12 +915,12 @@ class _StudentCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: statusColor.withValues(alpha: 0.12),
+                color: sc.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
                 status.name.toUpperCase(),
-                style: AppTypography.caption.copyWith(color: statusColor),
+                style: AppTypography.caption.copyWith(color: sc),
               ),
             ),
         ],
@@ -886,13 +929,12 @@ class _StudentCard extends StatelessWidget {
   }
 }
 
-class _StatusBtn extends StatelessWidget {
+class _Btn extends StatelessWidget {
   final String label;
   final Color color;
   final bool isActive;
   final VoidCallback onTap;
-
-  const _StatusBtn(this.label, this.color, this.isActive, this.onTap);
+  const _Btn(this.label, this.color, this.isActive, this.onTap);
 
   @override
   Widget build(BuildContext context) {

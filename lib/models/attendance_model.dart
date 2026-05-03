@@ -13,7 +13,7 @@ class AttendanceModel {
   final DateTime? entryTime;
   final DateTime? exitTime;
 
-  // ─── Timetable-mapped fields ───
+  // ─── Timetable-mapped context fields ───
   final String teacherId;
   final String teacherName;
   final String subject;
@@ -21,12 +21,12 @@ class AttendanceModel {
   final String roomName;
   final String sessionName;
 
-  /// Actual timestamp when the teacher recorded this entry
-  final DateTime? recordedAt;
-
-  /// Scheduled window from the timetable (e.g. "08:00" / "09:30")
+  /// Scheduled window from timetable — "08:00" / "09:30"
   final String scheduledStartTime;
   final String scheduledEndTime;
+
+  /// Exact timestamp the teacher tapped a status (= time of absence)
+  final DateTime? recordedAt;
 
   final String? note;
   final DateTime createdAt;
@@ -47,20 +47,26 @@ class AttendanceModel {
     this.roomId = '',
     this.roomName = '',
     this.sessionName = '',
-    this.recordedAt,
     this.scheduledStartTime = '',
     this.scheduledEndTime = '',
+    this.recordedAt,
     this.note,
     required this.createdAt,
   });
 
-  // ─── Convenience getter ───
-  String get scheduledTimeRange =>
-      (scheduledStartTime.isNotEmpty && scheduledEndTime.isNotEmpty)
-          ? '$scheduledStartTime – $scheduledEndTime'
-          : sessionName.isNotEmpty
-          ? sessionName
-          : '';
+  /// Returns "08:00 – 09:30" when fields are set.
+  /// Falls back to parsing sessionName for records written before this fix.
+  String get scheduledTimeRange {
+    if (scheduledStartTime.isNotEmpty && scheduledEndTime.isNotEmpty) {
+      return '$scheduledStartTime – $scheduledEndTime';
+    }
+    // Backward-compat: extract times from "Math (08:00 - 09:30)" or "08:00 – 09:30"
+    final match = RegExp(
+      r'(\d{2}:\d{2})\s*[–\-]\s*(\d{2}:\d{2})',
+    ).firstMatch(sessionName);
+    if (match != null) return '${match.group(1)} – ${match.group(2)}';
+    return '';
+  }
 
   factory AttendanceModel.fromFirestore(DocumentSnapshot doc) {
     final raw = doc.data() as Map<String, dynamic>;
@@ -92,9 +98,9 @@ class AttendanceModel {
       roomId: raw['roomId']?.toString() ?? '',
       roomName: raw['roomName']?.toString() ?? '',
       sessionName: raw['sessionName']?.toString() ?? '',
-      recordedAt: (raw['recordedAt'] as Timestamp?)?.toDate(),
       scheduledStartTime: raw['scheduledStartTime']?.toString() ?? '',
       scheduledEndTime: raw['scheduledEndTime']?.toString() ?? '',
+      recordedAt: (raw['recordedAt'] as Timestamp?)?.toDate(),
       note: raw['note']?.toString(),
       createdAt: (raw['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
@@ -116,28 +122,27 @@ class AttendanceModel {
       'roomId': roomId,
       'roomName': roomName,
       'sessionName': sessionName,
+      'scheduledStartTime': scheduledStartTime,
+      'scheduledEndTime': scheduledEndTime,
       'recordedAt':
           recordedAt != null
               ? Timestamp.fromDate(recordedAt!)
               : FieldValue.serverTimestamp(),
-      'scheduledStartTime': scheduledStartTime,
-      'scheduledEndTime': scheduledEndTime,
       'note': note ?? '',
       'createdAt': Timestamp.fromDate(createdAt),
     };
   }
 
-  // ─── Human-readable summary ───
   String get summary {
     final parts = <String>[];
     if (subject.isNotEmpty) parts.add(subject);
-    if (teacherName.isNotEmpty) parts.add('with $teacherName');
+    if (teacherName.isNotEmpty) parts.add('by $teacherName');
     if (scheduledTimeRange.isNotEmpty) parts.add('($scheduledTimeRange)');
     if (roomName.isNotEmpty) parts.add('in $roomName');
     if (recordedAt != null) {
       final t =
           '${recordedAt!.hour.toString().padLeft(2, '0')}:${recordedAt!.minute.toString().padLeft(2, '0')}';
-      parts.add('• recorded at $t');
+      parts.add('· recorded $t');
     }
     return parts.join(' ');
   }
