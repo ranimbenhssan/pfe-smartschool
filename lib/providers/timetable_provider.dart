@@ -35,23 +35,6 @@ final classesByTeacherProvider =
       return ref.watch(firestoreServiceProvider).getClassesByTeacher(teacherId);
     });
 
-// ─────────────────────────────────────────
-//  Current Teacher — fetched directly by Auth UID
-//
-//  Avoids scanning all teachers. The teachers/{uid} doc id IS the uid.
-// ─────────────────────────────────────────
-final currentTeacherProvider = StreamProvider<TeacherModel?>((ref) {
-  final authAsync = ref.watch(authStateProvider);
-  return authAsync.when(
-    loading: () => Stream.value(null),
-    error: (_, __) => Stream.value(null),
-    data: (user) {
-      if (user == null) return Stream.value(null);
-      return ref.watch(firestoreServiceProvider).getTeacherStream(user.uid);
-    },
-  );
-});
-
 // ─── Selected Day Filter ───
 final selectedDayProvider = StateProvider<int?>((ref) => null);
 
