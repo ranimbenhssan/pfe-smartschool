@@ -5,11 +5,13 @@ import '../theme/theme.dart';
 class StudentCard extends StatelessWidget {
   final StudentModel student;
   final VoidCallback? onTap;
+  final VoidCallback? onDelete; // ← new
 
   const StudentCard({
     super.key,
     required this.student,
     this.onTap,
+    this.onDelete,
   });
 
   @override
@@ -25,26 +27,25 @@ class StudentCard extends StatelessWidget {
           color: isDark ? AppColors.darkCard : AppColors.lightCard,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color:
-                isDark ? AppColors.darkBorder : AppColors.lightBorder,
+            color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
           ),
         ),
         child: Row(
           children: [
+            // ─── Avatar ───
             CircleAvatar(
               radius: 22,
-              backgroundColor:
-                  AppColors.accent.withValues(alpha: 0.15),
+              backgroundColor: AppColors.accent.withValues(alpha: 0.15),
               child: Text(
-                student.name.isNotEmpty
-                    ? student.name[0].toUpperCase()
-                    : '?',
+                student.name.isNotEmpty ? student.name[0].toUpperCase() : '?',
                 style: AppTypography.labelLarge.copyWith(
                   color: AppColors.accent,
                 ),
               ),
             ),
             const SizedBox(width: 12),
+
+            // ─── Name + chips ───
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -52,13 +53,10 @@ class StudentCard extends StatelessWidget {
                   Text(
                     student.name,
                     style: AppTypography.labelLarge.copyWith(
-                      color: isDark
-                          ? AppColors.darkText
-                          : AppColors.lightText,
+                      color: isDark ? AppColors.darkText : AppColors.lightText,
                     ),
                   ),
                   const SizedBox(height: 4),
-                  // ─── Class + Level display ───
                   Row(
                     children: [
                       _Chip(
@@ -77,12 +75,57 @@ class StudentCard extends StatelessWidget {
                 ],
               ),
             ),
-            Icon(
-              Icons.chevron_right_rounded,
-              color: isDark
-                  ? AppColors.darkTextHint
-                  : AppColors.lightTextHint,
-            ),
+
+            // ─── 3-dot popup menu ───
+            if (onDelete != null)
+              PopupMenuButton<String>(
+                icon: Icon(
+                  Icons.more_vert_rounded,
+                  size: 20,
+                  color:
+                      isDark
+                          ? AppColors.darkTextSecondary
+                          : AppColors.lightTextSecondary,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                color: isDark ? AppColors.darkCard : AppColors.lightCard,
+                // Prevent the tap from bubbling up to GestureDetector
+                onSelected: (value) {
+                  if (value == 'delete') onDelete!();
+                },
+                itemBuilder:
+                    (_) => [
+                      PopupMenuItem<String>(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.delete_outline_rounded,
+                              color: AppColors.error,
+                              size: 18,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Delete',
+                              style: AppTypography.labelLarge.copyWith(
+                                color: AppColors.error,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+              )
+            else
+              Icon(
+                Icons.chevron_right_rounded,
+                color:
+                    isDark
+                        ? AppColors.darkTextSecondary
+                        : AppColors.lightTextSecondary,
+              ),
           ],
         ),
       ),
@@ -90,6 +133,7 @@ class StudentCard extends StatelessWidget {
   }
 }
 
+// ─── Chip helper ───
 class _Chip extends StatelessWidget {
   final String label;
   final Color color;
@@ -99,16 +143,12 @@ class _Chip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding:
-          const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(5),
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
       ),
-      child: Text(
-        label,
-        style: AppTypography.caption.copyWith(color: color),
-      ),
+      child: Text(label, style: AppTypography.caption.copyWith(color: color)),
     );
   }
 }

@@ -13,14 +13,21 @@ class AttendanceModel {
   final DateTime? entryTime;
   final DateTime? exitTime;
 
-  // ─── New detailed fields ───
+  // ─── Timetable-mapped fields ───
   final String teacherId;
   final String teacherName;
   final String subject;
   final String roomId;
   final String roomName;
   final String sessionName;
+
+  /// Actual timestamp when the teacher recorded this entry
   final DateTime? recordedAt;
+
+  /// Scheduled window from the timetable (e.g. "08:00" / "09:30")
+  final String scheduledStartTime;
+  final String scheduledEndTime;
+
   final String? note;
   final DateTime createdAt;
 
@@ -41,9 +48,19 @@ class AttendanceModel {
     this.roomName = '',
     this.sessionName = '',
     this.recordedAt,
+    this.scheduledStartTime = '',
+    this.scheduledEndTime = '',
     this.note,
     required this.createdAt,
   });
+
+  // ─── Convenience getter ───
+  String get scheduledTimeRange =>
+      (scheduledStartTime.isNotEmpty && scheduledEndTime.isNotEmpty)
+          ? '$scheduledStartTime – $scheduledEndTime'
+          : sessionName.isNotEmpty
+          ? sessionName
+          : '';
 
   factory AttendanceModel.fromFirestore(DocumentSnapshot doc) {
     final raw = doc.data() as Map<String, dynamic>;
@@ -76,6 +93,8 @@ class AttendanceModel {
       roomName: raw['roomName']?.toString() ?? '',
       sessionName: raw['sessionName']?.toString() ?? '',
       recordedAt: (raw['recordedAt'] as Timestamp?)?.toDate(),
+      scheduledStartTime: raw['scheduledStartTime']?.toString() ?? '',
+      scheduledEndTime: raw['scheduledEndTime']?.toString() ?? '',
       note: raw['note']?.toString(),
       createdAt: (raw['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
@@ -101,22 +120,24 @@ class AttendanceModel {
           recordedAt != null
               ? Timestamp.fromDate(recordedAt!)
               : FieldValue.serverTimestamp(),
+      'scheduledStartTime': scheduledStartTime,
+      'scheduledEndTime': scheduledEndTime,
       'note': note ?? '',
       'createdAt': Timestamp.fromDate(createdAt),
     };
   }
 
-  // ─── Human readable summary ───
+  // ─── Human-readable summary ───
   String get summary {
     final parts = <String>[];
-    if (sessionName.isNotEmpty) parts.add(sessionName);
-    if (teacherName.isNotEmpty) parts.add('recorded by $teacherName');
+    if (subject.isNotEmpty) parts.add(subject);
+    if (teacherName.isNotEmpty) parts.add('with $teacherName');
+    if (scheduledTimeRange.isNotEmpty) parts.add('($scheduledTimeRange)');
+    if (roomName.isNotEmpty) parts.add('in $roomName');
     if (recordedAt != null) {
-      final time =
+      final t =
           '${recordedAt!.hour.toString().padLeft(2, '0')}:${recordedAt!.minute.toString().padLeft(2, '0')}';
-      final date2 =
-          '${recordedAt!.day.toString().padLeft(2, '0')}/${recordedAt!.month.toString().padLeft(2, '0')}/${recordedAt!.year}';
-      parts.add('at $time on $date2');
+      parts.add('• recorded at $t');
     }
     return parts.join(' ');
   }

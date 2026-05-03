@@ -186,12 +186,6 @@ class AdminAttendanceByClassScreen extends ConsumerWidget {
                                                   AttendanceDetailCard(
                                                     record: record,
                                                     isDark: isDark,
-                                                    onTap:
-                                                        () => context.push(
-                                                          AppRoutes
-                                                              .adminAttendanceEdit,
-                                                          extra: record,
-                                                        ),
                                                   ),
                                                 ],
                                               ),

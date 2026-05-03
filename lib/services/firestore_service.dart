@@ -94,6 +94,32 @@ class FirestoreService {
     await _firestore.collection('students').doc(studentId).delete();
   }
 
+  /// Deletes student doc + user doc in a batch.
+  /// Firebase Auth account deletion must be done server-side (Cloud Function)
+  /// or by the user themselves — client SDK cannot delete other accounts.
+  /// This handles all Firestore cleanup atomically.
+  Future<void> deleteStudentCascade(String studentId) async {
+    final batch = _firestore.batch();
+
+    // 1. Delete students/{studentId}
+    batch.delete(_firestore.collection('students').doc(studentId));
+
+    // 2. Delete users/{studentId}  (same UID used for both docs)
+    batch.delete(_firestore.collection('users').doc(studentId));
+
+    // 3. (Optional) Delete attendance records for this student
+    //    Uncomment if you want full cleanup — be aware of cost on large datasets
+    // final attendance = await _firestore
+    //     .collection('attendance')
+    //     .where('studentId', isEqualTo: studentId)
+    //     .get();
+    // for (final doc in attendance.docs) {
+    //   batch.delete(doc.reference);
+    // }
+
+    await batch.commit();
+  }
+
   Future<void> updateUser(String userId, Map<String, dynamic> data) async {
     await _firestore.collection('users').doc(userId).update(data);
   }

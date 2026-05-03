@@ -16,7 +16,6 @@ class StudentAttendanceStatsScreen extends ConsumerStatefulWidget {
 
 class _StudentAttendanceStatsScreenState
     extends ConsumerState<StudentAttendanceStatsScreen> {
-  // ─── Filter: all / absent / late / present ───
   String _filter = 'all';
 
   @override
@@ -64,7 +63,6 @@ class _StudentAttendanceStatsScreenState
               final total = list.length;
               final rate = total > 0 ? ((present / total) * 100).toInt() : 0;
 
-              // ─── Apply filter ───
               final filtered =
                   _filter == 'all'
                       ? list
@@ -72,102 +70,73 @@ class _StudentAttendanceStatsScreenState
 
               return Column(
                 children: [
-                  // ─── Stats summary ───
-                  SingleChildScrollView(
+                  // ─── Summary stats ───
+                  Container(
+                    margin: const EdgeInsets.all(16),
                     padding: const EdgeInsets.all(16),
-                    child: Column(
+                    decoration: BoxDecoration(
+                      color: isDark ? AppColors.darkCard : AppColors.lightCard,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color:
+                            isDark
+                                ? AppColors.darkBorder
+                                : AppColors.lightBorder,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
-                        // ─── Rate card ───
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                AppColors.studentColor.withValues(alpha: 0.8),
-                                AppColors.studentColor,
-                              ],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      '$rate%',
-                                      style: AppTypography.displayLarge
-                                          .copyWith(
-                                            color: Colors.white,
-                                            fontSize: 48,
-                                          ),
-                                    ),
-                                    Text(
-                                      'Attendance Rate',
-                                      style: AppTypography.bodySmall.copyWith(
-                                        color: Colors.white70,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Column(
-                                children: [
-                                  _MiniStat('Present', present, Colors.white),
-                                  _MiniStat('Absent', absent, Colors.white70),
-                                  _MiniStat('Late', late, Colors.white60),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-
-                        // ─── Filter chips ───
-                        SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: [
-                              _FilterChip(
-                                label: 'All ($total)',
-                                isActive: _filter == 'all',
-                                color: AppColors.info,
-                                onTap: () => setState(() => _filter = 'all'),
-                              ),
-                              const SizedBox(width: 8),
-                              _FilterChip(
-                                label: 'Absent ($absent)',
-                                isActive: _filter == 'absent',
-                                color: AppColors.absent,
-                                onTap: () => setState(() => _filter = 'absent'),
-                              ),
-                              const SizedBox(width: 8),
-                              _FilterChip(
-                                label: 'Late ($late)',
-                                isActive: _filter == 'late',
-                                color: AppColors.late,
-                                onTap: () => setState(() => _filter = 'late'),
-                              ),
-                              const SizedBox(width: 8),
-                              _FilterChip(
-                                label: 'Present ($present)',
-                                isActive: _filter == 'present',
-                                color: AppColors.present,
-                                onTap:
-                                    () => setState(() => _filter = 'present'),
-                              ),
-                            ],
-                          ),
-                        ),
+                        _MiniStat('Present', present, AppColors.present),
+                        _MiniStat('Absent', absent, AppColors.absent),
+                        _MiniStat('Late', late, AppColors.late),
+                        _MiniStat('Rate', rate, AppColors.info, suffix: '%'),
                       ],
                     ),
                   ),
 
-                  // ─── Attendance list ───
+                  // ─── Filter chips ───
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          _FilterChip(
+                            label: 'All ($total)',
+                            isActive: _filter == 'all',
+                            color: AppColors.accent,
+                            onTap: () => setState(() => _filter = 'all'),
+                          ),
+                          const SizedBox(width: 8),
+                          _FilterChip(
+                            label: 'Present ($present)',
+                            isActive: _filter == 'present',
+                            color: AppColors.present,
+                            onTap: () => setState(() => _filter = 'present'),
+                          ),
+                          const SizedBox(width: 8),
+                          _FilterChip(
+                            label: 'Absent ($absent)',
+                            isActive: _filter == 'absent',
+                            color: AppColors.absent,
+                            onTap: () => setState(() => _filter = 'absent'),
+                          ),
+                          const SizedBox(width: 8),
+                          _FilterChip(
+                            label: 'Late ($late)',
+                            isActive: _filter == 'late',
+                            color: AppColors.late,
+                            onTap: () => setState(() => _filter = 'late'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // ─── Records list ───
                   Expanded(
                     child:
                         filtered.isEmpty
@@ -204,7 +173,7 @@ class _StudentAttendanceStatsScreenState
 }
 
 // ─────────────────────────────────────────
-//  ATTENDANCE DETAIL CARD
+//  ATTENDANCE DETAIL CARD — all 5 fields
 // ─────────────────────────────────────────
 class _AttendanceDetailCard extends StatelessWidget {
   final AttendanceModel record;
@@ -215,14 +184,19 @@ class _AttendanceDetailCard extends StatelessWidget {
   String _formatDisplayDate(String dateStr) {
     try {
       final parts = dateStr.split('-');
-      if (parts.length == 3) {
-        return '${parts[2]}/${parts[1]}/${parts[0]}';
-      }
+      if (parts.length == 3) return '${parts[2]}/${parts[1]}/${parts[0]}';
       return dateStr;
     } catch (_) {
       return dateStr;
     }
   }
+
+  bool get _hasDetails =>
+      record.subject.isNotEmpty ||
+      record.teacherName.isNotEmpty ||
+      record.roomName.isNotEmpty ||
+      record.recordedAt != null ||
+      record.scheduledTimeRange.isNotEmpty;
 
   @override
   Widget build(BuildContext context) {
@@ -244,7 +218,7 @@ class _AttendanceDetailCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ─── Top row ───
+          // ─── Header: date + status badge ───
           Row(
             children: [
               Container(
@@ -264,7 +238,7 @@ class _AttendanceDetailCard extends StatelessWidget {
                   size: 20,
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -274,14 +248,10 @@ class _AttendanceDetailCard extends StatelessWidget {
                       style: AppTypography.labelLarge.copyWith(
                         color:
                             isDark ? AppColors.darkText : AppColors.lightText,
-                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                    if (record.recordedAt != null)
-                      Text(
-                        DateFormat('HH:mm').format(record.recordedAt!),
-                        style: AppTypography.caption,
-                      ),
+                    if (record.className.isNotEmpty)
+                      Text(record.className, style: AppTypography.caption),
                   ],
                 ),
               ),
@@ -289,11 +259,8 @@ class _AttendanceDetailCard extends StatelessWidget {
             ],
           ),
 
-          // ─── Details section ───
-          if (record.sessionName.isNotEmpty ||
-              record.subject.isNotEmpty ||
-              record.teacherName.isNotEmpty ||
-              record.roomName.isNotEmpty) ...[
+          // ─── 5-field detail grid ───
+          if (_hasDetails) ...[
             const SizedBox(height: 10),
             Container(
               width: double.infinity,
@@ -308,57 +275,88 @@ class _AttendanceDetailCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (record.sessionName.isNotEmpty)
-                    _DetailRow(
-                      icon: Icons.event_note_rounded,
-                      label: 'Session',
-                      value: record.sessionName,
-                      color: AppColors.accent,
-                      isDark: isDark,
-                    ),
-                  if (record.subject.isNotEmpty)
-                    _DetailRow(
-                      icon: Icons.menu_book_rounded,
-                      label: 'Subject',
-                      value: record.subject,
-                      color: AppColors.info,
-                      isDark: isDark,
-                    ),
-                  if (record.teacherName.isNotEmpty)
-                    _DetailRow(
-                      icon: Icons.person_rounded,
-                      label: 'Recorded by',
-                      value: record.teacherName,
-                      color: AppColors.teacherColor,
-                      isDark: isDark,
-                    ),
-                  if (record.roomName.isNotEmpty)
-                    _DetailRow(
-                      icon: Icons.meeting_room_rounded,
-                      label: 'Room',
-                      value: record.roomName,
-                      color: AppColors.success,
-                      isDark: isDark,
-                    ),
+                  // ─── Row 1: Subject + Teacher ───
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _FieldTile(
+                          icon: Icons.menu_book_rounded,
+                          label: 'Subject',
+                          value:
+                              record.subject.isNotEmpty ? record.subject : '—',
+                          color: AppColors.info,
+                          isDark: isDark,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _FieldTile(
+                          icon: Icons.person_rounded,
+                          label: 'Teacher',
+                          value:
+                              record.teacherName.isNotEmpty
+                                  ? record.teacherName
+                                  : '—',
+                          color: AppColors.teacherColor,
+                          isDark: isDark,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+
+                  // ─── Row 2: Room + Scheduled Class Time ───
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _FieldTile(
+                          icon: Icons.meeting_room_rounded,
+                          label: 'Room',
+                          value:
+                              record.roomName.isNotEmpty
+                                  ? record.roomName
+                                  : '—',
+                          color: AppColors.success,
+                          isDark: isDark,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _FieldTile(
+                          icon: Icons.schedule_rounded,
+                          label: 'Scheduled Time',
+                          value:
+                              record.scheduledTimeRange.isNotEmpty
+                                  ? record.scheduledTimeRange
+                                  : '—',
+                          color: AppColors.accent,
+                          isDark: isDark,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+
+                  // ─── Row 3: Time of Absence (full width) ───
+                  _FieldTile(
+                    icon: Icons.access_time_filled_rounded,
+                    label: 'Time of Absence',
+                    value:
+                        record.recordedAt != null
+                            ? DateFormat(
+                              'HH:mm  –  dd/MM/yyyy',
+                            ).format(record.recordedAt!)
+                            : record.entryTime != null
+                            ? DateFormat(
+                              'HH:mm  –  dd/MM/yyyy',
+                            ).format(record.entryTime!)
+                            : '—',
+                    color: statusColor,
+                    isDark: isDark,
+                    fullWidth: true,
+                  ),
                 ],
               ),
-            ),
-          ],
-
-          if (record.note != null && record.note!.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                const Icon(
-                  Icons.note_rounded,
-                  size: 12,
-                  color: AppColors.warning,
-                ),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(record.note!, style: AppTypography.caption),
-                ),
-              ],
             ),
           ],
         ],
@@ -367,69 +365,98 @@ class _AttendanceDetailCard extends StatelessWidget {
   }
 }
 
-class _DetailRow extends StatelessWidget {
+// ─────────────────────────────────────────
+//  FIELD TILE
+// ─────────────────────────────────────────
+class _FieldTile extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
   final Color color;
   final bool isDark;
+  final bool fullWidth;
 
-  const _DetailRow({
+  const _FieldTile({
     required this.icon,
     required this.label,
     required this.value,
     required this.color,
     required this.isDark,
+    this.fullWidth = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
+    final tile = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.18)),
+      ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 12, color: color),
+          Icon(icon, size: 14, color: color),
           const SizedBox(width: 6),
-          Text(
-            '$label: ',
-            style: AppTypography.caption.copyWith(
-              color:
-                  isDark
-                      ? AppColors.darkTextSecondary
-                      : AppColors.lightTextSecondary,
-            ),
-          ),
           Expanded(
-            child: Text(
-              value,
-              style: AppTypography.labelSmall.copyWith(
-                color: isDark ? AppColors.darkText : AppColors.lightText,
-              ),
-              overflow: TextOverflow.ellipsis,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: AppTypography.caption.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: AppTypography.labelSmall.copyWith(
+                    color: isDark ? AppColors.darkText : AppColors.lightText,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+              ],
             ),
           ),
         ],
       ),
     );
+    return fullWidth ? SizedBox(width: double.infinity, child: tile) : tile;
   }
 }
 
+// ─────────────────────────────────────────
+//  MINI STAT
+// ─────────────────────────────────────────
 class _MiniStat extends StatelessWidget {
   final String label;
   final int value;
   final Color color;
+  final String suffix;
 
-  const _MiniStat(this.label, this.value, this.color);
+  const _MiniStat(this.label, this.value, this.color, {this.suffix = ''});
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      '$label: $value',
-      style: AppTypography.caption.copyWith(color: color),
+    return Column(
+      children: [
+        Text(
+          '$value$suffix',
+          style: AppTypography.headingSmall.copyWith(color: color),
+        ),
+        Text(label, style: AppTypography.caption),
+      ],
     );
   }
 }
 
+// ─────────────────────────────────────────
+//  FILTER CHIP
+// ─────────────────────────────────────────
 class _FilterChip extends StatelessWidget {
   final String label;
   final bool isActive;

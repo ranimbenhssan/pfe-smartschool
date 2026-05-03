@@ -148,11 +148,6 @@ class TeacherAttendanceByDateScreen extends ConsumerWidget {
                                       AttendanceDetailCard(
                                         record: record,
                                         isDark: isDark,
-                                        onTap:
-                                            () => context.push(
-                                              AppRoutes.teacherAttendanceEdit,
-                                              extra: record,
-                                            ),
                                       ),
                                     ],
                                   ),

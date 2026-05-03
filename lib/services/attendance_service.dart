@@ -7,14 +7,23 @@ final attendanceServiceProvider = Provider<AttendanceService>((ref) {
 });
 
 class AttendanceService {
-  final FirebaseFirestore _db = FirebaseFirestore.instance;  // ← must be inside class
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  String _formatDate(DateTime date) {                         // ← must be inside class
+  String _formatDate(DateTime date) {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
 
   String _getDayName(int weekday) {
-    const days = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    const days = [
+      '',
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
+    ];
     return days[weekday];
   }
 
@@ -24,10 +33,10 @@ class AttendanceService {
         .where('isRecognized', isEqualTo: false)
         .snapshots()
         .asyncMap((snap) async {
-      for (final doc in snap.docs) {
-        await _processRfidLog(doc.id, doc.data());
-      }
-    });
+          for (final doc in snap.docs) {
+            await _processRfidLog(doc.id, doc.data());
+          }
+        });
   }
 
   Future<void> _processRfidLog(
@@ -39,11 +48,12 @@ class AttendanceService {
       final direction = logData['direction'] as String? ?? '';
       if (rfidTag.isEmpty) return;
 
-      final studentSnap = await _db
-          .collection('students')
-          .where('rfidTag', isEqualTo: rfidTag)
-          .limit(1)
-          .get();
+      final studentSnap =
+          await _db
+              .collection('students')
+              .where('rfidTag', isEqualTo: rfidTag)
+              .limit(1)
+              .get();
 
       if (studentSnap.docs.isEmpty) return;
 
@@ -58,7 +68,11 @@ class AttendanceService {
 
       if (direction.toUpperCase() == 'IN') {
         await _markAttendanceFromData(studentDoc.id, studentData);
-        await _checkAIFlags(studentDoc.id, studentData['name'] ?? '', studentData['classId'] ?? '');
+        await _checkAIFlags(
+          studentDoc.id,
+          studentData['name'] ?? '',
+          studentData['classId'] ?? '',
+        );
       } else if (direction.toUpperCase() == 'OUT') {
         await _markExit(studentDoc.id);
       }
@@ -74,12 +88,13 @@ class AttendanceService {
     final now = DateTime.now();
     final dateStr = _formatDate(now);
 
-    final existing = await _db
-        .collection('attendance')
-        .where('studentId', isEqualTo: studentId)
-        .where('date', isEqualTo: dateStr)
-        .limit(1)
-        .get();
+    final existing =
+        await _db
+            .collection('attendance')
+            .where('studentId', isEqualTo: studentId)
+            .where('date', isEqualTo: dateStr)
+            .limit(1)
+            .get();
 
     if (existing.docs.isNotEmpty) return;
 
@@ -87,7 +102,7 @@ class AttendanceService {
     final diffMinutes = now.difference(schoolStart).inMinutes;
     final status = diffMinutes > 15 ? 'late' : 'present';
 
-    // ─── Find timetable entry ───
+    // ─── Find matching timetable entry ───
     final classId = studentData['classId']?.toString() ?? '';
     final dayName = _getDayName(now.weekday);
     final currentTime =
@@ -99,18 +114,23 @@ class AttendanceService {
     String roomId = '';
     String roomName = '';
     String sessionName = '';
+    String scheduledStartTime = '';
+    String scheduledEndTime = '';
 
     if (classId.isNotEmpty) {
-      final timetableSnap = await _db
-          .collection('timetable')
-          .where('classId', isEqualTo: classId)
-          .where('dayOfWeek', isEqualTo: dayName)
-          .get();
+      final timetableSnap =
+          await _db
+              .collection('timetable')
+              .where('classId', isEqualTo: classId)
+              .where('dayOfWeek', isEqualTo: dayName)
+              .get();
 
       for (final doc in timetableSnap.docs) {
         final data = doc.data();
         final start = data['startTime']?.toString() ?? '';
         final end = data['endTime']?.toString() ?? '';
+        if (start.isEmpty || end.isEmpty) continue;
+
         if (currentTime.compareTo(start) >= 0 &&
             currentTime.compareTo(end) <= 0) {
           teacherId = data['teacherId']?.toString() ?? '';
@@ -118,7 +138,10 @@ class AttendanceService {
           subject = data['subject']?.toString() ?? '';
           roomId = data['roomId']?.toString() ?? '';
           roomName = data['roomName']?.toString() ?? '';
-          sessionName = '${data['subject'] ?? ''} Session';
+          scheduledStartTime = start;
+          scheduledEndTime = end;
+          sessionName =
+              '${data['subject'] ?? ''} ($scheduledStartTime – $scheduledEndTime)';
           break;
         }
       }
@@ -133,12 +156,15 @@ class AttendanceService {
       'status': status,
       'entryTime': Timestamp.fromDate(now),
       'exitTime': null,
+      // ─── Timetable-mapped fields ───
       'teacherId': teacherId,
       'teacherName': teacherName,
       'subject': subject,
       'roomId': roomId,
       'roomName': roomName,
       'sessionName': sessionName,
+      'scheduledStartTime': scheduledStartTime,
+      'scheduledEndTime': scheduledEndTime,
       'recordedAt': Timestamp.fromDate(now),
       'note': '',
       'createdAt': FieldValue.serverTimestamp(),
@@ -147,12 +173,13 @@ class AttendanceService {
 
   Future<void> _markExit(String studentId) async {
     final dateStr = _formatDate(DateTime.now());
-    final snap = await _db
-        .collection('attendance')
-        .where('studentId', isEqualTo: studentId)
-        .where('date', isEqualTo: dateStr)
-        .limit(1)
-        .get();
+    final snap =
+        await _db
+            .collection('attendance')
+            .where('studentId', isEqualTo: studentId)
+            .where('date', isEqualTo: dateStr)
+            .limit(1)
+            .get();
     if (snap.docs.isEmpty) return;
     await snap.docs.first.reference.update({
       'exitTime': FieldValue.serverTimestamp(),
@@ -164,21 +191,20 @@ class AttendanceService {
     String studentName,
     String classId,
   ) async {
-    final thirtyDaysAgo =
-        DateTime.now().subtract(const Duration(days: 30));
-    final snap = await _db
-        .collection('attendance')
-        .where('studentId', isEqualTo: studentId)
-        .where('createdAt',
-            isGreaterThanOrEqualTo:
-                Timestamp.fromDate(thirtyDaysAgo))
-        .get();
+    final thirtyDaysAgo = DateTime.now().subtract(const Duration(days: 30));
+    final snap =
+        await _db
+            .collection('attendance')
+            .where('studentId', isEqualTo: studentId)
+            .where(
+              'createdAt',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(thirtyDaysAgo),
+            )
+            .get();
 
     final records = snap.docs.map((d) => d.data()).toList();
-    final absent =
-        records.where((r) => r['status'] == 'absent').length;
-    final late =
-        records.where((r) => r['status'] == 'late').length;
+    final absent = records.where((r) => r['status'] == 'absent').length;
+    final late = records.where((r) => r['status'] == 'late').length;
 
     String? flagType;
     String details = '';
@@ -191,20 +217,20 @@ class AttendanceService {
       riskScore = (absent / 30).clamp(0, 1);
     } else if (late >= 4) {
       flagType = 'latePattern';
-      details =
-          '$studentName has arrived late $late times in the last 30 days';
+      details = '$studentName has arrived late $late times in the last 30 days';
       riskScore = (late / 30).clamp(0, 1);
     }
 
     if (flagType == null) return;
 
-    final existing = await _db
-        .collection('ai_flags')
-        .where('studentId', isEqualTo: studentId)
-        .where('type', isEqualTo: flagType)
-        .where('resolved', isEqualTo: false)
-        .limit(1)
-        .get();
+    final existing =
+        await _db
+            .collection('ai_flags')
+            .where('studentId', isEqualTo: studentId)
+            .where('type', isEqualTo: flagType)
+            .where('resolved', isEqualTo: false)
+            .limit(1)
+            .get();
 
     if (existing.docs.isNotEmpty) return;
 

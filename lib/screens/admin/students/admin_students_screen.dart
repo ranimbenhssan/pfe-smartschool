@@ -45,24 +45,26 @@ class AdminStudentsScreen extends ConsumerWidget {
           ),
 
           // ─── Student Count ───
-          students.whenData((list) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    children: [
-                      Text(
-                        '${list.length} students',
-                        style: AppTypography.bodySmall.copyWith(
-                          color:
-                              isDark
-                                  ? AppColors.darkTextSecondary
-                                  : AppColors.lightTextSecondary,
-                        ),
+          students
+                  .whenData(
+                    (list) => Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                        children: [
+                          Text(
+                            '${list.length} students',
+                            style: AppTypography.bodySmall.copyWith(
+                              color:
+                                  isDark
+                                      ? AppColors.darkTextSecondary
+                                      : AppColors.lightTextSecondary,
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                );
-              }).value ??
+                    ),
+                  )
+                  .value ??
               const SizedBox.shrink(),
 
           const SizedBox(height: 8),
@@ -99,6 +101,14 @@ class AdminStudentsScreen extends ConsumerWidget {
                                     () => context.push(
                                       '${AppRoutes.adminStudentProfile}/${student.id}',
                                     ),
+                                // ─── Wire delete callback ───
+                                onDelete:
+                                    () => _confirmDelete(
+                                      context,
+                                      ref,
+                                      student.id,
+                                      student.name,
+                                    ),
                               );
                             },
                           ),
@@ -114,6 +124,7 @@ class AdminStudentsScreen extends ConsumerWidget {
     );
   }
 
+  // ─── Confirm Delete Dialog ───
   void _confirmDelete(
     BuildContext context,
     WidgetRef ref,
@@ -124,8 +135,13 @@ class AdminStudentsScreen extends ConsumerWidget {
       context: context,
       builder:
           (_) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
             title: const Text('Delete Student'),
-            content: Text('Are you sure you want to delete $name?'),
+            content: Text(
+              'This will permanently remove $name and all their data. This cannot be undone.',
+            ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
@@ -134,13 +150,26 @@ class AdminStudentsScreen extends ConsumerWidget {
               TextButton(
                 onPressed: () async {
                   Navigator.pop(context);
-                  await ref
-                      .read(firestoreServiceProvider)
-                      .deleteStudent(studentId);
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Student deleted')),
-                    );
+                  try {
+                    // ─── Use cascade delete (students + users docs) ───
+                    await ref
+                        .read(firestoreServiceProvider)
+                        .deleteStudentCascade(studentId);
+
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('$name deleted'),
+                          backgroundColor: AppColors.error,
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+                    }
                   }
                 },
                 child: const Text(
