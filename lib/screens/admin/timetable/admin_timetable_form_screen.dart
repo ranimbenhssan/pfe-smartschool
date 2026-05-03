@@ -167,8 +167,8 @@ class _AdminTimetableFormScreenState
                           list.map((c) {
                             return DropdownMenuItem(
                               value: c.id,
-                              child: Text(c.name),
-                              onTap: () => _selectedClassName = c.name,
+                              child: Text(c.getFullName()),
+                              onTap: () => _selectedClassName = c.getFullName(),
                             );
                           }).toList(),
                       onChanged:

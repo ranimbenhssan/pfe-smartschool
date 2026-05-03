@@ -6,14 +6,19 @@ class AttendanceModel {
   final String id;
   final String studentId;
   final String studentName;
+
+  /// Firestore class document id
   final String classId;
+
+  /// Combined display name — always "3 IOT 1" format via ClassModel.getFullName()
   final String className;
+
   final String date;
   final AttendanceStatus status;
   final DateTime? entryTime;
   final DateTime? exitTime;
 
-  // ─── Timetable-mapped context fields ───
+  // ─── Timetable context fields (absent / late records only) ───
   final String teacherId;
   final String teacherName;
   final String subject;
@@ -21,11 +26,13 @@ class AttendanceModel {
   final String roomName;
   final String sessionName;
 
-  /// Scheduled window from timetable — "08:00" / "09:30"
+  /// Scheduled class start — "08:00"
   final String scheduledStartTime;
+
+  /// Scheduled class end   — "09:30"
   final String scheduledEndTime;
 
-  /// Exact timestamp the teacher tapped a status (= time of absence)
+  /// Timestamp when the teacher recorded this entry (time of absence)
   final DateTime? recordedAt;
 
   final String? note;
@@ -54,13 +61,12 @@ class AttendanceModel {
     required this.createdAt,
   });
 
-  /// Returns "08:00 – 09:30" when fields are set.
-  /// Falls back to parsing sessionName for records written before this fix.
+  /// "08:00 – 09:30"
+  /// Falls back to regex-parsing sessionName for legacy records.
   String get scheduledTimeRange {
     if (scheduledStartTime.isNotEmpty && scheduledEndTime.isNotEmpty) {
       return '$scheduledStartTime – $scheduledEndTime';
     }
-    // Backward-compat: extract times from "Math (08:00 - 09:30)" or "08:00 – 09:30"
     final match = RegExp(
       r'(\d{2}:\d{2})\s*[–\-]\s*(\d{2}:\d{2})',
     ).firstMatch(sessionName);

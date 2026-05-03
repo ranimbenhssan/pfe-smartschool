@@ -323,7 +323,7 @@ class FirestoreService {
   //  ATTENDANCE
   // ─────────────────────────────────────────
 
-  // Get attendance by date (all classes)
+  /// All records for a date across all classes (admin dashboard)
   Stream<List<AttendanceModel>> getAttendanceByDate(String date) {
     return _firestore
         .collection('attendance')
@@ -337,23 +337,9 @@ class FirestoreService {
         );
   }
 
-  // Get present count by date (sum across classes)
-  Stream<int> getPresentCountByDate(String date) {
-    return _firestore
-        .collection('attendance_counts')
-        .where('date', isEqualTo: date)
-        .snapshots()
-        .map((snap) {
-          var total = 0;
-          for (final doc in snap.docs) {
-            final data = doc.data();
-            total += (data['presentCount'] as num?)?.toInt() ?? 0;
-          }
-          return total;
-        });
-  }
-
-  // Get attendance by date and class
+  /// Records for a specific date + class (admin attendance-by-class screen)
+  /// Queries by classId (the Firestore document ID) — always correct regardless
+  /// of className format changes.
   Stream<List<AttendanceModel>> getAttendanceByDateAndClass(
     String date,
     String classId,
@@ -371,16 +357,34 @@ class FirestoreService {
         );
   }
 
-  // Get attendance by student (last 30 days)
+  /// Present count for a date (sum of class counters).
+  Stream<int> getPresentCountByDate(String date) {
+    return _firestore
+        .collection('attendance_counts')
+        .where('date', isEqualTo: date)
+        .snapshots()
+        .map((snap) {
+          var total = 0;
+          for (final doc in snap.docs) {
+            final data = doc.data();
+            total += (data['presentCount'] as num?)?.toInt() ?? 0;
+          }
+          return total;
+        });
+  }
+
+  /// Absence/late records for a student (last 30 days).
+  ///
+  /// IMPORTANT: only 'absent' and 'late' documents exist in the collection.
+  /// 'present' is tracked via students/{id}.presenceCount (counter).
+  /// The whereIn filter is defensive — it also prevents accidentally surfacing
+  /// any legacy 'present' docs that may exist from before the refactor.
   Stream<List<AttendanceModel>> getAttendanceByStudent(String studentId) {
     final thirtyDaysAgo = DateTime.now().subtract(const Duration(days: 30));
     return _firestore
         .collection('attendance')
         .where('studentId', isEqualTo: studentId)
-        .where(
-          'status',
-          whereIn: ['absent', 'late'],
-        ) // ← no 'present' docs exist
+        .where('status', whereIn: ['absent', 'late'])
         .where(
           'createdAt',
           isGreaterThanOrEqualTo: Timestamp.fromDate(thirtyDaysAgo),
@@ -395,7 +399,22 @@ class FirestoreService {
         );
   }
 
-  // Update attendance
+  /// All absence/late records for a class (teacher stats / admin reports)
+  Stream<List<AttendanceModel>> getAttendanceByClass(String classId) {
+    return _firestore
+        .collection('attendance')
+        .where('classId', isEqualTo: classId)
+        .where('status', whereIn: ['absent', 'late'])
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map(
+          (snap) =>
+              snap.docs
+                  .map((doc) => AttendanceModel.fromFirestore(doc))
+                  .toList(),
+        );
+  }
+
   Future<void> updateAttendance(
     String attendanceId,
     Map<String, dynamic> data,
@@ -403,7 +422,6 @@ class FirestoreService {
     await _firestore.collection('attendance').doc(attendanceId).update(data);
   }
 
-  // Set attendance
   Future<void> setAttendance(AttendanceModel attendance) async {
     await _firestore
         .collection('attendance')

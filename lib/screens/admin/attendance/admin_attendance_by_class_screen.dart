@@ -6,6 +6,7 @@ import '../../../theme/theme.dart';
 import '../../../widgets/widgets.dart';
 import '../../../providers/providers.dart';
 import '../../../navigation/app_routes.dart';
+import '../../../models/models.dart';
 
 class AdminAttendanceByClassScreen extends ConsumerWidget {
   const AdminAttendanceByClassScreen({super.key});
@@ -27,7 +28,7 @@ class AdminAttendanceByClassScreen extends ConsumerWidget {
       ),
       body: Column(
         children: [
-          // ─── Class Selector ───
+          // ─── Class selector dropdown ───
           Padding(
             padding: const EdgeInsets.all(16),
             child: classes.when(
@@ -65,14 +66,21 @@ class AdminAttendanceByClassScreen extends ConsumerWidget {
                         dropdownColor:
                             isDark ? AppColors.darkCard : AppColors.lightCard,
                         items:
-                            list
-                                .map(
-                                  (c) => DropdownMenuItem(
-                                    value: c.id,
-                                    child: Text(c.name),
+                            list.map((c) {
+                              return DropdownMenuItem(
+                                value: c.id,
+                                // ─── FIX: use getFullName() → "3 IOT 1" ───
+                                child: Text(
+                                  c.getFullName(),
+                                  style: AppTypography.bodyMedium.copyWith(
+                                    color:
+                                        isDark
+                                            ? AppColors.darkText
+                                            : AppColors.lightText,
                                   ),
-                                )
-                                .toList(),
+                                ),
+                              );
+                            }).toList(),
                         onChanged:
                             (val) =>
                                 ref
@@ -84,7 +92,7 @@ class AdminAttendanceByClassScreen extends ConsumerWidget {
             ),
           ),
 
-          // ─── Attendance List ───
+          // ─── Attendance list ───
           Expanded(
             child:
                 selectedClassId == null
@@ -112,10 +120,10 @@ class AdminAttendanceByClassScreen extends ConsumerWidget {
                           data:
                               (list) =>
                                   list.isEmpty
-                                      ? const EmptyState(
+                                      ? EmptyState(
                                         title: 'No Records',
                                         message:
-                                            'No attendance for this class today',
+                                            'No attendance recorded for today in this class.',
                                         icon: Icons.event_busy_rounded,
                                       )
                                       : ListView.builder(
@@ -125,71 +133,13 @@ class AdminAttendanceByClassScreen extends ConsumerWidget {
                                         itemCount: list.length,
                                         itemBuilder: (context, index) {
                                           final record = list[index];
-                                          return GestureDetector(
+                                          return _AttendanceCard(
+                                            record: record,
+                                            isDark: isDark,
                                             onTap:
                                                 () => context.push(
-                                                  AppRoutes.adminAttendanceEdit,
-                                                  extra: record,
+                                                  '${AppRoutes.adminAttendanceEdit}/${record.id}',
                                                 ),
-                                            child: Container(
-                                              padding: const EdgeInsets.all(14),
-                                              margin: const EdgeInsets.only(
-                                                bottom: 8,
-                                              ),
-                                              decoration: BoxDecoration(
-                                                color:
-                                                    isDark
-                                                        ? AppColors.darkCard
-                                                        : AppColors.lightCard,
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
-                                                border: Border.all(
-                                                  color:
-                                                      isDark
-                                                          ? AppColors.darkBorder
-                                                          : AppColors
-                                                              .lightBorder,
-                                                ),
-                                              ),
-                                              child: Row(
-                                                children: [
-                                                  Expanded(
-                                                    child: Column(
-                                                      crossAxisAlignment:
-                                                          CrossAxisAlignment
-                                                              .start,
-                                                      children: [
-                                                        Text(
-                                                          record.studentName,
-                                                          style: AppTypography
-                                                              .labelLarge
-                                                              .copyWith(
-                                                                color:
-                                                                    isDark
-                                                                        ? AppColors
-                                                                            .darkText
-                                                                        : AppColors
-                                                                            .lightText,
-                                                              ),
-                                                        ),
-                                                        if (record.entryTime !=
-                                                            null)
-                                                          Text(
-                                                            'Entry: ${DateFormat('HH:mm').format(record.entryTime!)}',
-                                                            style:
-                                                                AppTypography
-                                                                    .caption,
-                                                          ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                  AttendanceDetailCard(
-                                                    record: record,
-                                                    isDark: isDark,
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
                                           );
                                         },
                                       ),
@@ -198,6 +148,103 @@ class AdminAttendanceByClassScreen extends ConsumerWidget {
                     ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────
+//  ATTENDANCE CARD
+// ─────────────────────────────────────────
+class _AttendanceCard extends StatelessWidget {
+  final AttendanceModel record;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  const _AttendanceCard({
+    required this.record,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final sc =
+        record.status == AttendanceStatus.late
+            ? AppColors.late
+            : AppColors.absent;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        margin: const EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.darkCard : AppColors.lightCard,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: sc.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: sc.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                record.status == AttendanceStatus.late
+                    ? Icons.watch_later_rounded
+                    : Icons.cancel_rounded,
+                color: sc,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    record.studentName,
+                    style: AppTypography.labelLarge.copyWith(
+                      color: isDark ? AppColors.darkText : AppColors.lightText,
+                    ),
+                  ),
+                  // ─── FIX: className is now "3 IOT 1" ───
+                  Text(record.className, style: AppTypography.caption),
+                  if (record.subject.isNotEmpty)
+                    Text(
+                      '${record.subject}'
+                      '${record.scheduledTimeRange.isNotEmpty ? ' · ${record.scheduledTimeRange}' : ''}',
+                      style: AppTypography.caption.copyWith(
+                        color:
+                            isDark
+                                ? AppColors.darkTextSecondary
+                                : AppColors.lightTextSecondary,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: sc.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: sc.withValues(alpha: 0.3)),
+              ),
+              child: Text(
+                record.status.name.toUpperCase(),
+                style: AppTypography.caption.copyWith(
+                  color: sc,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

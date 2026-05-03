@@ -27,6 +27,9 @@ class AttendanceService {
     return days[weekday];
   }
 
+  // ─────────────────────────────────────────
+  //  RFID LISTENER
+  // ─────────────────────────────────────────
   Stream<void> listenForRfidLogs() {
     return _db
         .collection('rfid_logs')
@@ -81,6 +84,9 @@ class AttendanceService {
     }
   }
 
+  // ─────────────────────────────────────────
+  //  MARK ATTENDANCE FROM RFID DATA
+  // ─────────────────────────────────────────
   Future<void> _markAttendanceFromData(
     String studentId,
     Map<String, dynamic> studentData,
@@ -88,6 +94,7 @@ class AttendanceService {
     final now = DateTime.now();
     final dateStr = _formatDate(now);
 
+    // Skip if already recorded today
     final existing =
         await _db
             .collection('attendance')
@@ -95,15 +102,19 @@ class AttendanceService {
             .where('date', isEqualTo: dateStr)
             .limit(1)
             .get();
-
     if (existing.docs.isNotEmpty) return;
 
     final schoolStart = DateTime(now.year, now.month, now.day, 8, 0);
     final diffMinutes = now.difference(schoolStart).inMinutes;
     final status = diffMinutes > 15 ? 'late' : 'present';
 
-    // ─── Find matching timetable entry ───
+    // ─── Resolve timetable slot for all 5 context fields ───
     final classId = studentData['classId']?.toString() ?? '';
+
+    // className is already stored in the combined format "3 IOT 1"
+    // (written by ExcelImportService._buildClassName or ClassModel.getFullName())
+    final className = studentData['className']?.toString() ?? '';
+
     final dayName = _getDayName(now.weekday);
     final currentTime =
         '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
@@ -126,58 +137,69 @@ class AttendanceService {
               .get();
 
       for (final doc in timetableSnap.docs) {
-        final data = doc.data();
-        final start = data['startTime']?.toString() ?? '';
-        final end = data['endTime']?.toString() ?? '';
+        final d = doc.data();
+        final start = d['startTime']?.toString() ?? '';
+        final end = d['endTime']?.toString() ?? '';
         if (start.isEmpty || end.isEmpty) continue;
-
         if (currentTime.compareTo(start) >= 0 &&
             currentTime.compareTo(end) <= 0) {
-          teacherId = data['teacherId']?.toString() ?? '';
-          teacherName = data['teacherName']?.toString() ?? '';
-          subject = data['subject']?.toString() ?? '';
-          roomId = data['roomId']?.toString() ?? '';
-          roomName = data['roomName']?.toString() ?? '';
+          teacherId = d['teacherId']?.toString() ?? '';
+          teacherName = d['teacherName']?.toString() ?? '';
+          subject = d['subject']?.toString() ?? '';
+          roomId = d['roomId']?.toString() ?? '';
+          roomName = d['roomName']?.toString() ?? '';
           scheduledStartTime = start;
           scheduledEndTime = end;
-          sessionName =
-              '${data['subject'] ?? ''} ($scheduledStartTime – $scheduledEndTime)';
+          // sessionName uses combined className + subject + window
+          sessionName = '$subject ($start – $end)';
           break;
         }
       }
     }
 
+    // ─────────────────────────────────────────
+    //  TWO DATA PATHS
+    //  present → increment counter, no document
+    //  absent / late → full 5-field document
+    // ─────────────────────────────────────────
     if (status == 'present') {
-      // Present → counter only, no document
       await _db.collection('students').doc(studentId).update({
         'presenceCount': FieldValue.increment(1),
       });
     } else {
-      // Absent / Late → full document with all 5 fields
+      // absent or late
       await _db.collection('attendance').add({
         'studentId': studentId,
         'studentName': studentData['name'] ?? '',
         'classId': classId,
-        'className': studentData['className'] ?? '',
+        'className': className, // "3 IOT 1"
         'date': dateStr,
-        'status': status,
-        'entryTime': Timestamp.fromDate(now),
-        'exitTime': null,
+        'status': status, // 'absent' | 'late'
+        // ── Field 1: Subject ──
+        'subject': subject,
+        // ── Field 2: Teacher ──
         'teacherId': teacherId,
         'teacherName': teacherName,
-        'subject': subject,
+        // ── Field 3: Room ──
         'roomId': roomId,
         'roomName': roomName,
-        'sessionName': sessionName,
+        // ── Field 4: Scheduled Time ──
         'scheduledStartTime': scheduledStartTime,
         'scheduledEndTime': scheduledEndTime,
+        'sessionName': sessionName,
+        // ── Field 5: Time of Absence ──
         'recordedAt': Timestamp.fromDate(now),
+        'entryTime': Timestamp.fromDate(now),
+        'exitTime': null,
         'note': '',
         'createdAt': FieldValue.serverTimestamp(),
       });
     }
   }
 
+  // ─────────────────────────────────────────
+  //  MARK EXIT
+  // ─────────────────────────────────────────
   Future<void> _markExit(String studentId) async {
     final dateStr = _formatDate(DateTime.now());
     final snap =
@@ -193,6 +215,9 @@ class AttendanceService {
     });
   }
 
+  // ─────────────────────────────────────────
+  //  AI FLAG CHECK
+  // ─────────────────────────────────────────
   Future<void> _checkAIFlags(
     String studentId,
     String studentName,
@@ -230,7 +255,7 @@ class AttendanceService {
 
     if (flagType == null) return;
 
-    final existing =
+    final existingFlag =
         await _db
             .collection('ai_flags')
             .where('studentId', isEqualTo: studentId)
@@ -238,8 +263,7 @@ class AttendanceService {
             .where('resolved', isEqualTo: false)
             .limit(1)
             .get();
-
-    if (existing.docs.isNotEmpty) return;
+    if (existingFlag.docs.isNotEmpty) return;
 
     await _db.collection('ai_flags').add({
       'studentId': studentId,
