@@ -29,6 +29,10 @@ class _AdminClassFormScreenState extends ConsumerState<AdminClassFormScreen> {
     super.initState();
     _isEditing = widget.classId != null;
     if (_isEditing) _loadClass();
+    // ─── Trigger preview rebuild on every keystroke ───
+    _levelController.addListener(() => setState(() {}));
+    _nameController.addListener(() => setState(() {}));
+    _gradeController.addListener(() => setState(() {}));
   }
 
   Future<void> _loadClass() async {
@@ -52,16 +56,51 @@ class _AdminClassFormScreenState extends ConsumerState<AdminClassFormScreen> {
     super.dispose();
   }
 
+  /// Build a temporary ClassModel from the current form values
+  /// just to use getFullName() for the preview.
+  String get _previewName {
+    final tmp = ClassModel(
+      id: '',
+      name: _nameController.text.trim(),
+      grade: _gradeController.text.trim(),
+      level: _levelController.text.trim(),
+      teacherIds: [],
+      teacherNames: [],
+      roomId: '',
+      roomName: '',
+      studentCount: 0,
+      createdAt: DateTime.now(),
+    );
+    return tmp.getFullName();
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
 
     try {
       if (_isEditing) {
+        // ─── FIX: also update the denormalized displayName field ───
+        final updatedName = _nameController.text.trim();
+        final updatedGrade = _gradeController.text.trim();
+        final updatedLevel = _levelController.text.trim();
+        final tmp = ClassModel(
+          id: widget.classId!,
+          name: updatedName,
+          grade: updatedGrade,
+          level: updatedLevel,
+          teacherIds: [],
+          teacherNames: [],
+          roomId: '',
+          roomName: '',
+          studentCount: 0,
+          createdAt: DateTime.now(),
+        );
         await ref.read(firestoreServiceProvider).updateClass(widget.classId!, {
-          'name': _nameController.text.trim(),
-          'grade': _gradeController.text.trim(),
-          'level': _levelController.text.trim(),
+          'name': updatedName,
+          'grade': updatedGrade,
+          'level': updatedLevel,
+          'displayName': tmp.getFullName(), // ← denormalized combined name
         });
       } else {
         final classModel = ClassModel(
@@ -76,6 +115,7 @@ class _AdminClassFormScreenState extends ConsumerState<AdminClassFormScreen> {
           studentCount: 0,
           createdAt: DateTime.now(),
         );
+        // toFirestore() already includes displayName: getFullName()
         await ref.read(firestoreServiceProvider).addClass(classModel);
       }
 
@@ -104,6 +144,10 @@ class _AdminClassFormScreenState extends ConsumerState<AdminClassFormScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final hasPreview =
+        _levelController.text.isNotEmpty ||
+        _nameController.text.isNotEmpty ||
+        _gradeController.text.isNotEmpty;
 
     return Scaffold(
       backgroundColor:
@@ -134,7 +178,7 @@ class _AdminClassFormScreenState extends ConsumerState<AdminClassFormScreen> {
               // ─── Class Name ───
               AppTextField(
                 label: 'Class Name *',
-                hint: 'e.g. IoT1, Réseau2',
+                hint: 'e.g. IOT, Réseau',
                 controller: _nameController,
                 prefixIcon: const Icon(Icons.class_rounded, size: 18),
                 validator:
@@ -148,43 +192,52 @@ class _AdminClassFormScreenState extends ConsumerState<AdminClassFormScreen> {
               // ─── Grade ───
               AppTextField(
                 label: 'Grade *',
-                hint: 'e.g. Grade 3, BTS',
+                hint: 'e.g. 1, 2, A',
                 controller: _gradeController,
                 prefixIcon: const Icon(Icons.grade_rounded, size: 18),
                 validator:
                     (v) => v == null || v.isEmpty ? 'Grade is required' : null,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
 
-              // ─── Preview ───
-              if (_levelController.text.isNotEmpty ||
-                  _nameController.text.isNotEmpty)
+              // ─── Live preview using getFullName() ───
+              if (hasPreview)
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
                     color: AppColors.accent.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: AppColors.accent.withValues(alpha: 0.3),
                     ),
                   ),
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(
-                        Icons.preview_rounded,
-                        color: AppColors.accent,
-                        size: 16,
-                      ),
-                      const SizedBox(width: 8),
                       Text(
-                        'Display: ${_levelController.text}${_nameController.text}',
-                        style: AppTypography.labelMedium.copyWith(
+                        'Preview',
+                        style: AppTypography.caption.copyWith(
                           color: AppColors.accent,
                         ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        // ─── FIX: uses getFullName() logic ───
+                        _previewName.isNotEmpty ? _previewName : '—',
+                        style: AppTypography.headingMedium.copyWith(
+                          color: AppColors.accent,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'This is how the class will appear across the app.',
+                        style: AppTypography.caption,
                       ),
                     ],
                   ),
                 ),
+
               const SizedBox(height: 32),
 
               AppButton(

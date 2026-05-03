@@ -4,8 +4,8 @@ import 'package:go_router/go_router.dart';
 import '../../../theme/theme.dart';
 import '../../../widgets/widgets.dart';
 import '../../../providers/providers.dart';
-import '../../../services/services.dart';
 import '../../../navigation/app_routes.dart';
+import '../../../models/models.dart';
 
 class AdminClassesScreen extends ConsumerWidget {
   const AdminClassesScreen({super.key});
@@ -52,157 +52,18 @@ class AdminClassesScreen extends ConsumerWidget {
                       itemCount: list.length,
                       itemBuilder: (context, index) {
                         final cls = list[index];
-                        return GestureDetector(
+                        return _ClassCard(
+                          cls: cls,
+                          isDark: isDark,
                           onTap:
                               () => context.push(
                                 '${AppRoutes.adminClassDetail}/${cls.id}',
                               ),
-                          child: Container(
-                            padding: const EdgeInsets.all(16),
-                            margin: const EdgeInsets.only(bottom: 12),
-                            decoration: BoxDecoration(
-                              color:
-                                  isDark
-                                      ? AppColors.darkCard
-                                      : AppColors.lightCard,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color:
-                                    isDark
-                                        ? AppColors.darkBorder
-                                        : AppColors.lightBorder,
+                          onEdit:
+                              () => context.push(
+                                '${AppRoutes.adminClassEdit}/${cls.id}',
                               ),
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 48,
-                                  height: 48,
-                                  decoration: BoxDecoration(
-                                    gradient: AppColors.primaryGradient,
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Center(
-                                    child: Text(
-                                      cls.name.isNotEmpty
-                                          ? cls.name[0].toUpperCase()
-                                          : 'C',
-                                      style: AppTypography.headingMedium
-                                          .copyWith(color: AppColors.accent),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      // --- MISE À JOUR ICI ---
-                                      Text(
-                                        cls.displayName, // "3 IoT1"
-                                        style: AppTypography.labelLarge
-                                            .copyWith(
-                                              fontWeight: FontWeight.bold,
-                                              color:
-                                                  isDark
-                                                      ? AppColors.darkText
-                                                      : AppColors.lightText,
-                                            ),
-                                      ),
-                                      const SizedBox(height: 6),
-                                      SingleChildScrollView(
-                                        scrollDirection: Axis.horizontal,
-                                        child: Row(
-                                          children: [
-                                            _Badge(cls.grade, AppColors.info),
-                                            if (cls.level.isNotEmpty) ...[
-                                              const SizedBox(width: 6),
-                                              _Badge(
-                                                'Level ${cls.level}',
-                                                AppColors.accent,
-                                              ),
-                                            ],
-                                            const SizedBox(width: 6),
-                                            _Badge(
-                                              '${cls.studentCount} students',
-                                              AppColors.success,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      // -----------------------
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        'Teacher: ${cls.teacherName.isEmpty ? 'Not assigned' : cls.teacherName}',
-                                        style: AppTypography.caption.copyWith(
-                                          color: AppColors.teacherColor,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                PopupMenuButton(
-                                  icon: Icon(
-                                    Icons.more_vert_rounded,
-                                    color:
-                                        isDark
-                                            ? AppColors.darkTextHint
-                                            : AppColors.lightTextHint,
-                                  ),
-                                  itemBuilder:
-                                      (_) => [
-                                        const PopupMenuItem(
-                                          value: 'edit',
-                                          child: Row(
-                                            children: [
-                                              Icon(
-                                                Icons.edit_rounded,
-                                                size: 16,
-                                              ),
-                                              SizedBox(width: 8),
-                                              Text('Edit'),
-                                            ],
-                                          ),
-                                        ),
-                                        const PopupMenuItem(
-                                          value: 'delete',
-                                          child: Row(
-                                            children: [
-                                              Icon(
-                                                Icons.delete_rounded,
-                                                size: 16,
-                                                color: AppColors.error,
-                                              ),
-                                              SizedBox(width: 8),
-                                              Text(
-                                                'Delete',
-                                                style: TextStyle(
-                                                  color: AppColors.error,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                  onSelected: (value) {
-                                    if (value == 'edit') {
-                                      context.push(
-                                        '${AppRoutes.adminClassEdit}/${cls.id}',
-                                      );
-                                    } else if (value == 'delete') {
-                                      _confirmDelete(
-                                        context,
-                                        ref,
-                                        cls.id,
-                                        cls.name,
-                                      );
-                                    }
-                                  },
-                                ),
-                              ],
-                            ),
-                          ),
+                          onDelete: () => _confirmDelete(context, ref, cls),
                         );
                       },
                     ),
@@ -210,23 +71,24 @@ class AdminClassesScreen extends ConsumerWidget {
       floatingActionButton: FloatingActionButton(
         onPressed: () => context.push(AppRoutes.adminClassAdd),
         backgroundColor: AppColors.accent,
-        child: const Icon(Icons.add_rounded, color: AppColors.primary),
+        child: const Icon(Icons.add_rounded, color: Colors.white),
       ),
     );
   }
 
-  void _confirmDelete(
-    BuildContext context,
-    WidgetRef ref,
-    String classId,
-    String name,
-  ) {
+  void _confirmDelete(BuildContext context, WidgetRef ref, ClassModel cls) {
     showDialog(
       context: context,
       builder:
           (_) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
             title: const Text('Delete Class'),
-            content: Text('Are you sure you want to delete $name?'),
+            // ─── FIX: use getFullName() in dialog ───
+            content: Text(
+              'Delete "${cls.getFullName()}"? This cannot be undone.',
+            ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
@@ -235,12 +97,7 @@ class AdminClassesScreen extends ConsumerWidget {
               TextButton(
                 onPressed: () async {
                   Navigator.pop(context);
-                  await ref.read(firestoreServiceProvider).deleteClass(classId);
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Class deleted')),
-                    );
-                  }
+                  await ref.read(firestoreServiceProvider).deleteClass(cls.id);
                 },
                 child: const Text(
                   'Delete',
@@ -253,30 +110,165 @@ class AdminClassesScreen extends ConsumerWidget {
   }
 }
 
-// --- AJOUT DU WIDGET BADGE ICI ---
+// ─────────────────────────────────────────
+//  CLASS CARD
+// ─────────────────────────────────────────
+class _ClassCard extends StatelessWidget {
+  final ClassModel cls;
+  final bool isDark;
+  final VoidCallback onTap;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  const _ClassCard({
+    required this.cls,
+    required this.isDark,
+    required this.onTap,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        margin: const EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.darkCard : AppColors.lightCard,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+          ),
+        ),
+        child: Row(
+          children: [
+            // ─── Icon badge ───
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppColors.accent.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Center(
+                child: Text(
+                  cls.name.isNotEmpty ? cls.name[0].toUpperCase() : 'C',
+                  style: AppTypography.labelLarge.copyWith(
+                    color: AppColors.accent,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ─── PRIMARY LABEL: getFullName() → "3 IOT 1" ───
+                  Text(
+                    cls.getFullName(),
+                    style: AppTypography.labelLarge.copyWith(
+                      color: isDark ? AppColors.darkText : AppColors.lightText,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  // ─── Chips row ───
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        if (cls.grade.isNotEmpty)
+                          _Badge('Grade ${cls.grade}', AppColors.info),
+                        if (cls.grade.isNotEmpty) const SizedBox(width: 6),
+                        _Badge(
+                          '${cls.studentCount} students',
+                          AppColors.success,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Teacher: ${cls.teacherName.isEmpty ? 'Not assigned' : cls.teacherName}',
+                    style: AppTypography.caption.copyWith(
+                      color: AppColors.teacherColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // ─── 3-dot menu ───
+            PopupMenuButton<String>(
+              icon: Icon(
+                Icons.more_vert_rounded,
+                color:
+                    isDark
+                        ? AppColors.darkTextSecondary
+                        : AppColors.lightTextSecondary,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              onSelected: (v) {
+                if (v == 'edit') onEdit();
+                if (v == 'delete') onDelete();
+              },
+              itemBuilder:
+                  (_) => [
+                    const PopupMenuItem(
+                      value: 'edit',
+                      child: Row(
+                        children: [
+                          Icon(Icons.edit_rounded, size: 16),
+                          SizedBox(width: 8),
+                          Text('Edit'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.delete_rounded,
+                            size: 16,
+                            color: AppColors.error,
+                          ),
+                          SizedBox(width: 8),
+                          Text(
+                            'Delete',
+                            style: TextStyle(color: AppColors.error),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _Badge extends StatelessWidget {
   final String label;
   final Color color;
-
   const _Badge(this.label, this.color);
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withValues(alpha: 0.2)),
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
       ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-          color: color,
-        ),
-      ),
+      child: Text(label, style: AppTypography.caption.copyWith(color: color)),
     );
   }
 }

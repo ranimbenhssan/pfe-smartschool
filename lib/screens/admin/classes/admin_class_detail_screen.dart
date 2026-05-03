@@ -5,38 +5,22 @@ import '../../../theme/theme.dart';
 import '../../../widgets/widgets.dart';
 import '../../../providers/providers.dart';
 import '../../../navigation/app_routes.dart';
+import '../../../models/models.dart';
 
 class AdminClassDetailScreen extends ConsumerWidget {
   final String classId;
-
   const AdminClassDetailScreen({super.key, required this.classId});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cls = ref.watch(classProvider(classId));
-    final students = ref.watch(studentsByClassProvider(classId));
+    final classAsync = ref.watch(classProvider(classId));
+    final studentsAsync = ref.watch(studentsByClassIdProvider(classId));
 
     return Scaffold(
       backgroundColor:
           isDark ? AppColors.darkBackground : AppColors.lightBackground,
-      appBar: AppBar(
-        title: cls.when(
-          loading: () => const Text('Class Detail'),
-          error: (_, __) => const Text('Class Detail'),
-          data: (c) => Text(c?.name ?? 'Class Detail'),
-        ),
-        backgroundColor:
-            isDark ? AppColors.darkSurface : AppColors.lightSurface,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit_rounded),
-            onPressed:
-                () => context.push('${AppRoutes.adminClassEdit}/$classId'),
-          ),
-        ],
-      ),
-      body: cls.when(
+      body: classAsync.when(
         loading: () => const LoadingWidget(),
         error:
             (e, _) => EmptyState(
@@ -48,224 +32,264 @@ class AdminClassDetailScreen extends ConsumerWidget {
           if (c == null) {
             return const EmptyState(
               title: 'Class Not Found',
-              message: 'This class does not exist',
+              message: '',
               icon: Icons.class_outlined,
             );
           }
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ─── Class Info Card ───
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    gradient: AppColors.primaryGradient,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 56,
-                        height: 56,
-                        decoration: BoxDecoration(
-                          color: AppColors.accent.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Center(
-                          child: Text(
-                            c.name.isNotEmpty ? c.name[0].toUpperCase() : 'C',
-                            style: AppTypography.displaySmall.copyWith(
-                              color: AppColors.accent,
+
+          return CustomScrollView(
+            slivers: [
+              // ─── Hero app bar ───
+              SliverAppBar(
+                expandedHeight: 200,
+                pinned: true,
+                backgroundColor: AppColors.accent,
+                flexibleSpace: FlexibleSpaceBar(
+                  background: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          AppColors.accent.withValues(alpha: 0.9),
+                          AppColors.accent,
+                        ],
+                      ),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 80, 20, 20),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Container(
+                            width: 60,
+                            height: 60,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Center(
+                              child: Text(
+                                c.name.isNotEmpty
+                                    ? c.name[0].toUpperCase()
+                                    : 'C',
+                                style: AppTypography.displaySmall.copyWith(
+                                  color: AppColors.accent,
+                                ),
+                              ),
                             ),
                           ),
-                        ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // ─── FIX: use getFullName() not c.name ───
+                                Text(
+                                  c.getFullName(),
+                                  style: AppTypography.headingLarge.copyWith(
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    _HeaderChip(
+                                      label: 'Level ${c.level}',
+                                      color: Colors.white70,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    _HeaderChip(
+                                      label: 'Grade ${c.grade}',
+                                      color: Colors.white60,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    _HeaderChip(
+                                      label: '${c.studentCount} students',
+                                      color: Colors.white54,
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 16),
-                      Expanded(
+                    ),
+                  ),
+                ),
+                actions: [
+                  IconButton(
+                    icon: const Icon(Icons.edit_rounded, color: Colors.white),
+                    onPressed:
+                        () => context.push(
+                          '${AppRoutes.adminClassEdit}/$classId',
+                        ),
+                  ),
+                ],
+              ),
+
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // ─── Teachers info ───
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color:
+                              isDark ? AppColors.darkCard : AppColors.lightCard,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color:
+                                isDark
+                                    ? AppColors.darkBorder
+                                    : AppColors.lightBorder,
+                          ),
+                        ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              c.name,
-                              style: AppTypography.headingLarge.copyWith(
-                                color: Colors.white,
+                              'Teachers',
+                              style: AppTypography.labelLarge.copyWith(
+                                color:
+                                    isDark
+                                        ? AppColors.darkText
+                                        : AppColors.lightText,
                               ),
                             ),
-                            Text(
-                              'Grade: ${c.grade}',
-                              style: AppTypography.bodySmall.copyWith(
-                                color: Colors.white60,
+                            const SizedBox(height: 12),
+                            if (c.teacherNames.isEmpty)
+                              Text(
+                                'No teachers assigned',
+                                style: AppTypography.caption,
+                              )
+                            else
+                              ...c.teacherNames.asMap().entries.map(
+                                (entry) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child: Row(
+                                    children: [
+                                      CircleAvatar(
+                                        radius: 14,
+                                        backgroundColor: AppColors.teacherColor
+                                            .withValues(alpha: 0.15),
+                                        child: Text(
+                                          entry.value.isNotEmpty
+                                              ? entry.value[0].toUpperCase()
+                                              : '?',
+                                          style: AppTypography.caption.copyWith(
+                                            color: AppColors.teacherColor,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        entry.value,
+                                        style: AppTypography.labelLarge
+                                            .copyWith(
+                                              color:
+                                                  isDark
+                                                      ? AppColors.darkText
+                                                      : AppColors.lightText,
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
-                            ),
-                            Text(
-                              '${c.studentCount} students',
-                              style: AppTypography.bodySmall.copyWith(
-                                color: Colors.white60,
-                              ),
-                            ),
                           ],
                         ),
                       ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
 
-                // ─── Teachers Info ───
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: isDark ? AppColors.darkCard : AppColors.lightCard,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color:
-                          isDark ? AppColors.darkBorder : AppColors.lightBorder,
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+                      const SizedBox(height: 20),
+
+                      // ─── Students list heading ───
                       Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: AppColors.teacherColor.withValues(
-                                alpha: 0.12,
-                              ),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: const Icon(
-                              Icons.people_rounded,
-                              color: AppColors.teacherColor,
-                              size: 20,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Text('Teachers', style: AppTypography.caption),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      c.teacherNames.isEmpty
-                          ? Text(
-                            'No teachers assigned',
-                            style: AppTypography.bodySmall.copyWith(
+                          Text(
+                            'Students',
+                            style: AppTypography.headingMedium.copyWith(
                               color:
                                   isDark
-                                      ? AppColors.darkTextSecondary
-                                      : AppColors.lightTextSecondary,
+                                      ? AppColors.darkText
+                                      : AppColors.lightText,
                             ),
-                          )
-                          : Column(
-                            children:
-                                c.teacherNames
-                                    .asMap()
-                                    .entries
-                                    .map(
-                                      (entry) => Padding(
-                                        padding: const EdgeInsets.only(
-                                          bottom: 8,
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            CircleAvatar(
-                                              radius: 14,
-                                              backgroundColor: AppColors
-                                                  .teacherColor
-                                                  .withValues(alpha: 0.15),
-                                              child: Text(
-                                                entry.value.isNotEmpty
-                                                    ? entry.value[0]
-                                                        .toUpperCase()
-                                                    : '?',
-                                                style: AppTypography.caption
-                                                    .copyWith(
-                                                      color:
-                                                          AppColors
-                                                              .teacherColor,
-                                                    ),
-                                              ),
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Text(
-                                              entry.value,
-                                              style: AppTypography.labelLarge
-                                                  .copyWith(
-                                                    color:
-                                                        isDark
-                                                            ? AppColors.darkText
-                                                            : AppColors
-                                                                .lightText,
-                                                  ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    )
-                                    .toList(),
                           ),
+                          TextButton.icon(
+                            onPressed:
+                                () => context.push(AppRoutes.adminStudentAdd),
+                            icon: const Icon(Icons.add_rounded, size: 16),
+                            label: const Text('Add'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+
+                      // ─── Students list ───
+                      studentsAsync.when(
+                        loading: () => const LoadingWidget(),
+                        error:
+                            (e, _) => EmptyState(
+                              title: 'Error',
+                              message: e.toString(),
+                              icon: Icons.error_outline_rounded,
+                            ),
+                        data:
+                            (list) =>
+                                list.isEmpty
+                                    ? const EmptyState(
+                                      title: 'No Students',
+                                      message:
+                                          'No students enrolled in this class',
+                                      icon: Icons.people_outline_rounded,
+                                    )
+                                    : Column(
+                                      children:
+                                          list
+                                              .map(
+                                                (student) => StudentCard(
+                                                  student: student,
+                                                  onTap:
+                                                      () => context.push(
+                                                        '${AppRoutes.adminStudentProfile}/${student.id}',
+                                                      ),
+                                                ),
+                                              )
+                                              .toList(),
+                                    ),
+                      ),
                     ],
                   ),
                 ),
-
-                // ─── Students List ───
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Students',
-                      style: AppTypography.headingMedium.copyWith(
-                        color:
-                            isDark ? AppColors.darkText : AppColors.lightText,
-                      ),
-                    ),
-                    TextButton.icon(
-                      onPressed: () => context.push(AppRoutes.adminStudentAdd),
-                      icon: const Icon(Icons.add_rounded, size: 16),
-                      label: const Text('Add'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                students.when(
-                  loading: () => const LoadingWidget(),
-                  error:
-                      (e, _) => EmptyState(
-                        title: 'Error',
-                        message: e.toString(),
-                        icon: Icons.error_outline_rounded,
-                      ),
-                  data:
-                      (list) =>
-                          list.isEmpty
-                              ? const EmptyState(
-                                title: 'No Students',
-                                message: 'No students in this class yet',
-                                icon: Icons.people_outline_rounded,
-                              )
-                              : Column(
-                                children:
-                                    list
-                                        .map(
-                                          (student) => StudentCard(
-                                            student: student,
-                                            onTap:
-                                                () => context.push(
-                                                  '${AppRoutes.adminStudentProfile}/${student.id}',
-                                                ),
-                                          ),
-                                        )
-                                        .toList(),
-                              ),
-                ),
-              ],
-            ),
+              ),
+            ],
           );
         },
       ),
+    );
+  }
+}
+
+class _HeaderChip extends StatelessWidget {
+  final String label;
+  final Color color;
+  const _HeaderChip({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(label, style: AppTypography.caption.copyWith(color: color)),
     );
   }
 }

@@ -11,7 +11,9 @@ final excelImportServiceProvider = Provider<ExcelImportService>((ref) {
   return ExcelImportService();
 });
 
-// ─── Import result ───
+// ─────────────────────────────────────────
+//  RESULT TYPES
+// ─────────────────────────────────────────
 class ImportResult {
   final int studentsCreated;
   final int teachersCreated;
@@ -44,8 +46,21 @@ class ImportedCredential {
   });
 }
 
+// ─────────────────────────────────────────
+//  SERVICE
+// ─────────────────────────────────────────
 class ExcelImportService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+
+  // ─── Replicates ClassModel.getFullName() without importing the model ───
+  // Structure: level + name + grade → "3 IOT 1"
+  String _buildClassName(String level, String name, String grade) {
+    final parts = <String>[];
+    if (level.trim().isNotEmpty) parts.add(level.trim());
+    if (name.trim().isNotEmpty) parts.add(name.trim());
+    if (grade.trim().isNotEmpty) parts.add(grade.trim());
+    return parts.isNotEmpty ? parts.join(' ') : name.trim();
+  }
 
   // ─── Generate random password ───
   String _generatePassword({int length = 10}) {
@@ -58,7 +73,9 @@ class ExcelImportService {
     ).join();
   }
 
-  // ─── Parse Excel bytes ───
+  // ─────────────────────────────────────────
+  //  ENTRY POINT
+  // ─────────────────────────────────────────
   Future<ImportResult> importFromBytes(Uint8List bytes) async {
     int studentsCreated = 0;
     int teachersCreated = 0;
@@ -90,24 +107,21 @@ class ExcelImportService {
         final sheetLower = sheetName.toLowerCase().trim();
 
         if (sheetLower.contains('class')) {
-          final result = await _importClasses(rows, errors);
-          classesCreated += result;
+          classesCreated += await _importClasses(rows, errors);
         } else if (sheetLower.contains('teacher')) {
-          final result = await _importTeachers(
+          teachersCreated += await _importTeachers(
             rows,
             errors,
             credentials,
             secondaryAuth,
           );
-          teachersCreated += result;
         } else if (sheetLower.contains('student')) {
-          final result = await _importStudents(
+          studentsCreated += await _importStudents(
             rows,
             errors,
             credentials,
             secondaryAuth,
           );
-          studentsCreated += result;
         }
       }
 
@@ -126,8 +140,10 @@ class ExcelImportService {
     );
   }
 
-  // ─── Import Classes sheet ───
-  // Expected columns: Name | Grade | Level
+  // ─────────────────────────────────────────
+  //  IMPORT CLASSES
+  //  Expected columns: Name | Grade | Level
+  // ─────────────────────────────────────────
   Future<int> _importClasses(
     List<List<Data?>> rows,
     List<String> errors,
@@ -164,11 +180,15 @@ class ExcelImportService {
           continue;
         }
 
+        // ─── FIX: build combined displayName = "3 IOT 1" ───
+        final displayName = _buildClassName(level, name, grade);
+
         final classId = _db.collection('classes').doc().id;
         await _db.collection('classes').doc(classId).set({
           'name': name,
           'grade': grade,
           'level': level,
+          'displayName': displayName, // ← "3 IOT 1"
           'teacherIds': [],
           'teacherNames': [],
           'roomId': '',
@@ -185,8 +205,10 @@ class ExcelImportService {
     return count;
   }
 
-  // ─── Import Teachers sheet ───
-  // Expected columns: Name | Email | Class | Subject | RfidTag (optional)
+  // ─────────────────────────────────────────
+  //  IMPORT TEACHERS
+  //  Expected columns: Name | Email | Class | Subject | RfidTag (optional)
+  // ─────────────────────────────────────────
   Future<int> _importTeachers(
     List<List<Data?>> rows,
     List<String> errors,
@@ -203,7 +225,7 @@ class ExcelImportService {
       try {
         final name = _cell(row, headers, 'name') ?? '';
         final email = _cell(row, headers, 'email') ?? '';
-        final className = _cell(row, headers, 'class') ?? '';
+        final rawClassName = _cell(row, headers, 'class') ?? '';
         final subject = _cell(row, headers, 'subject') ?? '';
         final rfidTag =
             _cell(row, headers, 'rfid') ?? _cell(row, headers, 'rfidtag') ?? '';
@@ -229,23 +251,32 @@ class ExcelImportService {
 
         final uid = cred.user!.uid;
 
-        // ─── Find assigned class ───
+        // ─── Resolve class → combined className ───
         List<String> classIds = [];
         List<String> classNames = [];
 
-        if (className.isNotEmpty) {
+        if (rawClassName.isNotEmpty) {
           final classSnap =
               await _db
                   .collection('classes')
-                  .where('name', isEqualTo: className)
+                  .where('name', isEqualTo: rawClassName)
                   .limit(1)
                   .get();
-          if (classSnap.docs.isNotEmpty) {
-            classIds = [classSnap.docs.first.id];
-            classNames = [className];
 
-            // ─── Update class with teacher ───
-            final classData = classSnap.docs.first.data();
+          if (classSnap.docs.isNotEmpty) {
+            final classDoc = classSnap.docs.first;
+            final classData = classDoc.data();
+
+            // ─── FIX: build combined displayName for assignedClassNames ───
+            final lvl = classData['level']?.toString() ?? '';
+            final nm = classData['name']?.toString() ?? rawClassName;
+            final gr = classData['grade']?.toString() ?? '';
+            final combinedName = _buildClassName(lvl, nm, gr); // "3 IOT 1"
+
+            classIds = [classDoc.id];
+            classNames = [combinedName];
+
+            // ─── Update class document with this teacher ───
             final existingIds = List<String>.from(
               classData['teacherIds'] ?? [],
             );
@@ -253,11 +284,15 @@ class ExcelImportService {
               classData['teacherNames'] ?? [],
             );
             if (!existingIds.contains(uid)) {
-              await classSnap.docs.first.reference.update({
+              await classDoc.reference.update({
                 'teacherIds': [...existingIds, uid],
                 'teacherNames': [...existingNames, name],
               });
             }
+          } else {
+            errors.add(
+              'Teacher "$name": Class "$rawClassName" not found — teacher saved without class',
+            );
           }
         }
 
@@ -270,13 +305,13 @@ class ExcelImportService {
           'createdAt': FieldValue.serverTimestamp(),
         });
 
-        // ─── Create teacher doc with RFID support ───
+        // ─── Create teacher doc ───
         await _db.collection('teachers').doc(uid).set({
           'userId': uid,
           'name': name,
           'email': email.trim(),
           'assignedClassIds': classIds,
-          'assignedClassNames': classNames,
+          'assignedClassNames': classNames, // ← ["3 IOT 1"] not ["IOT"]
           'subject': subject,
           'rfidTag': rfidTag,
           'rfidEnabled': rfidTag.isNotEmpty,
@@ -289,7 +324,7 @@ class ExcelImportService {
             email: email,
             password: password,
             role: 'Teacher',
-            className: className,
+            className: classNames.isNotEmpty ? classNames.first : rawClassName,
           ),
         );
 
@@ -301,8 +336,10 @@ class ExcelImportService {
     return count;
   }
 
-  // ─── Import Students sheet ───
-  // Expected columns: Name | Email | Class | RfidTag (optional)
+  // ─────────────────────────────────────────
+  //  IMPORT STUDENTS
+  //  Expected columns: Name | Email | Class | RfidTag (optional)
+  // ─────────────────────────────────────────
   Future<int> _importStudents(
     List<List<Data?>> rows,
     List<String> errors,
@@ -319,7 +356,7 @@ class ExcelImportService {
       try {
         final name = _cell(row, headers, 'name') ?? '';
         final email = _cell(row, headers, 'email') ?? '';
-        final className = _cell(row, headers, 'class') ?? '';
+        final rawClassName = _cell(row, headers, 'class') ?? '';
         final rfidTag =
             _cell(row, headers, 'rfid') ?? _cell(row, headers, 'rfidtag') ?? '';
 
@@ -344,30 +381,39 @@ class ExcelImportService {
 
         final uid = cred.user!.uid;
 
-        // ─── Find class ───
-        String classId = '';
-        String resolvedClassName = className;
-        String level = '';
+        // ─── Resolve class → combined className ───
+        String resolvedClassId = '';
+        String resolvedClassName = rawClassName; // fallback if class not found
+        String resolvedLevel = '';
 
-        if (className.isNotEmpty) {
+        if (rawClassName.isNotEmpty) {
           final classSnap =
               await _db
                   .collection('classes')
-                  .where('name', isEqualTo: className)
+                  .where('name', isEqualTo: rawClassName)
                   .limit(1)
                   .get();
+
           if (classSnap.docs.isNotEmpty) {
-            classId = classSnap.docs.first.id;
-            final data = classSnap.docs.first.data();
-            resolvedClassName = data['name'] ?? className;
-            level = data['level']?.toString() ?? '';
+            final classDoc = classSnap.docs.first;
+            final classData = classDoc.data();
+
+            // ─── FIX: build combined displayName for className field ───
+            final lvl = classData['level']?.toString() ?? '';
+            final nm = classData['name']?.toString() ?? rawClassName;
+            final gr = classData['grade']?.toString() ?? '';
+            resolvedClassId = classDoc.id;
+            resolvedClassName = _buildClassName(lvl, nm, gr); // "3 IOT 1"
+            resolvedLevel = lvl;
 
             // ─── Increment student count ───
-            await classSnap.docs.first.reference.update({
+            await classDoc.reference.update({
               'studentCount': FieldValue.increment(1),
             });
           } else {
-            errors.add('Student "$name": Class "$className" not found');
+            errors.add(
+              'Student "$name": Class "$rawClassName" not found — student saved without class',
+            );
           }
         }
 
@@ -385,10 +431,11 @@ class ExcelImportService {
           'userId': uid,
           'name': name,
           'email': email.trim(),
-          'classId': classId,
-          'className': resolvedClassName,
-          'level': level,
+          'classId': resolvedClassId,
+          'className': resolvedClassName, // ← "3 IOT 1" not just "IOT"
+          'level': resolvedLevel,
           'rfidTag': rfidTag,
+          'presenceCount': 0,
           'createdAt': FieldValue.serverTimestamp(),
         });
 
@@ -410,7 +457,9 @@ class ExcelImportService {
     return count;
   }
 
-  // ─── Helpers ───
+  // ─────────────────────────────────────────
+  //  HELPERS
+  // ─────────────────────────────────────────
   Map<String, int> _getHeaders(List<Data?> headerRow) {
     final map = <String, int>{};
     for (int i = 0; i < headerRow.length; i++) {
