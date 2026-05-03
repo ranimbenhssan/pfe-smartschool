@@ -379,21 +379,32 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.teacherNameCall,
         builder: (context, state) {
-          final classId = state.extra as String; // ← CORRECT
-          return TeacherNamecallScreen(classId: classId);
-        },
-      ),
-      GoRoute(
-        path: AppRoutes.teacherNameCall,
-        builder: (context, state) {
           final extra = state.extra;
-          final classId = extra is String ? extra : '';
+
+          String classId = '';
+          String className = '';
+          String targetDate = '';
+
+          if (extra is String) {
+            classId = extra;
+          } else if (extra is Map) {
+            final data = Map<String, dynamic>.from(extra);
+            classId = data['classId']?.toString() ?? '';
+            className = data['className']?.toString() ?? '';
+            targetDate = data['targetDate']?.toString() ?? '';
+          }
+
           if (classId.isEmpty) {
             return const Scaffold(
               body: Center(child: Text('Error: Invalid class ID')),
             );
           }
-          return TeacherNamecallScreen(classId: classId);
+
+          return TeacherNamecallScreen(
+            classId: classId,
+            className: className,
+            targetDate: targetDate,
+          );
         },
       ),
       GoRoute(
