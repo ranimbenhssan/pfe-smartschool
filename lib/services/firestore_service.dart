@@ -233,6 +233,12 @@ class FirestoreService {
     debugPrint('✅ Teacher added successfully');
   }
 
+  Future<void> incrementPresenceCount(String studentId, {int delta = 1}) async {
+    await _firestore.collection('students').doc(studentId).update({
+      'presenceCount': FieldValue.increment(delta),
+    });
+  }
+
   Future<void> updateTeacher(
     String teacherId,
     Map<String, dynamic> data,
@@ -371,6 +377,10 @@ class FirestoreService {
     return _firestore
         .collection('attendance')
         .where('studentId', isEqualTo: studentId)
+        .where(
+          'status',
+          whereIn: ['absent', 'late'],
+        ) // ← no 'present' docs exist
         .where(
           'createdAt',
           isGreaterThanOrEqualTo: Timestamp.fromDate(thirtyDaysAgo),

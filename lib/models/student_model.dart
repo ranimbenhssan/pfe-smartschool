@@ -6,10 +6,15 @@ class StudentModel {
   final String email;
   final String classId;
   final String className;
-  final String level; // ← NEW
+  final String level;
   final String rfidTag;
   final String userId;
   final DateTime createdAt;
+
+  /// Running total of sessions marked Present.
+  /// Incremented atomically via FieldValue.increment(1) — never stored
+  /// in the `attendance` collection for present records.
+  final int presenceCount;
 
   const StudentModel({
     required this.id,
@@ -21,9 +26,9 @@ class StudentModel {
     required this.rfidTag,
     required this.userId,
     required this.createdAt,
+    this.presenceCount = 0,
   });
 
-  // ─── Full display: "Ranim BenHssan – 3Iot1" ───
   String get fullDisplay => '$name — $level $className';
   String get classDisplay => '$level $className';
 
@@ -39,6 +44,7 @@ class StudentModel {
       rfidTag: raw['rfidTag']?.toString() ?? '',
       userId: raw['userId']?.toString() ?? '',
       createdAt: (raw['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      presenceCount: (raw['presenceCount'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -52,6 +58,8 @@ class StudentModel {
       'rfidTag': rfidTag,
       'userId': userId,
       'createdAt': Timestamp.fromDate(createdAt),
+      // presenceCount is NOT included here — it is always written via
+      // FieldValue.increment to avoid race conditions on concurrent saves.
     };
   }
 }

@@ -185,119 +185,108 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
   ) async {
     setState(() => _savingMap[student.id] = true);
 
-    final presentDelta =
-        previousStatus == AttendanceStatus.present &&
-                status != AttendanceStatus.present
-            ? -1
-            : previousStatus != AttendanceStatus.present &&
-                status == AttendanceStatus.present
-            ? 1
-            : 0;
-
-    if (status == AttendanceStatus.present) {
-      try {
-        await _updatePresentCount(presentDelta);
-        final existing =
-            await FirebaseFirestore.instance
-                .collection('attendance')
-                .where('studentId', isEqualTo: student.id)
-                .where('date', isEqualTo: _dateStr)
-                .limit(1)
-                .get();
-        if (existing.docs.isNotEmpty) {
-          await existing.docs.first.reference.delete();
-        }
-      } catch (e) {
-        debugPrint('Error cleaning present attendance: $e');
-      }
-
-      if (mounted) setState(() => _savingMap[student.id] = false);
-      return;
-    }
-
-    if (presentDelta != 0) {
-      try {
-        await _updatePresentCount(presentDelta);
-      } catch (e) {
-        debugPrint('Error updating present count: $e');
-      }
-    }
-
+    final db = FirebaseFirestore.instance;
     final now = DateTime.now();
     final slot = _resolvedSlot;
 
-    // ─── 1. Subject ───
+    // ─── Session context (all 5 fields) ───
     final subject = slot?.subject ?? '';
-
-    // ─── 2. Teacher — passed in from currentUser ───
-    // (already in parameters)
-
-    // ─── 3. Room ───
     final roomId = slot?.roomId ?? '';
     final roomName = slot?.roomName ?? '';
-
-    // ─── 4. Scheduled Class Time ───
-    final scheduledStartTime = slot?.startTime ?? '';
-    final scheduledEndTime = slot?.endTime ?? '';
-
-    // ─── 5. Time of Absence = recordedAt (now) ───
-    // entryTime for past records = 08:00 on the target date
-    final entryTimeForPast = DateTime(
-      _dateTime.year,
-      _dateTime.month,
-      _dateTime.day,
-      8,
-      0,
-    );
-    final effectiveEntryTime = _isPastDate ? entryTimeForPast : now;
-
+    final scheduledStart = slot?.startTime ?? '';
+    final scheduledEnd = slot?.endTime ?? '';
     final sessionName =
-        slot != null
-            ? '${slot.subject} ($scheduledStartTime – $scheduledEndTime)'
-            : '';
+        slot != null ? '${slot.subject} ($scheduledStart – $scheduledEnd)' : '';
+    final studentRef = db.collection('students').doc(student.id);
 
     try {
-      final existing =
-          await FirebaseFirestore.instance
+      // ─── 1. Find any existing attendance doc for this student + date ───
+      final existingSnap =
+          await db
               .collection('attendance')
               .where('studentId', isEqualTo: student.id)
               .where('date', isEqualTo: _dateStr)
               .limit(1)
               .get();
 
-      // ─── Payload with ALL 5 fields ───
-      final fullPayload = {
-        'status': status.name,
-        'teacherId': teacherId,
-        'teacherName': teacherName, // Teacher
-        'subject': subject, // Subject
-        'roomId': roomId,
-        'roomName': roomName, // Room
-        'sessionName': sessionName,
-        'scheduledStartTime': scheduledStartTime, // Scheduled Start
-        'scheduledEndTime': scheduledEndTime, // Scheduled End
-        'recordedAt': Timestamp.fromDate(now), // Time of Absence
-      };
+      final existingDoc =
+          existingSnap.docs.isNotEmpty ? existingSnap.docs.first : null;
 
-      if (existing.docs.isNotEmpty) {
-        await existing.docs.first.reference.update(fullPayload);
+      final batch = db.batch();
+
+      // ─── PATH A: PRESENT ─────────────────────────────────────────────────
+      if (status == AttendanceStatus.present) {
+        // Delete absence doc if it exists (teacher correcting absent → present)
+        if (existingDoc != null) {
+          batch.delete(existingDoc.reference);
+        }
+
+        // Increment counter.
+        // If previously absent/late, we are converting → net effect: +1.
+        // If no previous record, first-time present → +1.
+        // If already present (re-tap), guard in UI prevents this path.
+        batch.update(studentRef, {'presenceCount': FieldValue.increment(1)});
+
+        // ─── PATH B: ABSENT / LATE ────────────────────────────────────────────
       } else {
-        await FirebaseFirestore.instance.collection('attendance').add({
+        // If the previous record was present, decrement the counter.
+        if (previousStatus == AttendanceStatus.present) {
+          batch.update(studentRef, {'presenceCount': FieldValue.increment(-1)});
+        }
+
+        // Build the absence payload (all 5 detail fields).
+        final entryTimeForPast = DateTime(
+          _dateTime.year,
+          _dateTime.month,
+          _dateTime.day,
+          8,
+          0,
+        );
+
+        final absencePayload = {
           'studentId': student.id,
           'studentName': student.name,
           'classId': student.classId,
           'className': student.className,
           'date': _dateStr,
+          'status': status.name, // 'absent' or 'late'
+          // ── Field 1: Subject ──
+          'subject': subject,
+          // ── Field 2: Teacher ──
+          'teacherId': teacherId,
+          'teacherName': teacherName,
+          // ── Field 3: Room ──
+          'roomId': roomId,
+          'roomName': roomName,
+          // ── Field 4: Scheduled Class Time ──
+          'scheduledStartTime': scheduledStart,
+          'scheduledEndTime': scheduledEnd,
+          'sessionName': sessionName,
+          // ── Field 5: Time of Absence ──
+          'recordedAt': Timestamp.fromDate(now),
+          // Other fields
           'entryTime':
               status == AttendanceStatus.late
-                  ? Timestamp.fromDate(effectiveEntryTime)
+                  ? Timestamp.fromDate(_isPastDate ? entryTimeForPast : now)
                   : null,
           'exitTime': null,
           'note': _isPastDate ? 'Manually entered for $_dateStr' : '',
-          'createdAt': FieldValue.serverTimestamp(),
-          ...fullPayload,
-        });
+        };
+
+        if (existingDoc != null) {
+          // ─── Update existing absence record ───
+          batch.update(existingDoc.reference, absencePayload);
+        } else {
+          // ─── Create new absence record ───
+          final newRef = db.collection('attendance').doc();
+          batch.set(newRef, {
+            ...absencePayload,
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+        }
       }
+
+      await batch.commit();
     } catch (e) {
       debugPrint('Error saving attendance: $e');
     }

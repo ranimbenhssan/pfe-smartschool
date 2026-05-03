@@ -147,28 +147,35 @@ class AttendanceService {
       }
     }
 
-    await _db.collection('attendance').add({
-      'studentId': studentId,
-      'studentName': studentData['name'] ?? '',
-      'classId': classId,
-      'className': studentData['className'] ?? '',
-      'date': dateStr,
-      'status': status,
-      'entryTime': Timestamp.fromDate(now),
-      'exitTime': null,
-      // ─── Timetable-mapped fields ───
-      'teacherId': teacherId,
-      'teacherName': teacherName,
-      'subject': subject,
-      'roomId': roomId,
-      'roomName': roomName,
-      'sessionName': sessionName,
-      'scheduledStartTime': scheduledStartTime,
-      'scheduledEndTime': scheduledEndTime,
-      'recordedAt': Timestamp.fromDate(now),
-      'note': '',
-      'createdAt': FieldValue.serverTimestamp(),
-    });
+    if (status == 'present') {
+      // Present → counter only, no document
+      await _db.collection('students').doc(studentId).update({
+        'presenceCount': FieldValue.increment(1),
+      });
+    } else {
+      // Absent / Late → full document with all 5 fields
+      await _db.collection('attendance').add({
+        'studentId': studentId,
+        'studentName': studentData['name'] ?? '',
+        'classId': classId,
+        'className': studentData['className'] ?? '',
+        'date': dateStr,
+        'status': status,
+        'entryTime': Timestamp.fromDate(now),
+        'exitTime': null,
+        'teacherId': teacherId,
+        'teacherName': teacherName,
+        'subject': subject,
+        'roomId': roomId,
+        'roomName': roomName,
+        'sessionName': sessionName,
+        'scheduledStartTime': scheduledStartTime,
+        'scheduledEndTime': scheduledEndTime,
+        'recordedAt': Timestamp.fromDate(now),
+        'note': '',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    }
   }
 
   Future<void> _markExit(String studentId) async {

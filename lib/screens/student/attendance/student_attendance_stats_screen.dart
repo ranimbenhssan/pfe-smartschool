@@ -16,6 +16,7 @@ class StudentAttendanceStatsScreen extends ConsumerStatefulWidget {
 
 class _StudentAttendanceStatsScreenState
     extends ConsumerState<StudentAttendanceStatsScreen> {
+  // ─── Filter: all / absent / late  (no 'present' — counter only, no docs) ───
   String _filter = 'all';
 
   @override
@@ -41,9 +42,16 @@ class _StudentAttendanceStatsScreenState
             ),
         data: (user) {
           if (user == null) return const SizedBox.shrink();
-          final attendance = ref.watch(attendanceByStudentProvider(user.id));
 
-          return attendance.when(
+          // ─── presenceCount from student doc (not from attendance collection) ───
+          final studentAsync = ref.watch(studentProvider(user.id));
+
+          // ─── Only absent/late docs exist in attendance collection ───
+          final attendanceAsync = ref.watch(
+            attendanceByStudentProvider(user.id),
+          );
+
+          return studentAsync.when(
             loading: () => const LoadingWidget(),
             error:
                 (e, _) => EmptyState(
@@ -51,118 +59,185 @@ class _StudentAttendanceStatsScreenState
                   message: e.toString(),
                   icon: Icons.error_outline_rounded,
                 ),
-            data: (list) {
-              final present =
-                  list
-                      .where((a) => a.status == AttendanceStatus.present)
-                      .length;
-              final absent =
-                  list.where((a) => a.status == AttendanceStatus.absent).length;
-              final late =
-                  list.where((a) => a.status == AttendanceStatus.late).length;
-              final total = list.length;
-              final rate = total > 0 ? ((present / total) * 100).toInt() : 0;
+            data: (student) {
+              if (student == null) return const SizedBox.shrink();
 
-              final filtered =
-                  _filter == 'all'
-                      ? list
-                      : list.where((a) => a.status.name == _filter).toList();
-
-              return Column(
-                children: [
-                  // ─── Summary stats ───
-                  Container(
-                    margin: const EdgeInsets.all(16),
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: isDark ? AppColors.darkCard : AppColors.lightCard,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color:
-                            isDark
-                                ? AppColors.darkBorder
-                                : AppColors.lightBorder,
-                      ),
+              return attendanceAsync.when(
+                loading: () => const LoadingWidget(),
+                error:
+                    (e, _) => EmptyState(
+                      title: 'Error',
+                      message: e.toString(),
+                      icon: Icons.error_outline_rounded,
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _MiniStat('Present', present, AppColors.present),
-                        _MiniStat('Absent', absent, AppColors.absent),
-                        _MiniStat('Late', late, AppColors.late),
-                        _MiniStat('Rate', rate, AppColors.info, suffix: '%'),
-                      ],
-                    ),
-                  ),
+                data: (list) {
+                  final absent =
+                      list
+                          .where((a) => a.status == AttendanceStatus.absent)
+                          .length;
+                  final late =
+                      list
+                          .where((a) => a.status == AttendanceStatus.late)
+                          .length;
 
-                  // ─── Filter chips ───
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          _FilterChip(
-                            label: 'All ($total)',
-                            isActive: _filter == 'all',
-                            color: AppColors.accent,
-                            onTap: () => setState(() => _filter = 'all'),
-                          ),
-                          const SizedBox(width: 8),
-                          _FilterChip(
-                            label: 'Present ($present)',
-                            isActive: _filter == 'present',
-                            color: AppColors.present,
-                            onTap: () => setState(() => _filter = 'present'),
-                          ),
-                          const SizedBox(width: 8),
-                          _FilterChip(
-                            label: 'Absent ($absent)',
-                            isActive: _filter == 'absent',
-                            color: AppColors.absent,
-                            onTap: () => setState(() => _filter = 'absent'),
-                          ),
-                          const SizedBox(width: 8),
-                          _FilterChip(
-                            label: 'Late ($late)',
-                            isActive: _filter == 'late',
-                            color: AppColors.late,
-                            onTap: () => setState(() => _filter = 'late'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                  final presenceCount = student.presenceCount;
+                  final total = presenceCount + list.length;
+                  final rate =
+                      total > 0 ? ((presenceCount / total) * 100).toInt() : 0;
 
-                  const SizedBox(height: 12),
+                  final filtered =
+                      _filter == 'all'
+                          ? list
+                          : list
+                              .where((a) => a.status.name == _filter)
+                              .toList();
 
-                  // ─── Records list ───
-                  Expanded(
-                    child:
-                        filtered.isEmpty
-                            ? EmptyState(
-                              title: 'No Records',
-                              message:
-                                  _filter == 'all'
-                                      ? 'No attendance records yet'
-                                      : 'No $_filter records',
-                              icon: Icons.event_busy_rounded,
-                            )
-                            : ListView.builder(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
+                  return Column(
+                    children: [
+                      // ─── Summary banner ───
+                      Container(
+                        margin: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              AppColors.studentColor.withValues(alpha: 0.8),
+                              AppColors.studentColor,
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Row(
+                          children: [
+                            // ─── Rate circle ───
+                            SizedBox(
+                              width: 72,
+                              height: 72,
+                              child: Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  CircularProgressIndicator(
+                                    value: rate / 100,
+                                    strokeWidth: 6,
+                                    backgroundColor: Colors.white.withValues(
+                                      alpha: 0.2,
+                                    ),
+                                    valueColor:
+                                        const AlwaysStoppedAnimation<Color>(
+                                          Colors.white,
+                                        ),
+                                  ),
+                                  Text(
+                                    '$rate%',
+                                    style: AppTypography.labelLarge.copyWith(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
                               ),
-                              itemCount: filtered.length,
-                              itemBuilder: (context, index) {
-                                final record = filtered[index];
-                                return _AttendanceDetailCard(
-                                  record: record,
-                                  isDark: isDark,
-                                );
-                              },
                             ),
-                  ),
-                ],
+                            const SizedBox(width: 16),
+
+                            // ─── Mini stats ───
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Attendance Rate',
+                                    style: AppTypography.bodySmall.copyWith(
+                                      color: Colors.white70,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      _MiniStat(
+                                        'Present',
+                                        presenceCount,
+                                        Colors.white,
+                                      ),
+                                      const SizedBox(width: 12),
+                                      _MiniStat(
+                                        'Absent',
+                                        absent,
+                                        Colors.white70,
+                                      ),
+                                      const SizedBox(width: 12),
+                                      _MiniStat('Late', late, Colors.white60),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // ─── Filter chips ───
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              _FilterChip(
+                                label: 'All absences (${list.length})',
+                                isActive: _filter == 'all',
+                                color: AppColors.accent,
+                                onTap: () => setState(() => _filter = 'all'),
+                              ),
+                              const SizedBox(width: 8),
+                              _FilterChip(
+                                label: 'Absent ($absent)',
+                                isActive: _filter == 'absent',
+                                color: AppColors.absent,
+                                onTap: () => setState(() => _filter = 'absent'),
+                              ),
+                              const SizedBox(width: 8),
+                              _FilterChip(
+                                label: 'Late ($late)',
+                                isActive: _filter == 'late',
+                                color: AppColors.late,
+                                onTap: () => setState(() => _filter = 'late'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      // ─── Records list ───
+                      Expanded(
+                        child:
+                            filtered.isEmpty
+                                ? EmptyState(
+                                  title: 'No Records',
+                                  message:
+                                      _filter == 'all'
+                                          ? 'No absence records yet'
+                                          : 'No $_filter records',
+                                  icon: Icons.event_busy_rounded,
+                                )
+                                : ListView.builder(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                  ),
+                                  itemCount: filtered.length,
+                                  itemBuilder: (context, index) {
+                                    final record = filtered[index];
+                                    return _AttendanceDetailCard(
+                                      record: record,
+                                      isDark: isDark,
+                                    );
+                                  },
+                                ),
+                      ),
+                    ],
+                  );
+                },
               );
             },
           );
@@ -181,17 +256,16 @@ class _AttendanceDetailCard extends StatelessWidget {
 
   const _AttendanceDetailCard({required this.record, required this.isDark});
 
-  String _formatDisplayDate(String dateStr) {
+  String _fmtDate(String s) {
     try {
-      final parts = dateStr.split('-');
-      if (parts.length == 3) return '${parts[2]}/${parts[1]}/${parts[0]}';
-      return dateStr;
+      final p = s.split('-');
+      return p.length == 3 ? '${p[2]}/${p[1]}/${p[0]}' : s;
     } catch (_) {
-      return dateStr;
+      return s;
     }
   }
 
-  bool get _hasDetails =>
+  bool get _hasContext =>
       record.subject.isNotEmpty ||
       record.teacherName.isNotEmpty ||
       record.roomName.isNotEmpty ||
@@ -200,10 +274,8 @@ class _AttendanceDetailCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statusColor =
-        record.status == AttendanceStatus.present
-            ? AppColors.present
-            : record.status == AttendanceStatus.late
+    final sc =
+        record.status == AttendanceStatus.late
             ? AppColors.late
             : AppColors.absent;
 
@@ -213,28 +285,26 @@ class _AttendanceDetailCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: isDark ? AppColors.darkCard : AppColors.lightCard,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: statusColor.withValues(alpha: 0.3)),
+        border: Border.all(color: sc.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ─── Header: date + status badge ───
+          // ─── Header row ───
           Row(
             children: [
               Container(
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.12),
+                  color: sc.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
-                  record.status == AttendanceStatus.present
-                      ? Icons.check_circle_rounded
-                      : record.status == AttendanceStatus.late
+                  record.status == AttendanceStatus.late
                       ? Icons.watch_later_rounded
                       : Icons.cancel_rounded,
-                  color: statusColor,
+                  color: sc,
                   size: 20,
                 ),
               ),
@@ -244,7 +314,7 @@ class _AttendanceDetailCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _formatDisplayDate(record.date),
+                      _fmtDate(record.date),
                       style: AppTypography.labelLarge.copyWith(
                         color:
                             isDark ? AppColors.darkText : AppColors.lightText,
@@ -255,12 +325,29 @@ class _AttendanceDetailCard extends StatelessWidget {
                   ],
                 ),
               ),
-              AttendanceBadge(status: record.status),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: sc.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: sc.withValues(alpha: 0.3)),
+                ),
+                child: Text(
+                  record.status.name.toUpperCase(),
+                  style: AppTypography.caption.copyWith(
+                    color: sc,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
             ],
           ),
 
           // ─── 5-field detail grid ───
-          if (_hasDetails) ...[
+          if (_hasContext) ...[
             const SizedBox(height: 10),
             Container(
               width: double.infinity,
@@ -273,7 +360,6 @@ class _AttendanceDetailCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // ─── Row 1: Subject + Teacher ───
                   Row(
@@ -305,7 +391,7 @@ class _AttendanceDetailCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
 
-                  // ─── Row 2: Room + Scheduled Class Time ───
+                  // ─── Row 2: Room + Scheduled Time ───
                   Row(
                     children: [
                       Expanded(
@@ -337,7 +423,7 @@ class _AttendanceDetailCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
 
-                  // ─── Row 3: Time of Absence (full width) ───
+                  // ─── Row 3: Time of Absence — full width ───
                   _FieldTile(
                     icon: Icons.access_time_filled_rounded,
                     label: 'Time of Absence',
@@ -351,12 +437,30 @@ class _AttendanceDetailCard extends StatelessWidget {
                               'HH:mm  –  dd/MM/yyyy',
                             ).format(record.entryTime!)
                             : '—',
-                    color: statusColor,
+                    color: sc,
                     isDark: isDark,
                     fullWidth: true,
                   ),
                 ],
               ),
+            ),
+          ],
+
+          // ─── Manual entry note ───
+          if (record.note != null && record.note!.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                const Icon(
+                  Icons.note_rounded,
+                  size: 12,
+                  color: AppColors.warning,
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(record.note!, style: AppTypography.caption),
+                ),
+              ],
             ),
           ],
         ],
@@ -436,19 +540,22 @@ class _MiniStat extends StatelessWidget {
   final String label;
   final int value;
   final Color color;
-  final String suffix;
 
-  const _MiniStat(this.label, this.value, this.color, {this.suffix = ''});
+  const _MiniStat(this.label, this.value, this.color);
 
   @override
   Widget build(BuildContext context) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '$value$suffix',
-          style: AppTypography.headingSmall.copyWith(color: color),
+          '$value',
+          style: AppTypography.labelLarge.copyWith(
+            color: color,
+            fontWeight: FontWeight.bold,
+          ),
         ),
-        Text(label, style: AppTypography.caption),
+        Text(label, style: AppTypography.caption.copyWith(color: color)),
       ],
     );
   }
