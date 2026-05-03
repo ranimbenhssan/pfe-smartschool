@@ -289,8 +289,7 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
           'className': student.className,
           'date': _dateStr,
           'entryTime':
-              (status == AttendanceStatus.present ||
-                      status == AttendanceStatus.late)
+              status == AttendanceStatus.late
                   ? Timestamp.fromDate(effectiveEntryTime)
                   : null,
           'exitTime': null,
