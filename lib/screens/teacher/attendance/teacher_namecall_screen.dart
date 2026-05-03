@@ -169,6 +169,26 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
   ) async {
     setState(() => _savingMap[student.id] = true);
 
+    if (status == AttendanceStatus.present) {
+      try {
+        final existing =
+            await FirebaseFirestore.instance
+                .collection('attendance')
+                .where('studentId', isEqualTo: student.id)
+                .where('date', isEqualTo: _dateStr)
+                .limit(1)
+                .get();
+        if (existing.docs.isNotEmpty) {
+          await existing.docs.first.reference.delete();
+        }
+      } catch (e) {
+        debugPrint('Error cleaning present attendance: $e');
+      }
+
+      if (mounted) setState(() => _savingMap[student.id] = false);
+      return;
+    }
+
     final now = DateTime.now();
     final slot = _resolvedSlot;
 
