@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../models/models.dart';
@@ -5,7 +6,8 @@ import '../services/services.dart';
 
 // ─── Today's Date String ───
 final todayStringProvider = Provider<String>((ref) {
-  return DateFormat('yyyy-MM-dd').format(DateTime.now());
+  final now = DateTime.now();
+  return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
 });
 
 // ─── Selected Date ───
@@ -84,6 +86,68 @@ final todayLateCountProvider = Provider<int>((ref) {
                 list.where((a) => a.status == AttendanceStatus.late).length,
         orElse: () => 0,
       );
+});
+
+/// Stream of ALL absence records across all dates (no date filter).
+final allTimeAttendanceProvider = StreamProvider<List<AttendanceModel>>((ref) {
+  return FirebaseFirestore.instance
+      .collection('attendance')
+      .where('status', whereIn: ['absent', 'late'])
+      .orderBy('createdAt', descending: true)
+      .snapshots()
+      .map(
+        (snap) =>
+            snap.docs.map((d) => AttendanceModel.fromFirestore(d)).toList(),
+      );
+});
+
+/// Total absent records across ALL time.
+final allTimeAbsentCountProvider = Provider<int>((ref) {
+  final all = ref.watch(allTimeAttendanceProvider);
+  return all.when(
+    data:
+        (list) => list.where((a) => a.status == AttendanceStatus.absent).length,
+    loading: () => 0,
+    error: (_, __) => 0,
+  );
+});
+
+/// Total late records across ALL time.
+final allTimeLateCountProvider = Provider<int>((ref) {
+  final all = ref.watch(allTimeAttendanceProvider);
+  return all.when(
+    data: (list) => list.where((a) => a.status == AttendanceStatus.late).length,
+    loading: () => 0,
+    error: (_, __) => 0,
+  );
+});
+
+// ─────────────────────────────────────────
+//  STUDENT NAME SEARCH FILTER
+//  Applied client-side on allTimeAttendanceProvider.
+//  Empty query → full list.
+// ─────────────────────────────────────────
+
+/// The current search query for attendance student filter.
+final attendanceSearchQueryProvider = StateProvider<String>((ref) => '');
+
+/// Filtered all-time attendance records by student name.
+final filteredAttendanceProvider = Provider<AsyncValue<List<AttendanceModel>>>((
+  ref,
+) {
+  final query = ref.watch(attendanceSearchQueryProvider).toLowerCase().trim();
+  final allAsync = ref.watch(allTimeAttendanceProvider);
+
+  return allAsync.when(
+    loading: () => const AsyncValue.loading(),
+    error: (e, s) => AsyncValue.error(e, s),
+    data: (list) {
+      if (query.isEmpty) return AsyncValue.data(list);
+      return AsyncValue.data(
+        list.where((a) => a.studentName.toLowerCase().contains(query)).toList(),
+      );
+    },
+  );
 });
 
 // ─── Attendance Stats For Student ───

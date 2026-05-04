@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../../../theme/theme.dart';
 import '../../../widgets/widgets.dart';
 import '../../../providers/providers.dart';
@@ -10,12 +11,24 @@ class AdminAttendanceStatsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final presentCount = ref.watch(todayPresentCountProvider);
-    final absentCount = ref.watch(todayAbsentCountProvider);
-    final lateCount = ref.watch(todayLateCountProvider);
-    final total = presentCount + absentCount + lateCount;
-    final attendanceRate =
-        total > 0 ? ((presentCount / total) * 100).toInt() : 0;
+
+    // Today
+    final presentToday = ref.watch(todayPresentCountProvider);
+    final absentToday = ref.watch(todayAbsentCountProvider);
+    final lateToday = ref.watch(todayLateCountProvider);
+    final totalToday = presentToday + absentToday + lateToday;
+    final rateToday =
+        totalToday > 0 ? ((presentToday / totalToday) * 100).toInt() : 0;
+
+    // All-time
+    final allTimeAbsent = ref.watch(allTimeAbsentCountProvider);
+    final allTimeLate = ref.watch(allTimeLateCountProvider);
+    final allTimeAsync = ref.watch(allTimeAttendanceProvider);
+    final allTimeTotal = allTimeAsync.when(
+      data: (l) => l.length,
+      loading: () => 0,
+      error: (_, __) => 0,
+    );
 
     return Scaffold(
       backgroundColor:
@@ -30,7 +43,7 @@ class AdminAttendanceStatsScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ─── Overall Rate ───
+            // ── TODAY RATE RING ─────────────────────────────────────────
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(24),
@@ -38,19 +51,61 @@ class AdminAttendanceStatsScreen extends ConsumerWidget {
                 gradient: AppColors.primaryGradient,
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: Column(
+              child: Row(
                 children: [
-                  Text(
-                    '$attendanceRate%',
-                    style: AppTypography.displayLarge.copyWith(
-                      color: AppColors.accent,
-                      fontSize: 56,
+                  // Rate circle
+                  SizedBox(
+                    width: 80,
+                    height: 80,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        CircularProgressIndicator(
+                          value: rateToday / 100,
+                          strokeWidth: 7,
+                          backgroundColor: Colors.white.withValues(alpha: 0.15),
+                          valueColor: const AlwaysStoppedAnimation<Color>(
+                            AppColors.accent,
+                          ),
+                        ),
+                        Text(
+                          '$rateToday%',
+                          style: AppTypography.labelLarge.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  Text(
-                    'Overall Attendance Rate',
-                    style: AppTypography.bodyMedium.copyWith(
-                      color: Colors.white60,
+                  const SizedBox(width: 20),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "Today's Rate",
+                          style: AppTypography.headingSmall.copyWith(
+                            color: Colors.white,
+                          ),
+                        ),
+                        Text(
+                          DateFormat('EEE, d MMM').format(DateTime.now()),
+                          style: AppTypography.caption.copyWith(
+                            color: Colors.white60,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            _MiniPill('P: $presentToday', AppColors.success),
+                            const SizedBox(width: 6),
+                            _MiniPill('A: $absentToday', AppColors.error),
+                            const SizedBox(width: 6),
+                            _MiniPill('L: $lateToday', AppColors.warning),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -58,71 +113,116 @@ class AdminAttendanceStatsScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 20),
 
-            // ─── Stats Grid ───
-            GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: 12,
-              crossAxisSpacing: 12,
-              childAspectRatio: 1.4,
-              children: [
-                StatCard(
-                  title: 'Present Today',
-                  value: presentCount.toString(),
-                  icon: Icons.check_circle_rounded,
-                  color: AppColors.present,
-                ),
-                StatCard(
-                  title: 'Absent Today',
-                  value: absentCount.toString(),
-                  icon: Icons.cancel_rounded,
-                  color: AppColors.absent,
-                ),
-                StatCard(
-                  title: 'Late Today',
-                  value: lateCount.toString(),
-                  icon: Icons.watch_later_rounded,
-                  color: AppColors.late,
-                ),
-                StatCard(
-                  title: 'Total Records',
-                  value: total.toString(),
-                  icon: Icons.people_rounded,
-                  color: AppColors.info,
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-
-            // ─── Progress Bars ───
+            // ── TODAY BREAKDOWN ─────────────────────────────────────────
             Text(
-              'Breakdown',
+              "Today's Breakdown",
               style: AppTypography.headingMedium.copyWith(
                 color: isDark ? AppColors.darkText : AppColors.lightText,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             _ProgressBar(
               label: 'Present',
-              value: total > 0 ? presentCount / total : 0,
+              value: totalToday > 0 ? presentToday / totalToday : 0,
               color: AppColors.present,
-              count: presentCount,
+              count: presentToday,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             _ProgressBar(
               label: 'Absent',
-              value: total > 0 ? absentCount / total : 0,
+              value: totalToday > 0 ? absentToday / totalToday : 0,
               color: AppColors.absent,
-              count: absentCount,
+              count: absentToday,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             _ProgressBar(
               label: 'Late',
-              value: total > 0 ? lateCount / total : 0,
+              value: totalToday > 0 ? lateToday / totalToday : 0,
               color: AppColors.late,
-              count: lateCount,
+              count: lateToday,
             ),
+            const SizedBox(height: 28),
+
+            // ── ALL-TIME CUMULATIVE ─────────────────────────────────────
+            Row(
+              children: [
+                Text(
+                  'All-Time Totals',
+                  style: AppTypography.headingMedium.copyWith(
+                    color: isDark ? AppColors.darkText : AppColors.lightText,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.info.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    'Never resets',
+                    style: AppTypography.caption.copyWith(
+                      color: AppColors.info,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // All-time stat cards
+            Row(
+              children: [
+                Expanded(
+                  child: _AllTimeStat(
+                    label: 'Total Absences',
+                    count: allTimeAbsent,
+                    color: AppColors.absent,
+                    icon: Icons.cancel_rounded,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _AllTimeStat(
+                    label: 'Total Late',
+                    count: allTimeLate,
+                    color: AppColors.late,
+                    icon: Icons.watch_later_rounded,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _AllTimeStat(
+                    label: 'Total Records',
+                    count: allTimeTotal,
+                    color: AppColors.info,
+                    icon: Icons.list_alt_rounded,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // All-time progress bars
+            if (allTimeTotal > 0) ...[
+              _ProgressBar(
+                label: 'Absent (all-time)',
+                value: allTimeAbsent / allTimeTotal,
+                color: AppColors.absent,
+                count: allTimeAbsent,
+              ),
+              const SizedBox(height: 10),
+              _ProgressBar(
+                label: 'Late (all-time)',
+                value: allTimeLate / allTimeTotal,
+                color: AppColors.late,
+                count: allTimeLate,
+              ),
+            ],
+            const SizedBox(height: 32),
           ],
         ),
       ),
@@ -130,6 +230,9 @@ class AdminAttendanceStatsScreen extends ConsumerWidget {
   }
 }
 
+// ─────────────────────────────────────────
+//  PROGRESS BAR
+// ─────────────────────────────────────────
 class _ProgressBar extends StatelessWidget {
   final String label;
   final double value;
@@ -168,7 +271,7 @@ class _ProgressBar extends StatelessWidget {
         ClipRRect(
           borderRadius: BorderRadius.circular(4),
           child: LinearProgressIndicator(
-            value: value,
+            value: value.clamp(0.0, 1.0),
             backgroundColor: color.withValues(alpha: 0.12),
             valueColor: AlwaysStoppedAnimation<Color>(color),
             minHeight: 8,
@@ -177,4 +280,77 @@ class _ProgressBar extends StatelessWidget {
       ],
     );
   }
+}
+
+// ─────────────────────────────────────────
+//  ALL-TIME STAT CARD
+// ─────────────────────────────────────────
+class _AllTimeStat extends StatelessWidget {
+  final String label;
+  final int count;
+  final Color color;
+  final IconData icon;
+
+  const _AllTimeStat({
+    required this.label,
+    required this.count,
+    required this.color,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkCard : AppColors.lightCard,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 18),
+          const SizedBox(height: 6),
+          Text(
+            '$count',
+            style: AppTypography.headingLarge.copyWith(
+              color: color,
+              fontWeight: FontWeight.bold,
+              fontSize: 22,
+            ),
+          ),
+          Text(
+            label,
+            style: AppTypography.caption.copyWith(
+              color: isDark ? AppColors.darkText : AppColors.lightText,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MiniPill extends StatelessWidget {
+  final String label;
+  final Color color;
+  const _MiniPill(this.label, this.color);
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.2),
+      borderRadius: BorderRadius.circular(20),
+    ),
+    child: Text(
+      label,
+      style: AppTypography.caption.copyWith(
+        color: Colors.white,
+        fontWeight: FontWeight.bold,
+      ),
+    ),
+  );
 }
