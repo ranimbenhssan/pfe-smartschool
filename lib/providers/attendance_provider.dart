@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../models/models.dart';
+import 'teacher_provider.dart';
 import '../services/services.dart';
 
 // ─────────────────────────────────────────
