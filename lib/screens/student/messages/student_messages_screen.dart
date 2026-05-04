@@ -7,11 +7,26 @@ import '../../../providers/providers.dart';
 import '../../../services/services.dart';
 import '../../../navigation/app_routes.dart';
 
-class StudentmessageScreen extends ConsumerWidget {
+class StudentmessageScreen extends ConsumerStatefulWidget {
   const StudentmessageScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<StudentmessageScreen> createState() =>
+      _StudentmessageScreenState();
+}
+
+class _StudentmessageScreenState extends ConsumerState<StudentmessageScreen> {
+  final _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final currentUser = ref.watch(currentUserProvider);
 
@@ -19,16 +34,14 @@ class StudentmessageScreen extends ConsumerWidget {
       backgroundColor:
           isDark ? AppColors.darkBackground : AppColors.lightBackground,
       appBar: AppBar(
-        title: const Text('message'),
+        title: const Text('Messages'),
         backgroundColor:
             isDark ? AppColors.darkSurface : AppColors.lightSurface,
         actions: [
-          // ─── Send button — always visible ───
           IconButton(
             icon: const Icon(Icons.edit_rounded),
             onPressed: () => context.push(AppRoutes.studentmessageend),
           ),
-          // ─── Mark all read ───
           currentUser.when(
             loading: () => const SizedBox.shrink(),
             error: (_, __) => const SizedBox.shrink(),
@@ -63,8 +76,10 @@ class StudentmessageScreen extends ConsumerWidget {
               icon: Icons.message_rounded,
             );
           }
-          final message = ref.watch(notificationsProvider(user.id));
-          return message.when(
+
+          final messages = ref.watch(notificationsProvider(user.id));
+
+          return messages.when(
             loading: () => const LoadingWidget(),
             error:
                 (e, _) => EmptyState(
@@ -72,35 +87,124 @@ class StudentmessageScreen extends ConsumerWidget {
                   message: e.toString(),
                   icon: Icons.error_outline_rounded,
                 ),
-            data:
-                (list) =>
-                    list.isEmpty
-                        ? const EmptyState(
-                          title: 'No message',
-                          message: 'No message yet',
-                          icon: Icons.message_rounded,
-                        )
-                        : ListView.builder(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: list.length,
-                          itemBuilder: (context, index) {
-                            final message = list[index];
-                            return MessagesTile(
-                              message: message,
-                              onTap: () async {
-                                await ref
-                                    .read(firestoreServiceProvider)
-                                    .markNotificationRead(message.id);
-                                if (context.mounted) {
-                                  context.push(
-                                    AppRoutes.messageDetail,
-                                    extra: message,
-                                  );
-                                }
-                              },
-                            );
-                          },
+            data: (list) {
+              // ── Real-time filter on query ──────────────────────────────
+              final filtered =
+                  _query.isEmpty
+                      ? list
+                      : list.where((m) {
+                        final q = _query.toLowerCase();
+                        return m.title.toLowerCase().contains(q) ||
+                            m.message.toLowerCase().contains(q) ||
+                            m.senderName.toLowerCase().contains(q);
+                      }).toList();
+
+              return Column(
+                children: [
+                  // ── Search bar ──────────────────────────────────────────
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: (v) => setState(() => _query = v),
+                      decoration: InputDecoration(
+                        hintText: 'Search by subject or sender...',
+                        prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                        suffixIcon:
+                            _query.isNotEmpty
+                                ? IconButton(
+                                  icon: const Icon(
+                                    Icons.clear_rounded,
+                                    size: 18,
+                                  ),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    setState(() => _query = '');
+                                  },
+                                )
+                                : null,
+                        filled: true,
+                        fillColor:
+                            isDark ? AppColors.darkCard : AppColors.lightCard,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
                         ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // ── Result count when filtering ─────────────────────────
+                  if (_query.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(
+                        left: 20,
+                        right: 16,
+                        bottom: 4,
+                      ),
+                      child: Row(
+                        children: [
+                          Text(
+                            '${filtered.length} result${filtered.length == 1 ? '' : 's'} for "$_query"',
+                            style: AppTypography.caption.copyWith(
+                              color:
+                                  isDark
+                                      ? AppColors.darkTextSecondary
+                                      : AppColors.lightTextSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                  // ── Message list ───────────────────────────────────────
+                  Expanded(
+                    child:
+                        filtered.isEmpty
+                            ? EmptyState(
+                              title:
+                                  _query.isEmpty ? 'No messages' : 'No results',
+                              message:
+                                  _query.isEmpty
+                                      ? 'No messages yet'
+                                      : 'No messages match "$_query"',
+                              icon:
+                                  _query.isEmpty
+                                      ? Icons.message_rounded
+                                      : Icons.search_off_rounded,
+                            )
+                            : ListView.builder(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 4,
+                              ),
+                              itemCount: filtered.length,
+                              itemBuilder: (context, index) {
+                                final message = filtered[index];
+                                return MessagesTile(
+                                  message: message,
+                                  onTap: () async {
+                                    await ref
+                                        .read(firestoreServiceProvider)
+                                        .markNotificationRead(message.id);
+                                    if (context.mounted) {
+                                      context.push(
+                                        AppRoutes.messageDetail,
+                                        extra: message,
+                                      );
+                                    }
+                                  },
+                                );
+                              },
+                            ),
+                  ),
+                ],
+              );
+            },
           );
         },
       ),

@@ -19,7 +19,7 @@ class AdminmessageScreen extends ConsumerWidget {
       backgroundColor:
           isDark ? AppColors.darkBackground : AppColors.lightBackground,
       appBar: AppBar(
-        title: const Text('message'),
+        title: const Text('Messages'),
         backgroundColor:
             isDark ? AppColors.darkSurface : AppColors.lightSurface,
         actions: [
@@ -57,7 +57,7 @@ class AdminmessageScreen extends ConsumerWidget {
           if (user == null) {
             return const EmptyState(
               title: 'Not logged in',
-              message: 'Please log in to view message',
+              message: 'Please log in to view messages',
               icon: Icons.message_rounded,
             );
           }
@@ -73,16 +73,31 @@ class AdminmessageScreen extends ConsumerWidget {
   }
 }
 
-class _MessageList extends ConsumerWidget {
+// ─── Stateful list with search ─────────────────────────────────────────────
+class _MessageList extends ConsumerStatefulWidget {
   final String userId;
-
   const _MessageList({required this.userId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final message = ref.watch(notificationsProvider(userId));
+  ConsumerState<_MessageList> createState() => _MessageListState();
+}
 
-    return message.when(
+class _MessageListState extends ConsumerState<_MessageList> {
+  final _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final messages = ref.watch(notificationsProvider(widget.userId));
+
+    return messages.when(
       loading: () => const LoadingWidget(),
       error:
           (e, _) => EmptyState(
@@ -90,35 +105,114 @@ class _MessageList extends ConsumerWidget {
             message: e.toString(),
             icon: Icons.error_outline_rounded,
           ),
-      data:
-          (list) =>
-              list.isEmpty
-                  ? const EmptyState(
-                    title: 'No message',
-                    message: 'No message yet',
-                    icon: Icons.message_rounded,
-                  )
-                  : ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: list.length,
-                    itemBuilder: (context, index) {
-                      final message = list[index];
-                      return MessagesTile(
-                        message: message,
-                        onTap: () async {
-                          await ref
-                              .read(firestoreServiceProvider)
-                              .markNotificationRead(message.id);
-                          if (context.mounted) {
-                            context.push(
-                              AppRoutes.messageDetail,
-                              extra: message,
-                            );
-                          }
-                        },
-                      );
-                    },
+      data: (list) {
+        final filtered =
+            _query.isEmpty
+                ? list
+                : list.where((m) {
+                  final q = _query.toLowerCase();
+                  return m.title.toLowerCase().contains(q) ||
+                      m.message.toLowerCase().contains(q) ||
+                      m.senderName.toLowerCase().contains(q);
+                }).toList();
+
+        return Column(
+          children: [
+            // ── Search bar ──────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: TextField(
+                controller: _searchController,
+                onChanged: (v) => setState(() => _query = v),
+                decoration: InputDecoration(
+                  hintText: 'Search by subject or sender...',
+                  prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                  suffixIcon:
+                      _query.isNotEmpty
+                          ? IconButton(
+                            icon: const Icon(Icons.clear_rounded, size: 18),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() => _query = '');
+                            },
+                          )
+                          : null,
+                  filled: true,
+                  fillColor: isDark ? AppColors.darkCard : AppColors.lightCard,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
                   ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                ),
+              ),
+            ),
+
+            // ── Result count ────────────────────────────────────────────
+            if (_query.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(left: 20, right: 16, bottom: 4),
+                child: Row(
+                  children: [
+                    Text(
+                      '${filtered.length} result${filtered.length == 1 ? '' : 's'} for "$_query"',
+                      style: AppTypography.caption.copyWith(
+                        color:
+                            isDark
+                                ? AppColors.darkTextSecondary
+                                : AppColors.lightTextSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+            // ── List ────────────────────────────────────────────────────
+            Expanded(
+              child:
+                  filtered.isEmpty
+                      ? EmptyState(
+                        title: _query.isEmpty ? 'No messages' : 'No results',
+                        message:
+                            _query.isEmpty
+                                ? 'No messages yet'
+                                : 'No messages match "$_query"',
+                        icon:
+                            _query.isEmpty
+                                ? Icons.message_rounded
+                                : Icons.search_off_rounded,
+                      )
+                      : ListView.builder(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 4,
+                        ),
+                        itemCount: filtered.length,
+                        itemBuilder: (context, index) {
+                          final message = filtered[index];
+                          return MessagesTile(
+                            message: message,
+                            onTap: () async {
+                              await ref
+                                  .read(firestoreServiceProvider)
+                                  .markNotificationRead(message.id);
+                              if (context.mounted) {
+                                context.push(
+                                  AppRoutes.messageDetail,
+                                  extra: message,
+                                );
+                              }
+                            },
+                          );
+                        },
+                      ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
