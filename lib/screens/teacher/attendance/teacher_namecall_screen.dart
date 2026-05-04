@@ -32,6 +32,7 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
   final Map<String, bool> _savingMap = {};
   bool _isSubmitted = false;
   bool _isLoadingInit = true;
+  bool _didSyncTotals = false;
 
   // ─── Date resolution ──────────────────────────────────────────────────────
   late String _dateStr;
@@ -81,6 +82,33 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
   Future<void> _initData() async {
     await Future.wait([_resolveTimetableSlot(), _loadExistingAttendance()]);
     if (mounted) setState(() => _isLoadingInit = false);
+  }
+
+  CollectionReference<Map<String, dynamic>> _presenceCol(String studentId) {
+    return FirebaseFirestore.instance
+        .collection('students')
+        .doc(studentId)
+        .collection('presence');
+  }
+
+  Future<void> _syncTotalPresence(String studentId) async {
+    try {
+      final presenceSnap = await _presenceCol(studentId).get();
+      final totalPresence = presenceSnap.size;
+
+      final studentRef = FirebaseFirestore.instance
+          .collection('students')
+          .doc(studentId);
+      final studentDoc = await studentRef.get();
+      final current =
+          (studentDoc.data()?['totalPresence'] as num?)?.toInt() ?? 0;
+
+      if (current != totalPresence) {
+        await studentRef.update({'totalPresence': totalPresence});
+      }
+    } catch (e) {
+      debugPrint('_syncTotalPresence: $e');
+    }
   }
 
   // ─── Resolve timetable slot ───────────────────────────────────────────────
@@ -186,84 +214,100 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
   ) async {
     setState(() => _savingMap[student.id] = true);
 
-    final now = DateTime.now();
-
-    // Resolve "3 IOT 1" from class doc at save time
-    final resolvedClassName = await _resolveClassName(
-      student.classId,
-      student.className,
-    );
-
-    // Session context — all 5 fields
-    final subject = slot?.subject ?? '';
-    final sessionName =
-        slot != null
-            ? '${slot.subject} Session (${slot.startTime} – ${slot.endTime})'
-            : '';
-    final roomId = slot?.roomId ?? '';
-    final roomName = slot?.roomName ?? '';
-    final scheduledStart = slot?.startTime ?? '';
-    final scheduledEnd = slot?.endTime ?? '';
-
-    final entryTimeForPast = DateTime(
-      _dateTime.year,
-      _dateTime.month,
-      _dateTime.day,
-      8,
-      0,
-    );
-
     try {
-      // ── Query existing record — variable name `existing` ──────────────
+      final now = DateTime.now();
+      final db = FirebaseFirestore.instance;
+
+      final resolvedClassName = await _resolveClassName(
+        student.classId,
+        student.className,
+      );
+
+      final subject = slot?.subject ?? '';
+      final sessionName =
+          slot != null
+              ? '${slot.subject} Session (${slot.startTime} – ${slot.endTime})'
+              : '';
+      final roomId = slot?.roomId ?? '';
+      final roomName = slot?.roomName ?? '';
+      final scheduledStart = slot?.startTime ?? '';
+      final scheduledEnd = slot?.endTime ?? '';
+
+      final entryTimeForPast = DateTime(
+        _dateTime.year,
+        _dateTime.month,
+        _dateTime.day,
+        8,
+        0,
+      );
+
       final existing =
-          await FirebaseFirestore.instance
+          await db
               .collection('attendance')
               .where('studentId', isEqualTo: student.id)
               .where('date', isEqualTo: _dateStr)
               .limit(1)
               .get();
 
-      // ── Capture previous status BEFORE writing ────────────────────────
+      final existingDoc = existing.docs.isNotEmpty ? existing.docs.first : null;
+
+      final presenceRef = _presenceCol(student.id).doc(_dateStr);
+      final presenceDoc = await presenceRef.get();
+
       final previousStatus =
-          existing.docs.isNotEmpty
-              ? existing.docs.first.data()['status']?.toString() ?? ''
-              : '';
+          presenceDoc.exists
+              ? AttendanceStatus.present
+              : existingDoc != null
+              ? AttendanceStatus.values.firstWhere(
+                (s) =>
+                    s.name ==
+                    (existingDoc.data()['status']?.toString() ?? 'absent'),
+                orElse: () => AttendanceStatus.absent,
+              )
+              : null;
 
-      final data = {
-        'studentId': student.id,
-        'studentName': student.name,
-        'classId': student.classId,
-        'className': resolvedClassName, // "3 IOT 1"
-        'date': _dateStr,
-        'status': status.name,
-        'entryTime':
-            status == AttendanceStatus.present ||
-                    status == AttendanceStatus.late
-                ? Timestamp.fromDate(_isPastDate ? entryTimeForPast : now)
-                : null,
-        'exitTime': null,
-        // ── Field 1: Subject ──────────────────────────────
-        'subject': subject,
-        // ── Field 2: Teacher ──────────────────────────────
-        'teacherId': teacherId,
-        'teacherName': teacherName,
-        // ── Field 3: Room ─────────────────────────────────
-        'roomId': roomId,
-        'roomName': roomName,
-        // ── Field 4: Scheduled Time ───────────────────────
-        'scheduledStartTime': scheduledStart,
-        'scheduledEndTime': scheduledEnd,
-        'sessionName': sessionName,
-        // ── Field 5: Time of Absence ──────────────────────
-        'recordedAt': Timestamp.fromDate(now),
-        'note': _isPastDate ? 'Manually entered for $_dateStr' : '',
-        'createdAt': FieldValue.serverTimestamp(),
-      };
+      final batch = db.batch();
+      final studentRef = db.collection('students').doc(student.id);
 
-      if (existing.docs.isNotEmpty) {
-        // ── Update existing record ──────────────────────────────────────
-        await existing.docs.first.reference.update({
+      if (status == AttendanceStatus.present) {
+        if (existingDoc != null) {
+          batch.delete(existingDoc.reference);
+        }
+
+        if (!presenceDoc.exists) {
+          batch.set(presenceRef, {
+            'date': _dateStr,
+            'classId': student.classId,
+            'className': resolvedClassName,
+            'teacherId': teacherId,
+            'teacherName': teacherName,
+            'subject': subject,
+            'roomId': roomId,
+            'roomName': roomName,
+            'scheduledStartTime': scheduledStart,
+            'scheduledEndTime': scheduledEnd,
+            'recordedAt': Timestamp.fromDate(now),
+          });
+          batch.update(studentRef, {'totalPresence': FieldValue.increment(1)});
+        }
+      } else {
+        if (presenceDoc.exists) {
+          batch.delete(presenceRef);
+          batch.update(studentRef, {'totalPresence': FieldValue.increment(-1)});
+        }
+
+        final absencePayload = {
+          'studentId': student.id,
+          'studentName': student.name,
+          'classId': student.classId,
+          'className': resolvedClassName,
+          'date': _dateStr,
           'status': status.name,
+          'entryTime':
+              status == AttendanceStatus.late
+                  ? Timestamp.fromDate(_isPastDate ? entryTimeForPast : now)
+                  : null,
+          'exitTime': null,
           'subject': subject,
           'teacherId': teacherId,
           'teacherName': teacherName,
@@ -273,27 +317,35 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
           'scheduledEndTime': scheduledEnd,
           'sessionName': sessionName,
           'recordedAt': Timestamp.fromDate(now),
-          'className': resolvedClassName,
-        });
-      } else {
-        // ── Create new record ───────────────────────────────────────────
-        await FirebaseFirestore.instance.collection('attendance').add(data);
+          'note': _isPastDate ? 'Manually entered for $_dateStr' : '',
+        };
+
+        if (existingDoc != null) {
+          batch.update(existingDoc.reference, absencePayload);
+        } else {
+          final newRef = db.collection('attendance').doc();
+          batch.set(newRef, {
+            ...absencePayload,
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+        }
       }
+
+      await batch.commit();
+
+      await _syncTotalPresence(student.id);
 
       // ── In-app notification (non-fatal — own try/catch) ───────────────
       try {
         final studentDoc =
-            await FirebaseFirestore.instance
-                .collection('students')
-                .doc(student.id)
-                .get();
+            await db.collection('students').doc(student.id).get();
         final studentUserId = studentDoc.data()?['userId']?.toString() ?? '';
 
         await AttendanceNotificationService.notify(
           studentUserId: studentUserId,
           studentName: student.name,
           newStatus: status.name,
-          previousStatus: previousStatus,
+          previousStatus: previousStatus?.name ?? '',
           subject: subject,
           className: resolvedClassName,
           scheduledStart: scheduledStart,
@@ -407,6 +459,15 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
                               'No students found in this class.\nMake sure students are assigned to this class.',
                           icon: Icons.people_outline_rounded,
                         );
+                      }
+
+                      if (!_didSyncTotals) {
+                        _didSyncTotals = true;
+                        Future.microtask(() async {
+                          for (final s in studentList) {
+                            await _syncTotalPresence(s.id);
+                          }
+                        });
                       }
 
                       // Default all students to present on first load
