@@ -51,28 +51,6 @@ final todayAttendanceProvider = StreamProvider<List<AttendanceModel>>((ref) {
 });
 
 // ─────────────────────────────────────────
-//  CURRENT TEACHER — stream from teachers collection
-//  Uses auth UID (currentUser.id) to find the teacher doc.
-// ─────────────────────────────────────────
-
-final currentTeacherProvider = StreamProvider<TeacherModel?>((ref) {
-  final user = ref.watch(currentUserProvider);
-  return user.when(
-    data: (u) {
-      if (u == null) return Stream.value(null);
-      // The teacher doc's id == auth UID (same as users/{id})
-      return FirebaseFirestore.instance
-          .collection('teachers')
-          .doc(u.id)
-          .snapshots()
-          .map((doc) => doc.exists ? TeacherModel.fromFirestore(doc) : null);
-    },
-    loading: () => Stream.value(null),
-    error: (_, __) => Stream.value(null),
-  );
-});
-
-// ─────────────────────────────────────────
 //  TEACHER'S ASSIGNED CLASS IDs
 //
 //  Primary source: TeacherModel.assignedClassIds (from teacher doc).
