@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import '../../../theme/theme.dart';
 import '../../../widgets/widgets.dart';
 import '../../../providers/providers.dart';
-import '../../../models/models.dart';
-import '../../../navigation/app_routes.dart';
 
 class TeacherAttendanceStatsScreen extends ConsumerWidget {
   const TeacherAttendanceStatsScreen({super.key});
@@ -14,12 +12,12 @@ class TeacherAttendanceStatsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // ── today counts — plain int, no .maybeWhen needed ───────────────────
-    final presentToday = ref.watch(todayPresentCountProvider); // int
-    final absentToday = ref.watch(todayAbsentCountProvider); // int
-    final lateToday = ref.watch(todayLateCountProvider); // int
-    final total = presentToday + absentToday + lateToday;
-    final rate = total > 0 ? ((presentToday / total) * 100).toInt() : 0;
+    // ── Teacher-scoped counts — plain int, no .maybeWhen in UI ───────────
+    final present = ref.watch(teacherPresentCountIntProvider); // int
+    final absent = ref.watch(teacherAbsentCountIntProvider); // int
+    final late = ref.watch(teacherLateCountIntProvider); // int
+    final total = present + absent + late;
+    final rate = total > 0 ? ((present / total) * 100).toInt() : 0;
 
     return Scaffold(
       backgroundColor:
@@ -51,7 +49,7 @@ class TeacherAttendanceStatsScreen extends ConsumerWidget {
               child: Column(
                 children: [
                   Text(
-                    '$rate%', // plain int → no formatting issues
+                    '$rate%',
                     style: AppTypography.displayLarge.copyWith(
                       color: Colors.white,
                       fontSize: 56,
@@ -61,6 +59,13 @@ class TeacherAttendanceStatsScreen extends ConsumerWidget {
                     'Attendance Rate Today',
                     style: AppTypography.bodyMedium.copyWith(
                       color: Colors.white70,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    DateFormat('EEEE, d MMM yyyy').format(DateTime.now()),
+                    style: AppTypography.caption.copyWith(
+                      color: Colors.white54,
                     ),
                   ),
                 ],
@@ -79,19 +84,19 @@ class TeacherAttendanceStatsScreen extends ConsumerWidget {
               children: [
                 StatCard(
                   title: 'Present',
-                  value: '$presentToday', // plain int
+                  value: '$present',
                   icon: Icons.check_circle_rounded,
                   color: AppColors.present,
                 ),
                 StatCard(
                   title: 'Absent',
-                  value: '$absentToday',
+                  value: '$absent',
                   icon: Icons.cancel_rounded,
                   color: AppColors.absent,
                 ),
                 StatCard(
                   title: 'Late',
-                  value: '$lateToday',
+                  value: '$late',
                   icon: Icons.watch_later_rounded,
                   color: AppColors.late,
                 ),
@@ -109,25 +114,25 @@ class TeacherAttendanceStatsScreen extends ConsumerWidget {
             _ProgressBar(
               isDark: isDark,
               label: 'Present',
-              value: total > 0 ? presentToday / total : 0,
+              value: total > 0 ? present / total : 0,
               color: AppColors.present,
-              count: presentToday,
+              count: present,
             ),
             const SizedBox(height: 12),
             _ProgressBar(
               isDark: isDark,
               label: 'Absent',
-              value: total > 0 ? absentToday / total : 0,
+              value: total > 0 ? absent / total : 0,
               color: AppColors.absent,
-              count: absentToday,
+              count: absent,
             ),
             const SizedBox(height: 12),
             _ProgressBar(
               isDark: isDark,
               label: 'Late',
-              value: total > 0 ? lateToday / total : 0,
+              value: total > 0 ? late / total : 0,
               color: AppColors.late,
-              count: lateToday,
+              count: late,
             ),
             const SizedBox(height: 32),
           ],
@@ -142,7 +147,7 @@ class _ProgressBar extends StatelessWidget {
   final String label;
   final double value;
   final Color color;
-  final int count; // plain int
+  final int count;
 
   const _ProgressBar({
     required this.isDark,

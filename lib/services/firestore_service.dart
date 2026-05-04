@@ -706,7 +706,7 @@ class FirestoreService {
       _firestore.collection('students').count().get(),
       _firestore.collection('teachers').count().get(),
       _firestore.collection('classes').count().get(),
-      // FIX: present records are in attendance_counts, not attendance
+      // FIX: present records are in attendance_counts, NOT attendance
       _firestore
           .collection('attendance_counts')
           .where('date', isEqualTo: dateStr)
@@ -729,8 +729,8 @@ class FirestoreService {
       'totalStudents': results[0].count ?? 0,
       'totalTeachers': results[1].count ?? 0,
       'totalClasses': results[2].count ?? 0,
-      'presentToday': results[3].count ?? 0, // from attendance_counts
-      'absentToday': results[4].count ?? 0, // from attendance
+      'presentToday': results[3].count ?? 0,
+      'absentToday': results[4].count ?? 0,
       'activeFlags': results[5].count ?? 0,
     };
   }
