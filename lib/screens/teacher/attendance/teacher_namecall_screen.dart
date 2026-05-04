@@ -8,16 +8,30 @@ import '../../../providers/providers.dart';
 import '../../../models/models.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  COLLECTIONS USED
+//  HYBRID TRACKING DESIGN
 //
-//  attendance_counts/{studentId}_{date}
-//    → one document per student per day they were present
-//    → document ID is deterministic: allows upsert + precise deletion
-//    → querying this collection by studentId gives total presence count
+//  students/{id}
+//    └─ totalPresence: int          ← summary field, updated with FieldValue.increment
+//    └─ presence_tracking/{date}    ← sub-collection, one doc per day present
+//         studentId, classId, className, date, sessionName, recordedAt
 //
-//  attendance/{auto-id}
-//    → one document per absent/late record with full 5-field context
-//    → never written for 'present' status
+//  attendance/{auto-id}             ← only absent / late records
+//         all 5 context fields
+//
+//  ON MARK PRESENT:
+//    1. batch.set(students/{id}/presence_tracking/{date})   ← detailed record
+//    2. batch.update(students/{id}, {totalPresence: +1})    ← summary field
+//    3. batch.delete any existing absence doc for this date
+//
+//  ON MARK ABSENT/LATE:
+//    1. batch.delete(students/{id}/presence_tracking/{date})  ← remove tracking
+//    2. batch.update(students/{id}, {totalPresence: -1})       ← decrement summary
+//    3. batch.set attendance doc with all 5 fields
+//
+//  RECONCILE (_reconcilePresenceCount):
+//    - Count sub-collection docs
+//    - If count ≠ students/{id}.totalPresence → overwrite with correct value
+//    - Called on screen open per student
 // ─────────────────────────────────────────────────────────────────────────────
 
 class TeacherNamecallScreen extends ConsumerStatefulWidget {
@@ -38,15 +52,13 @@ class TeacherNamecallScreen extends ConsumerStatefulWidget {
 }
 
 class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
-  // Current UI status for each student
   final Map<String, AttendanceStatus> _attendanceMap = {};
-
-  // Presence count per student — fetched from attendance_counts collection
   final Map<String, int> _presenceCountMap = {};
-
   final Map<String, bool> _savingMap = {};
+
   bool _isSubmitted = false;
   bool _isLoadingInit = true;
+  bool _countsLoaded = false;
 
   late String _dateStr;
   late DateTime _dateTime;
@@ -68,10 +80,7 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
   String _fmt(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
-  // Deterministic doc ID in attendance_counts — one per student per date
-  String _countDocId(String studentId, String date) => '${studentId}_$date';
-
-  // ───────────────────────────────────────
+  // ─────────────────────────────────────────
   @override
   void initState() {
     super.initState();
@@ -100,8 +109,8 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
   }
 
   // ─────────────────────────────────────────
-  //  Timetable slot for the target date.
-  //  Today:     prefer active window, fallback to first.
+  //  Timetable slot resolution.
+  //  Today:     active window preferred → fallback to first slot.
   //  Past date: first slot for that day of week.
   // ─────────────────────────────────────────
   Future<void> _resolveTimetableSlot() async {
@@ -140,12 +149,13 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
   }
 
   // ─────────────────────────────────────────
-  //  Load existing attendance state for this class + date.
-  //  Also pre-loads presence counts from attendance_counts.
+  //  Load today's attendance state for this class.
+  //  Reads both attendance collection (absent/late)
+  //  and presence_tracking sub-collections (present).
   // ─────────────────────────────────────────
   Future<void> _loadExistingAttendance() async {
     try {
-      // Today's absence/late records for this class
+      // Absent / late records
       final absSnap =
           await FirebaseFirestore.instance
               .collection('attendance')
@@ -162,46 +172,46 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
           orElse: () => AttendanceStatus.absent,
         );
       }
-
-      // Mark students who have a presence doc today as present
-      final presentSnap =
-          await FirebaseFirestore.instance
-              .collection('attendance_counts')
-              .where('classId', isEqualTo: widget.classId)
-              .where('date', isEqualTo: _dateStr)
-              .get();
-
-      for (final doc in presentSnap.docs) {
-        final sid = doc.data()['studentId']?.toString() ?? '';
-        if (sid.isNotEmpty) {
-          _attendanceMap[sid] = AttendanceStatus.present;
-        }
-      }
     } catch (e) {
       debugPrint('_loadExistingAttendance: $e');
     }
   }
 
-  // ─────────────────────────────────────────
-  //  FETCH PRESENCE COUNT
+  // ─────────────────────────────────────────────────────────────────────────
+  //  RECONCILE PRESENCE COUNT
   //
-  //  Queries the attendance_counts collection for all documents
-  //  belonging to this student.  Each document = one present day.
-  //  Returns the total number of days the student was present.
+  //  Source of truth: students/{id}/presence_tracking sub-collection count.
+  //  Fast read:       students/{id}.totalPresence summary field.
   //
-  //  Called after every Firestore write to keep the UI in sync.
-  // ─────────────────────────────────────────
-  Future<int> _fetchPresenceCount(String studentId) async {
+  //  If they disagree → overwrite totalPresence with the correct count.
+  //  Called once per student when the screen opens.
+  // ─────────────────────────────────────────────────────────────────────────
+  Future<int> _reconcilePresenceCount(String studentId, int cachedTotal) async {
     try {
       final snap =
           await FirebaseFirestore.instance
-              .collection('attendance_counts')
-              .where('studentId', isEqualTo: studentId)
+              .collection('students')
+              .doc(studentId)
+              .collection('presence_tracking')
               .get();
-      return snap.docs.length;
+
+      final realCount = snap.docs.length;
+
+      if (realCount != cachedTotal) {
+        // Discrepancy found — overwrite the summary field
+        await FirebaseFirestore.instance
+            .collection('students')
+            .doc(studentId)
+            .update({'totalPresence': realCount});
+        debugPrint(
+          'Reconciled $studentId: cached=$cachedTotal real=$realCount',
+        );
+      }
+
+      return realCount;
     } catch (e) {
-      debugPrint('_fetchPresenceCount: $e');
-      return _presenceCountMap[studentId] ?? 0;
+      debugPrint('_reconcilePresenceCount: $e');
+      return cachedTotal;
     }
   }
 
@@ -231,19 +241,23 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  //  SAVE ATTENDANCE
+  //  SAVE ATTENDANCE — hybrid tracking
   //
-  //  PRESENT:
-  //    → Write document to attendance_counts/{studentId}_{date}
-  //    → Delete any existing absence doc in attendance for this date
-  //    → Call _fetchPresenceCount → update UI counter
+  //  PATH A — PRESENT
+  //    1. batch.set  presence_tracking/{date}           ← detailed tracking
+  //    2. batch.update students/{id} totalPresence +1   ← summary field
+  //    3. batch.delete absence doc if any for this date
+  //    → UI: _presenceCountMap[id]++ immediately
   //
-  //  ABSENT / LATE:
-  //    → Delete document from attendance_counts/{studentId}_{date}
-  //    → Write absence doc to attendance collection with all 5 fields
-  //    → Call _fetchPresenceCount → update UI counter
+  //  PATH B — ABSENT / LATE
+  //    1. batch.delete presence_tracking/{date}         ← remove tracking
+  //    2. batch.update students/{id} totalPresence -1   ← summary field
+  //       (only if a tracking doc actually existed)
+  //    3. batch.set/update absence doc in attendance collection
+  //    → UI: _presenceCountMap[id]-- immediately
   //
-  //  Uses WriteBatch for atomicity on each path.
+  //  After commit: _reconcilePresenceCount verifies sub-collection count
+  //  matches summary field and overwrites if needed.
   // ─────────────────────────────────────────────────────────────────────────
   Future<void> _saveStudentAttendance(
     StudentModel student,
@@ -256,13 +270,11 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
     final db = FirebaseFirestore.instance;
     final now = DateTime.now();
 
-    // Resolve "3 IOT 1" from class doc
     final resolvedClassName = await _resolveClassName(
       student.classId,
       student.className,
     );
 
-    // Session context
     final slot = _resolvedSlot;
     final subject = slot?.subject ?? '';
     final roomId = slot?.roomId ?? '';
@@ -272,12 +284,20 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
     final sessionName =
         slot != null ? '$subject ($scheduledStart – $scheduledEnd)' : '';
 
-    // Deterministic doc ref in attendance_counts
-    final countDocRef = db
-        .collection('attendance_counts')
-        .doc(_countDocId(student.id, _dateStr));
+    // Refs
+    final studentRef = db.collection('students').doc(student.id);
+    final trackingRef = studentRef
+        .collection('presence_tracking')
+        .doc(_dateStr); // deterministic: one doc per student per day
 
-    // Find existing absence doc for this student + date
+    // Does a tracking doc already exist for today?
+    DocumentSnapshot<Map<String, dynamic>>? existingTracking;
+    try {
+      final t = await trackingRef.get();
+      if (t.exists) existingTracking = t;
+    } catch (_) {}
+
+    // Find existing absence doc
     QuerySnapshot<Map<String, dynamic>> absenceSnap;
     try {
       absenceSnap =
@@ -288,7 +308,7 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
               .limit(1)
               .get();
     } catch (e) {
-      debugPrint('Absence query error: $e');
+      debugPrint('Absence query: $e');
       if (mounted) setState(() => _savingMap[student.id] = false);
       return;
     }
@@ -302,16 +322,14 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
       if (newStatus == AttendanceStatus.present) {
         // ══════════════════════════════════════════════════════════════════
         //  PATH A — PRESENT
-        //  Write presence record to attendance_counts.
-        //  Delete any existing absence doc for this date.
         // ══════════════════════════════════════════════════════════════════
 
-        // Write to attendance_counts (upsert — same doc ID if re-tapped)
-        batch.set(countDocRef, {
+        // 1. Write tracking record (upsert — safe to re-tap)
+        batch.set(trackingRef, {
           'studentId': student.id,
           'studentName': student.name,
           'classId': student.classId,
-          'className': resolvedClassName, // "3 IOT 1"
+          'className': resolvedClassName,
           'date': _dateStr,
           'teacherId': teacherId,
           'teacherName': teacherName,
@@ -322,22 +340,47 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
           'scheduledEndTime': scheduledEnd,
           'sessionName': sessionName,
           'recordedAt': Timestamp.fromDate(now),
-          'createdAt': FieldValue.serverTimestamp(),
         });
 
-        // Delete absence doc if one exists (was absent/late before)
+        // 2. Increment summary field — only if no tracking doc existed before
+        //    (prevents double-increment on re-tap of the same button)
+        if (existingTracking == null) {
+          batch.update(studentRef, {'totalPresence': FieldValue.increment(1)});
+
+          // Optimistic UI update
+          if (mounted) {
+            setState(() {
+              _presenceCountMap[student.id] =
+                  (_presenceCountMap[student.id] ?? 0) + 1;
+            });
+          }
+        }
+
+        // 3. Delete any absence doc for this date (was absent/late before)
         if (existingAbsenceDoc != null) {
           batch.delete(existingAbsenceDoc.reference);
         }
       } else {
         // ══════════════════════════════════════════════════════════════════
         //  PATH B — ABSENT / LATE
-        //  Delete from attendance_counts (removes from presence count).
-        //  Write full absence doc to attendance collection.
         // ══════════════════════════════════════════════════════════════════
 
-        // Delete presence record — this is what decrements the count
-        batch.delete(countDocRef);
+        // 1. Delete tracking record (removes from sub-collection count)
+        batch.delete(trackingRef);
+
+        // 2. Decrement summary — only if a tracking doc existed
+        //    (prevents spurious decrements when going absent→late)
+        if (existingTracking != null) {
+          batch.update(studentRef, {'totalPresence': FieldValue.increment(-1)});
+
+          // Optimistic UI update
+          if (mounted) {
+            setState(() {
+              final curr = _presenceCountMap[student.id] ?? 0;
+              _presenceCountMap[student.id] = (curr - 1).clamp(0, 9999);
+            });
+          }
+        }
 
         final entryTimeForPast = DateTime(
           _dateTime.year,
@@ -376,11 +419,10 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
           'note': _isPastDate ? 'Manually entered for $_dateStr' : '',
         };
 
+        // 3. Write / update absence doc
         if (existingAbsenceDoc != null) {
-          // Update status on existing absence doc (e.g. absent → late)
           batch.update(existingAbsenceDoc.reference, absencePayload);
         } else {
-          // Create new absence doc
           final newRef = db.collection('attendance').doc();
           batch.set(newRef, {
             ...absencePayload,
@@ -391,14 +433,15 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
 
       await batch.commit();
 
-      // ── Re-sync presence count from attendance_counts source of truth ──
-      final freshCount = await _fetchPresenceCount(student.id);
+      // ── Post-commit reconcile (verifies sub-collection vs summary) ───
+      final cached = _presenceCountMap[student.id] ?? 0;
+      final verified = await _reconcilePresenceCount(student.id, cached);
 
       if (mounted) {
-        setState(() => _presenceCountMap[student.id] = freshCount);
+        setState(() => _presenceCountMap[student.id] = verified);
       }
     } catch (e) {
-      debugPrint('Batch commit error: $e');
+      debugPrint('Batch commit: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -412,9 +455,48 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
     if (mounted) setState(() => _savingMap[student.id] = false);
   }
 
-  // ─────────────────────────────────────────
+  // Eager-load presence counts from student docs (totalPresence field)
+  // then reconcile with sub-collection counts.
+  void _loadPresenceCounts(List<StudentModel> students) {
+    if (_countsLoaded) return;
+    _countsLoaded = true;
+
+    for (final s in students) {
+      // Seed UI immediately from the cached summary field
+      if (!_presenceCountMap.containsKey(s.id)) {
+        _presenceCountMap[s.id] = s.totalPresence;
+      }
+
+      // Also mark present in _attendanceMap if they have a tracking doc today
+      FirebaseFirestore.instance
+          .collection('students')
+          .doc(s.id)
+          .collection('presence_tracking')
+          .doc(_dateStr)
+          .get()
+          .then((doc) {
+            if (doc.exists && mounted) {
+              setState(() {
+                _attendanceMap.putIfAbsent(
+                  s.id,
+                  () => AttendanceStatus.present,
+                );
+              });
+            }
+          });
+
+      // Reconcile in background
+      _reconcilePresenceCount(s.id, s.totalPresence).then((verified) {
+        if (mounted) {
+          setState(() => _presenceCountMap[s.id] = verified);
+        }
+      });
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   //  BUILD
-  // ─────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -505,10 +587,9 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
                           s.id,
                           () => AttendanceStatus.absent,
                         );
-                        _presenceCountMap.putIfAbsent(s.id, () => 0);
                       }
 
-                      // Eagerly load presence counts on first build
+                      // Seed counts from model + reconcile in background
                       _loadPresenceCounts(studentList);
 
                       return Column(
@@ -549,7 +630,8 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
                                 final isSaving =
                                     _savingMap[student.id] ?? false;
                                 final presenceCount =
-                                    _presenceCountMap[student.id] ?? 0;
+                                    _presenceCountMap[student.id] ??
+                                    student.totalPresence;
 
                                 return _StudentCard(
                                   student: student,
@@ -637,18 +719,6 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
               ),
     );
   }
-
-  // Load presence counts for all students in this class (called once on build)
-  bool _countsLoaded = false;
-  void _loadPresenceCounts(List<StudentModel> students) {
-    if (_countsLoaded) return;
-    _countsLoaded = true;
-    for (final s in students) {
-      _fetchPresenceCount(s.id).then((count) {
-        if (mounted) setState(() => _presenceCountMap[s.id] = count);
-      });
-    }
-  }
 }
 
 // ─────────────────────────────────────────
@@ -728,7 +798,7 @@ class _SlotBanner extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'No timetable slot found — records will save without session context.',
+                'No timetable slot — records will save without session context.',
                 style: AppTypography.caption,
               ),
             ),
@@ -1031,7 +1101,7 @@ class _StudentCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // Avatar + presence count badge
+          // Avatar + presence badge
           Stack(
             clipBehavior: Clip.none,
             children: [

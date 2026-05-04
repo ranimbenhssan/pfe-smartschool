@@ -5,16 +5,19 @@ class StudentModel {
   final String name;
   final String email;
   final String classId;
+
+  /// Combined "Level Name Grade" e.g. "3 IOT 1"
   final String className;
+
   final String level;
   final String rfidTag;
   final String userId;
   final DateTime createdAt;
 
-  /// Running total of sessions marked Present.
-  /// Incremented atomically via FieldValue.increment(1) — never stored
-  /// in the `attendance` collection for present records.
-  final int presenceCount;
+  /// Summary counter — kept in sync with presence_tracking sub-collection
+  /// via FieldValue.increment. Never written via toFirestore() to prevent
+  /// overwriting incremental updates.
+  final int totalPresence;
 
   const StudentModel({
     required this.id,
@@ -26,12 +29,18 @@ class StudentModel {
     required this.rfidTag,
     required this.userId,
     required this.createdAt,
-    this.presenceCount = 0,
+    this.totalPresence = 0,
   });
 
+  // ── Display getters ──────────────────────────────────────────────────────
   String get fullDisplay => '$name — $level $className';
   String get classDisplay => '$level $className';
 
+  /// Alias for totalPresence — resolves the compile error:
+  /// "The getter 'presenceCount' isn't defined for the type 'StudentModel'"
+  int get presenceCount => totalPresence;
+
+  // ── Firestore ────────────────────────────────────────────────────────────
   factory StudentModel.fromFirestore(DocumentSnapshot doc) {
     final raw = doc.data() as Map<String, dynamic>;
     return StudentModel(
@@ -44,7 +53,11 @@ class StudentModel {
       rfidTag: raw['rfidTag']?.toString() ?? '',
       userId: raw['userId']?.toString() ?? '',
       createdAt: (raw['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      presenceCount: (raw['presenceCount'] as num?)?.toInt() ?? 0,
+      // Read either field name — supports both old and new Firestore docs
+      totalPresence:
+          (raw['totalPresence'] as num?)?.toInt() ??
+          (raw['presenceCount'] as num?)?.toInt() ??
+          0,
     );
   }
 
@@ -58,8 +71,8 @@ class StudentModel {
       'rfidTag': rfidTag,
       'userId': userId,
       'createdAt': Timestamp.fromDate(createdAt),
-      // presenceCount is NOT included here — it is always written via
-      // FieldValue.increment to avoid race conditions on concurrent saves.
+      // totalPresence intentionally omitted — always written via
+      // FieldValue.increment to prevent overwriting concurrent updates.
     };
   }
 }
