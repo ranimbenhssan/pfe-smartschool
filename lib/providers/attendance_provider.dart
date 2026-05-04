@@ -58,34 +58,70 @@ final todayPresentCountStreamProvider = StreamProvider<int>((ref) {
 });
 
 // ─── Today's Present Count ───
-final todayPresentCountProvider = Provider<int>((ref) {
-  return ref
-      .watch(todayPresentCountStreamProvider)
-      .maybeWhen(data: (count) => count, orElse: () => 0);
+final todayPresentCountProvider = StreamProvider<int>((ref) {
+  final today = ref.watch(todayStringProvider);
+  return FirebaseFirestore.instance
+      .collection('attendance_counts')
+      .where('date', isEqualTo: today)
+      .snapshots()
+      .map((snap) => snap.docs.length);
 });
 
 // ─── Today's Absent Count ───
-final todayAbsentCountProvider = Provider<int>((ref) {
-  return ref
-      .watch(todayAttendanceProvider)
-      .maybeWhen(
-        data:
-            (list) =>
-                list.where((a) => a.status == AttendanceStatus.absent).length,
-        orElse: () => 0,
-      );
+final todayAbsentCountProvider = StreamProvider<int>((ref) {
+  final today = ref.watch(todayStringProvider);
+  return FirebaseFirestore.instance
+      .collection('attendance')
+      .where('date', isEqualTo: today)
+      .where('status', isEqualTo: 'absent')
+      .snapshots()
+      .map((snap) => snap.docs.length);
 });
 
 // ─── Today's Late Count ───
-final todayLateCountProvider = Provider<int>((ref) {
-  return ref
-      .watch(todayAttendanceProvider)
-      .maybeWhen(
-        data:
-            (list) =>
-                list.where((a) => a.status == AttendanceStatus.late).length,
-        orElse: () => 0,
-      );
+final todayLateCountProvider = StreamProvider<int>((ref) {
+  final today = ref.watch(todayStringProvider);
+  return FirebaseFirestore.instance
+      .collection('attendance')
+      .where('date', isEqualTo: today)
+      .where('status', isEqualTo: 'late')
+      .snapshots()
+      .map((snap) => snap.docs.length);
+});
+
+final presentCountByDateProvider = StreamProvider.family<int, String>((
+  ref,
+  date,
+) {
+  if (date.isEmpty) return Stream.value(0);
+  return FirebaseFirestore.instance
+      .collection('attendance_counts')
+      .where('date', isEqualTo: date)
+      .snapshots()
+      .map((snap) => snap.docs.length);
+});
+
+final presentCountByDateAndClassProvider =
+    StreamProvider.family<int, ({String date, String classId})>((ref, params) {
+      if (params.date.isEmpty || params.classId.isEmpty) return Stream.value(0);
+      return FirebaseFirestore.instance
+          .collection('attendance_counts')
+          .where('date', isEqualTo: params.date)
+          .where('classId', isEqualTo: params.classId)
+          .snapshots()
+          .map((snap) => snap.docs.length);
+    });
+
+final presentCountByClassProvider = StreamProvider.family<int, String>((
+  ref,
+  classId,
+) {
+  if (classId.isEmpty) return Stream.value(0);
+  return FirebaseFirestore.instance
+      .collection('attendance_counts')
+      .where('classId', isEqualTo: classId)
+      .snapshots()
+      .map((snap) => snap.docs.length);
 });
 
 /// Stream of ALL absence records across all dates (no date filter).

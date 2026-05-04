@@ -13,9 +13,15 @@ class AdminAttendanceStatsScreen extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     // Today
-    final presentToday = ref.watch(todayPresentCountProvider);
-    final absentToday = ref.watch(todayAbsentCountProvider);
-    final lateToday = ref.watch(todayLateCountProvider);
+    final presentToday = ref
+        .watch(todayPresentCountProvider)
+        .maybeWhen(data: (count) => count, orElse: () => 0);
+    final absentToday = ref
+        .watch(todayAbsentCountProvider)
+        .maybeWhen(data: (count) => count, orElse: () => 0);
+    final lateToday = ref
+        .watch(todayLateCountProvider)
+        .maybeWhen(data: (count) => count, orElse: () => 0);
     final totalToday = presentToday + absentToday + lateToday;
     final rateToday =
         totalToday > 0 ? ((presentToday / totalToday) * 100).toInt() : 0;

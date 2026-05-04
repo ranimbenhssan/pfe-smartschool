@@ -10,9 +10,15 @@ class TeacherAttendanceStatsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final present = ref.watch(todayPresentCountProvider);
-    final absent = ref.watch(todayAbsentCountProvider);
-    final late = ref.watch(todayLateCountProvider);
+    final present = ref
+        .watch(todayPresentCountProvider)
+        .maybeWhen(data: (count) => count, orElse: () => 0);
+    final absent = ref
+        .watch(todayAbsentCountProvider)
+        .maybeWhen(data: (count) => count, orElse: () => 0);
+    final late = ref
+        .watch(todayLateCountProvider)
+        .maybeWhen(data: (count) => count, orElse: () => 0);
     final total = present + absent + late;
     final rate = total > 0 ? ((present / total) * 100).toInt() : 0;
 

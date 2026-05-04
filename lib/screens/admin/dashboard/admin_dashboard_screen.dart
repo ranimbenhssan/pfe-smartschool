@@ -240,9 +240,15 @@ class _DashboardBody extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final stats = ref.watch(dashboardStatsProvider);
     final activeFlags = ref.watch(activeFlagsCountProvider);
-    final presentCount = ref.watch(todayPresentCountProvider);
-    final absentCount = ref.watch(todayAbsentCountProvider);
-    final lateCount = ref.watch(todayLateCountProvider);
+    final presentCount = ref
+        .watch(todayPresentCountProvider)
+        .maybeWhen(data: (count) => count, orElse: () => 0);
+    final absentCount = ref
+        .watch(todayAbsentCountProvider)
+        .maybeWhen(data: (count) => count, orElse: () => 0);
+    final lateCount = ref
+        .watch(todayLateCountProvider)
+        .maybeWhen(data: (count) => count, orElse: () => 0);
 
     return RefreshIndicator(
       color: AppColors.accent,
