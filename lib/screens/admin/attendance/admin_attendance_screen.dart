@@ -29,22 +29,17 @@ class _AdminAttendanceScreenState extends ConsumerState<AdminAttendanceScreen> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // ── Today-only data ───────────────────────────────────────────────────
+    // ── int directly — no .maybeWhen needed ───────────────────────────────
     final today = ref.watch(todayStringProvider);
-    final todayAttendance = ref.watch(todayAttendanceProvider);
-    final presentToday = ref
-        .watch(todayPresentCountProvider)
-        .maybeWhen(data: (count) => count, orElse: () => 0);
-    final absentToday = ref
-        .watch(todayAbsentCountProvider)
-        .maybeWhen(data: (count) => count, orElse: () => 0);
-    final lateToday = ref
-        .watch(todayLateCountProvider)
-        .maybeWhen(data: (count) => count, orElse: () => 0);
+    final presentCount = ref.watch(todayPresentCountProvider); // int
+    final absentCount = ref.watch(todayAbsentCountProvider); // int
+    final lateCount = ref.watch(todayLateCountProvider); // int
+    final total = presentCount + absentCount + lateCount;
+    final rate = total > 0 ? ((presentCount / total) * 100).toInt() : 0;
 
-    // ── All-time cumulative counters ──────────────────────────────────────
-    final allTimeAbsent = ref.watch(allTimeAbsentCountProvider);
-    final allTimeLate = ref.watch(allTimeLateCountProvider);
+    // ── All-time cumulative ───────────────────────────────────────────────
+    final allTimeAbsent = ref.watch(allTimeAbsentCountProvider); // int
+    final allTimeLate = ref.watch(allTimeLateCountProvider); // int
     final allTimeAsync = ref.watch(allTimeAttendanceProvider);
     final allTimeTotal = allTimeAsync.when(
       data: (l) => l.length,
@@ -52,7 +47,7 @@ class _AdminAttendanceScreenState extends ConsumerState<AdminAttendanceScreen> {
       error: (_, __) => 0,
     );
 
-    // ── Filtered list (student name search) ───────────────────────────────
+    // ── Filtered list ─────────────────────────────────────────────────────
     final filteredAsync = ref.watch(filteredAttendanceProvider);
     final searchQuery = ref.watch(attendanceSearchQueryProvider);
 
@@ -67,17 +62,14 @@ class _AdminAttendanceScreenState extends ConsumerState<AdminAttendanceScreen> {
           IconButton(
             icon: const Icon(Icons.bar_chart_rounded),
             onPressed: () => context.push(AppRoutes.adminAttendanceStats),
-            tooltip: 'Statistics',
           ),
           IconButton(
             icon: const Icon(Icons.calendar_today_rounded),
             onPressed: () => context.push(AppRoutes.adminAttendanceByDate),
-            tooltip: 'By Date',
           ),
           IconButton(
             icon: const Icon(Icons.class_rounded),
             onPressed: () => context.push(AppRoutes.adminAttendanceByClass),
-            tooltip: 'By Class',
           ),
         ],
       ),
@@ -98,25 +90,13 @@ class _AdminAttendanceScreenState extends ConsumerState<AdminAttendanceScreen> {
                   children: [
                     Row(
                       children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.accent.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            "TODAY'S ATTENDANCE",
-                            style: AppTypography.labelSmall.copyWith(
-                              color: AppColors.accent,
-                              letterSpacing: 1.0,
-                            ),
+                        Text(
+                          'Today — $today',
+                          style: AppTypography.labelMedium.copyWith(
+                            color: Colors.white60,
                           ),
                         ),
                         const Spacer(),
-                        // Live badge
                         Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 8,
@@ -150,43 +130,79 @@ class _AdminAttendanceScreenState extends ConsumerState<AdminAttendanceScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      DateFormat('EEEE, d MMM yyyy').format(DateTime.now()),
-                      style: AppTypography.caption.copyWith(
-                        color: Colors.white60,
-                      ),
-                    ),
                     const SizedBox(height: 16),
                     Row(
                       children: [
                         Expanded(
                           child: _TodayStat(
                             label: 'Present',
-                            value: presentToday,
+                            value: presentCount, // plain int
                             color: AppColors.success,
                             icon: Icons.check_circle_rounded,
                           ),
                         ),
-                        _Divider(),
+                        Container(width: 1, height: 50, color: Colors.white12),
                         Expanded(
                           child: _TodayStat(
                             label: 'Absent',
-                            value: absentToday,
+                            value: absentCount, // plain int
                             color: AppColors.error,
                             icon: Icons.cancel_rounded,
                           ),
                         ),
-                        _Divider(),
+                        Container(width: 1, height: 50, color: Colors.white12),
                         Expanded(
                           child: _TodayStat(
                             label: 'Late',
-                            value: lateToday,
+                            value: lateCount, // plain int
                             color: AppColors.warning,
                             icon: Icons.watch_later_rounded,
                           ),
                         ),
+                        Container(width: 1, height: 50, color: Colors.white12),
+                        Expanded(
+                          child: _TodayStat(
+                            label: 'Rate',
+                            value: rate,
+                            color: AppColors.accent,
+                            icon: Icons.percent_rounded,
+                            suffix: '%',
+                          ),
+                        ),
                       ],
+                    ),
+                    const SizedBox(height: 12),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: total > 0 ? presentCount / total : 0,
+                        backgroundColor: Colors.white12,
+                        valueColor: const AlwaysStoppedAnimation<Color>(
+                          AppColors.success,
+                        ),
+                        minHeight: 6,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    GestureDetector(
+                      onTap:
+                          () => context.push(AppRoutes.adminAttendanceByDate),
+                      child: Row(
+                        children: [
+                          Text(
+                            'View full report',
+                            style: AppTypography.labelSmall.copyWith(
+                              color: Colors.white60,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Icon(
+                            Icons.arrow_forward_rounded,
+                            color: Colors.white60,
+                            size: 14,
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -194,7 +210,7 @@ class _AdminAttendanceScreenState extends ConsumerState<AdminAttendanceScreen> {
             ),
           ),
 
-          // ── ALL-TIME CUMULATIVE COUNTERS ────────────────────────────────
+          // ── ALL-TIME COUNTERS ────────────────────────────────────────────
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
@@ -207,9 +223,9 @@ class _AdminAttendanceScreenState extends ConsumerState<AdminAttendanceScreen> {
                       color: isDark ? AppColors.darkText : AppColors.lightText,
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 4),
                   Text(
-                    'Cumulative totals — never reset.',
+                    'Cumulative — never reset.',
                     style: AppTypography.caption.copyWith(
                       color:
                           isDark
@@ -223,27 +239,20 @@ class _AdminAttendanceScreenState extends ConsumerState<AdminAttendanceScreen> {
                       Expanded(
                         child: _CumulativeCard(
                           label: 'Total Absences',
-                          count: allTimeAbsent,
+                          count: allTimeAbsent, // plain int
                           color: AppColors.absent,
                           icon: Icons.cancel_rounded,
-                          subtitle: 'Across all dates',
-                          onTap: () {
-                            ref
-                                .read(attendanceSearchQueryProvider.notifier)
-                                .state = '';
-                            _searchController.clear();
-                          },
+                          subtitle: 'All dates',
                         ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: _CumulativeCard(
                           label: 'Total Late',
-                          count: allTimeLate,
+                          count: allTimeLate, // plain int
                           color: AppColors.late,
                           icon: Icons.watch_later_rounded,
-                          subtitle: 'Across all dates',
-                          onTap: null,
+                          subtitle: 'All dates',
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -253,8 +262,7 @@ class _AdminAttendanceScreenState extends ConsumerState<AdminAttendanceScreen> {
                           count: allTimeTotal,
                           color: AppColors.info,
                           icon: Icons.list_alt_rounded,
-                          subtitle: 'Abs + Late combined',
-                          onTap: null,
+                          subtitle: 'Abs + Late',
                         ),
                       ),
                     ],
@@ -264,7 +272,7 @@ class _AdminAttendanceScreenState extends ConsumerState<AdminAttendanceScreen> {
             ),
           ),
 
-          // ── STUDENT NAME SEARCH ─────────────────────────────────────────
+          // ── STUDENT SEARCH ───────────────────────────────────────────────
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
@@ -320,8 +328,8 @@ class _AdminAttendanceScreenState extends ConsumerState<AdminAttendanceScreen> {
                       padding: const EdgeInsets.only(top: 6, left: 4),
                       child: filteredAsync.when(
                         data:
-                            (list) => Text(
-                              '${list.length} record${list.length == 1 ? '' : 's'} for "$searchQuery"',
+                            (l) => Text(
+                              '${l.length} record${l.length == 1 ? '' : 's'} for "$searchQuery"',
                               style: AppTypography.caption.copyWith(
                                 color:
                                     isDark
@@ -338,7 +346,7 @@ class _AdminAttendanceScreenState extends ConsumerState<AdminAttendanceScreen> {
             ),
           ),
 
-          // ── FILTERED ABSENCE LIST ───────────────────────────────────────
+          // ── FILTERED LIST ────────────────────────────────────────────────
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
             sliver: filteredAsync.when(
@@ -373,20 +381,19 @@ class _AdminAttendanceScreenState extends ConsumerState<AdminAttendanceScreen> {
                     ),
                   );
                 }
-
                 return SliverList(
-                  delegate: SliverChildBuilderDelegate((context, index) {
-                    final record = list[index];
-                    return _AttendanceRecordCard(
-                      record: record,
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) => _RecordCard(
+                      record: list[index],
                       isDark: isDark,
                       onTap:
                           () => context.push(
                             AppRoutes.adminAttendanceEdit,
-                            extra: record,
+                            extra: list[index],
                           ),
-                    );
-                  }, childCount: list.length),
+                    ),
+                    childCount: list.length,
+                  ),
                 );
               },
             ),
@@ -398,29 +405,31 @@ class _AdminAttendanceScreenState extends ConsumerState<AdminAttendanceScreen> {
 }
 
 // ─────────────────────────────────────────
-//  TODAY STAT — inside gradient banner
+//  TODAY STAT
 // ─────────────────────────────────────────
 class _TodayStat extends StatelessWidget {
   final String label;
-  final int value;
+  final int value; // plain int — no AsyncValue
   final Color color;
   final IconData icon;
+  final String suffix;
 
   const _TodayStat({
     required this.label,
     required this.value,
     required this.color,
     required this.icon,
+    this.suffix = '',
   });
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Icon(icon, color: color, size: 20),
+        Icon(icon, color: color, size: 18),
         const SizedBox(height: 4),
         Text(
-          '$value',
+          '$value$suffix',
           style: AppTypography.headingLarge.copyWith(
             color: Colors.white,
             fontWeight: FontWeight.bold,
@@ -435,14 +444,8 @@ class _TodayStat extends StatelessWidget {
   }
 }
 
-class _Divider extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) =>
-      Container(width: 1, height: 50, color: Colors.white12);
-}
-
 // ─────────────────────────────────────────
-//  CUMULATIVE CARD — all-time counter
+//  CUMULATIVE CARD
 // ─────────────────────────────────────────
 class _CumulativeCard extends StatelessWidget {
   final String label;
@@ -450,7 +453,6 @@ class _CumulativeCard extends StatelessWidget {
   final Color color;
   final IconData icon;
   final String subtitle;
-  final VoidCallback? onTap;
 
   const _CumulativeCard({
     required this.label,
@@ -458,58 +460,53 @@ class _CumulativeCard extends StatelessWidget {
     required this.color,
     required this.icon,
     required this.subtitle,
-    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: isDark ? AppColors.darkCard : AppColors.lightCard,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: color, size: 20),
-            const SizedBox(height: 8),
-            Text(
-              '$count',
-              style: AppTypography.headingLarge.copyWith(
-                color: color,
-                fontWeight: FontWeight.bold,
-                fontSize: 26,
-              ),
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkCard : AppColors.lightCard,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(height: 8),
+          Text(
+            '$count',
+            style: AppTypography.headingLarge.copyWith(
+              color: color,
+              fontWeight: FontWeight.bold,
+              fontSize: 26,
             ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: AppTypography.labelSmall.copyWith(
-                color: isDark ? AppColors.darkText : AppColors.lightText,
-              ),
+          ),
+          Text(
+            label,
+            style: AppTypography.labelSmall.copyWith(
+              color: isDark ? AppColors.darkText : AppColors.lightText,
             ),
-            Text(subtitle, style: AppTypography.caption),
-          ],
-        ),
+          ),
+          Text(subtitle, style: AppTypography.caption),
+        ],
       ),
     );
   }
 }
 
 // ─────────────────────────────────────────
-//  ATTENDANCE RECORD CARD
+//  RECORD CARD
 // ─────────────────────────────────────────
-class _AttendanceRecordCard extends StatelessWidget {
+class _RecordCard extends StatelessWidget {
   final AttendanceModel record;
   final bool isDark;
   final VoidCallback onTap;
 
-  const _AttendanceRecordCard({
+  const _RecordCard({
     required this.record,
     required this.isDark,
     required this.onTap,
@@ -530,7 +527,6 @@ class _AttendanceRecordCard extends StatelessWidget {
         record.status == AttendanceStatus.late
             ? AppColors.late
             : AppColors.absent;
-
     return GestureDetector(
       onTap: onTap,
       child: Container(

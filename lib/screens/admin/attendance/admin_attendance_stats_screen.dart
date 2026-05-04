@@ -12,23 +12,17 @@ class AdminAttendanceStatsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Today
-    final presentToday = ref
-        .watch(todayPresentCountProvider)
-        .maybeWhen(data: (count) => count, orElse: () => 0);
-    final absentToday = ref
-        .watch(todayAbsentCountProvider)
-        .maybeWhen(data: (count) => count, orElse: () => 0);
-    final lateToday = ref
-        .watch(todayLateCountProvider)
-        .maybeWhen(data: (count) => count, orElse: () => 0);
+    // ── All plain int — no .maybeWhen() needed ────────────────────────────
+    final presentToday = ref.watch(todayPresentCountProvider); // int
+    final absentToday = ref.watch(todayAbsentCountProvider); // int
+    final lateToday = ref.watch(todayLateCountProvider); // int
     final totalToday = presentToday + absentToday + lateToday;
     final rateToday =
         totalToday > 0 ? ((presentToday / totalToday) * 100).toInt() : 0;
 
-    // All-time
-    final allTimeAbsent = ref.watch(allTimeAbsentCountProvider);
-    final allTimeLate = ref.watch(allTimeLateCountProvider);
+    // ── All-time ──────────────────────────────────────────────────────────
+    final allTimeAbsent = ref.watch(allTimeAbsentCountProvider); // int
+    final allTimeLate = ref.watch(allTimeLateCountProvider); // int
     final allTimeAsync = ref.watch(allTimeAttendanceProvider);
     final allTimeTotal = allTimeAsync.when(
       data: (l) => l.length,
@@ -49,7 +43,7 @@ class AdminAttendanceStatsScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── TODAY RATE RING ─────────────────────────────────────────
+            // ── TODAY RATE RING ───────────────────────────────────────────
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(24),
@@ -59,7 +53,6 @@ class AdminAttendanceStatsScreen extends ConsumerWidget {
               ),
               child: Row(
                 children: [
-                  // Rate circle
                   SizedBox(
                     width: 80,
                     height: 80,
@@ -104,11 +97,11 @@ class AdminAttendanceStatsScreen extends ConsumerWidget {
                         const SizedBox(height: 8),
                         Row(
                           children: [
-                            _MiniPill('P: $presentToday', AppColors.success),
+                            _Pill('P: $presentToday', AppColors.success),
                             const SizedBox(width: 6),
-                            _MiniPill('A: $absentToday', AppColors.error),
+                            _Pill('A: $absentToday', AppColors.error),
                             const SizedBox(width: 6),
-                            _MiniPill('L: $lateToday', AppColors.warning),
+                            _Pill('L: $lateToday', AppColors.warning),
                           ],
                         ),
                       ],
@@ -119,7 +112,7 @@ class AdminAttendanceStatsScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 20),
 
-            // ── TODAY BREAKDOWN ─────────────────────────────────────────
+            // ── TODAY BREAKDOWN ───────────────────────────────────────────
             Text(
               "Today's Breakdown",
               style: AppTypography.headingMedium.copyWith(
@@ -149,7 +142,7 @@ class AdminAttendanceStatsScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 28),
 
-            // ── ALL-TIME CUMULATIVE ─────────────────────────────────────
+            // ── ALL-TIME TOTALS ───────────────────────────────────────────
             Row(
               children: [
                 Text(
@@ -178,8 +171,6 @@ class AdminAttendanceStatsScreen extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 12),
-
-            // All-time stat cards
             Row(
               children: [
                 Expanded(
@@ -211,8 +202,6 @@ class AdminAttendanceStatsScreen extends ConsumerWidget {
               ],
             ),
             const SizedBox(height: 16),
-
-            // All-time progress bars
             if (allTimeTotal > 0) ...[
               _ProgressBar(
                 label: 'Absent (all-time)',
@@ -236,9 +225,6 @@ class AdminAttendanceStatsScreen extends ConsumerWidget {
   }
 }
 
-// ─────────────────────────────────────────
-//  PROGRESS BAR
-// ─────────────────────────────────────────
 class _ProgressBar extends StatelessWidget {
   final String label;
   final double value;
@@ -268,7 +254,7 @@ class _ProgressBar extends StatelessWidget {
               ),
             ),
             Text(
-              '$count (${(value * 100).toInt()}%)',
+              '$count (${(value.clamp(0.0, 1.0) * 100).toInt()}%)',
               style: AppTypography.labelMedium.copyWith(color: color),
             ),
           ],
@@ -288,9 +274,6 @@ class _ProgressBar extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────
-//  ALL-TIME STAT CARD
-// ─────────────────────────────────────────
 class _AllTimeStat extends StatelessWidget {
   final String label;
   final int count;
@@ -339,10 +322,10 @@ class _AllTimeStat extends StatelessWidget {
   }
 }
 
-class _MiniPill extends StatelessWidget {
+class _Pill extends StatelessWidget {
   final String label;
   final Color color;
-  const _MiniPill(this.label, this.color);
+  const _Pill(this.label, this.color);
 
   @override
   Widget build(BuildContext context) => Container(

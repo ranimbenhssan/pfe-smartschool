@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../theme/theme.dart';
 import '../../../widgets/widgets.dart';
 import '../../../providers/providers.dart';
+import '../../../models/models.dart';
+import '../../../navigation/app_routes.dart';
 
 class TeacherAttendanceStatsScreen extends ConsumerWidget {
   const TeacherAttendanceStatsScreen({super.key});
@@ -10,17 +13,13 @@ class TeacherAttendanceStatsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final present = ref
-        .watch(todayPresentCountProvider)
-        .maybeWhen(data: (count) => count, orElse: () => 0);
-    final absent = ref
-        .watch(todayAbsentCountProvider)
-        .maybeWhen(data: (count) => count, orElse: () => 0);
-    final late = ref
-        .watch(todayLateCountProvider)
-        .maybeWhen(data: (count) => count, orElse: () => 0);
-    final total = present + absent + late;
-    final rate = total > 0 ? ((present / total) * 100).toInt() : 0;
+
+    // ── today counts — plain int, no .maybeWhen needed ───────────────────
+    final presentToday = ref.watch(todayPresentCountProvider); // int
+    final absentToday = ref.watch(todayAbsentCountProvider); // int
+    final lateToday = ref.watch(todayLateCountProvider); // int
+    final total = presentToday + absentToday + lateToday;
+    final rate = total > 0 ? ((presentToday / total) * 100).toInt() : 0;
 
     return Scaffold(
       backgroundColor:
@@ -34,7 +33,7 @@ class TeacherAttendanceStatsScreen extends ConsumerWidget {
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
-            // ─── Rate Card ───
+            // ── Rate card ─────────────────────────────────────────────────
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(24),
@@ -52,7 +51,7 @@ class TeacherAttendanceStatsScreen extends ConsumerWidget {
               child: Column(
                 children: [
                   Text(
-                    '$rate%',
+                    '$rate%', // plain int → no formatting issues
                     style: AppTypography.displayLarge.copyWith(
                       color: Colors.white,
                       fontSize: 56,
@@ -69,7 +68,7 @@ class TeacherAttendanceStatsScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 20),
 
-            // ─── Stats Grid ───
+            // ── Stats grid ────────────────────────────────────────────────
             GridView.count(
               crossAxisCount: 2,
               shrinkWrap: true,
@@ -80,25 +79,25 @@ class TeacherAttendanceStatsScreen extends ConsumerWidget {
               children: [
                 StatCard(
                   title: 'Present',
-                  value: present.toString(),
+                  value: '$presentToday', // plain int
                   icon: Icons.check_circle_rounded,
                   color: AppColors.present,
                 ),
                 StatCard(
                   title: 'Absent',
-                  value: absent.toString(),
+                  value: '$absentToday',
                   icon: Icons.cancel_rounded,
                   color: AppColors.absent,
                 ),
                 StatCard(
                   title: 'Late',
-                  value: late.toString(),
+                  value: '$lateToday',
                   icon: Icons.watch_later_rounded,
                   color: AppColors.late,
                 ),
                 StatCard(
                   title: 'Total',
-                  value: total.toString(),
+                  value: '$total',
                   icon: Icons.people_rounded,
                   color: AppColors.info,
                 ),
@@ -106,30 +105,31 @@ class TeacherAttendanceStatsScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 24),
 
-            // ─── Progress Bars ───
+            // ── Progress bars ─────────────────────────────────────────────
             _ProgressBar(
               isDark: isDark,
               label: 'Present',
-              value: total > 0 ? present / total : 0,
+              value: total > 0 ? presentToday / total : 0,
               color: AppColors.present,
-              count: present,
+              count: presentToday,
             ),
             const SizedBox(height: 12),
             _ProgressBar(
               isDark: isDark,
               label: 'Absent',
-              value: total > 0 ? absent / total : 0,
+              value: total > 0 ? absentToday / total : 0,
               color: AppColors.absent,
-              count: absent,
+              count: absentToday,
             ),
             const SizedBox(height: 12),
             _ProgressBar(
               isDark: isDark,
               label: 'Late',
-              value: total > 0 ? late / total : 0,
+              value: total > 0 ? lateToday / total : 0,
               color: AppColors.late,
-              count: late,
+              count: lateToday,
             ),
+            const SizedBox(height: 32),
           ],
         ),
       ),
@@ -142,7 +142,7 @@ class _ProgressBar extends StatelessWidget {
   final String label;
   final double value;
   final Color color;
-  final int count;
+  final int count; // plain int
 
   const _ProgressBar({
     required this.isDark,
@@ -167,7 +167,7 @@ class _ProgressBar extends StatelessWidget {
               ),
             ),
             Text(
-              '$count (${(value * 100).toInt()}%)',
+              '$count (${(value.clamp(0.0, 1.0) * 100).toInt()}%)',
               style: AppTypography.labelMedium.copyWith(color: color),
             ),
           ],
@@ -176,7 +176,7 @@ class _ProgressBar extends StatelessWidget {
         ClipRRect(
           borderRadius: BorderRadius.circular(4),
           child: LinearProgressIndicator(
-            value: value,
+            value: value.clamp(0.0, 1.0),
             backgroundColor: color.withValues(alpha: 0.12),
             valueColor: AlwaysStoppedAnimation<Color>(color),
             minHeight: 8,
