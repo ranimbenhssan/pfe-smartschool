@@ -51,14 +51,133 @@ final todayAttendanceProvider = StreamProvider<List<AttendanceModel>>((ref) {
 });
 
 // ─────────────────────────────────────────
-//  TODAY ATTENDANCE — RAW STREAMS (internal)
-//  These are StreamProviders used only to back the int Providers below.
-//  DO NOT expose them to UI directly — use the int providers.
+//  CURRENT TEACHER — stream from teachers collection
+//  Uses auth UID (currentUser.id) to find the teacher doc.
 // ─────────────────────────────────────────
 
-/// Internal stream: number of attendance_counts docs for today.
-/// attendance_counts/{studentId}_{date} is written for every Present mark.
-final _todayPresentStreamProvider = StreamProvider<int>((ref) {
+final currentTeacherProvider = StreamProvider<TeacherModel?>((ref) {
+  final user = ref.watch(currentUserProvider);
+  return user.when(
+    data: (u) {
+      if (u == null) return Stream.value(null);
+      // The teacher doc's id == auth UID (same as users/{id})
+      return FirebaseFirestore.instance
+          .collection('teachers')
+          .doc(u.id)
+          .snapshots()
+          .map((doc) => doc.exists ? TeacherModel.fromFirestore(doc) : null);
+    },
+    loading: () => Stream.value(null),
+    error: (_, __) => Stream.value(null),
+  );
+});
+
+// ─────────────────────────────────────────
+//  TEACHER'S ASSIGNED CLASS IDs
+//
+//  Primary source: TeacherModel.assignedClassIds (from teacher doc).
+//  Fallback:       timetable WHERE teacherId == u.id  (for teachers
+//                  whose assignedClassIds array is empty or stale).
+//
+//  Both sources are live streams so new assignments appear immediately.
+// ─────────────────────────────────────────
+
+final teacherClassIdsProvider = StreamProvider<List<String>>((ref) {
+  final teacherAsync = ref.watch(currentTeacherProvider);
+  final user = ref.watch(currentUserProvider);
+
+  return teacherAsync.when(
+    loading: () => Stream.value(<String>[]),
+    error: (_, __) => Stream.value(<String>[]),
+    data: (teacher) {
+      if (teacher == null) return Stream.value(<String>[]);
+
+      // If assignedClassIds is populated, use it directly
+      if (teacher.assignedClassIds.isNotEmpty) {
+        return Stream.value(teacher.assignedClassIds);
+      }
+
+      // Fallback: derive from timetable entries for this teacher
+      return user.when(
+        data: (u) {
+          if (u == null) return Stream.value(<String>[]);
+          return FirebaseFirestore.instance
+              .collection('timetable')
+              .where('teacherId', isEqualTo: u.id)
+              .snapshots()
+              .map(
+                (snap) =>
+                    snap.docs
+                        .map((d) => d.data()['classId']?.toString() ?? '')
+                        .where((id) => id.isNotEmpty)
+                        .toSet()
+                        .toList(),
+              );
+        },
+        loading: () => Stream.value(<String>[]),
+        error: (_, __) => Stream.value(<String>[]),
+      );
+    },
+  );
+});
+
+// ─────────────────────────────────────────
+//  PRESENT COUNT HELPERS
+//  attendance_counts/{studentId}_{date} — one doc per present student per day
+//  Queried by date (+ optional classId) to get live present counts.
+// ─────────────────────────────────────────
+
+/// Merges multiple count streams into a single sum stream.
+/// Clean implementation using StreamController with proper cleanup.
+Stream<int> _sumStreams(List<Stream<int>> streams) {
+  if (streams.isEmpty) return Stream.value(0);
+  if (streams.length == 1) return streams.first;
+
+  late StreamController<int> controller;
+  final counts = List<int>.filled(streams.length, 0);
+  final subs = <StreamSubscription>[];
+  int activeSubs = streams.length;
+
+  controller = StreamController<int>(
+    onListen: () {
+      for (int i = 0; i < streams.length; i++) {
+        final idx = i;
+        subs.add(
+          streams[idx].listen(
+            (c) {
+              counts[idx] = c;
+              if (!controller.isClosed) {
+                controller.add(counts.fold(0, (a, b) => a + b));
+              }
+            },
+            onError: (e) {
+              if (!controller.isClosed) controller.addError(e);
+            },
+            onDone: () {
+              activeSubs--;
+              if (activeSubs == 0 && !controller.isClosed) controller.close();
+            },
+          ),
+        );
+      }
+    },
+    onCancel: () {
+      for (final sub in subs) {
+        sub.cancel();
+      }
+    },
+  );
+
+  return controller.stream;
+}
+
+// ─────────────────────────────────────────
+//  ADMIN — GLOBAL TODAY COUNTS
+//  Present: attendance_counts WHERE date == today (all school)
+//  Absent/Late: attendance WHERE date == today AND status == x
+// ─────────────────────────────────────────
+
+final _adminPresentStreamProvider = StreamProvider<int>((ref) {
   final today = ref.watch(todayStringProvider);
   return FirebaseFirestore.instance
       .collection('attendance_counts')
@@ -67,8 +186,7 @@ final _todayPresentStreamProvider = StreamProvider<int>((ref) {
       .map((snap) => snap.docs.length);
 });
 
-/// Internal stream: absent docs from attendance collection for today.
-final _todayAbsentStreamProvider = StreamProvider<int>((ref) {
+final _adminAbsentStreamProvider = StreamProvider<int>((ref) {
   final today = ref.watch(todayStringProvider);
   return FirebaseFirestore.instance
       .collection('attendance')
@@ -78,8 +196,7 @@ final _todayAbsentStreamProvider = StreamProvider<int>((ref) {
       .map((snap) => snap.docs.length);
 });
 
-/// Internal stream: late docs from attendance collection for today.
-final _todayLateStreamProvider = StreamProvider<int>((ref) {
+final _adminLateStreamProvider = StreamProvider<int>((ref) {
   final today = ref.watch(todayStringProvider);
   return FirebaseFirestore.instance
       .collection('attendance')
@@ -89,194 +206,131 @@ final _todayLateStreamProvider = StreamProvider<int>((ref) {
       .map((snap) => snap.docs.length);
 });
 
+/// Plain int — safe to use directly in UI (no .maybeWhen needed)
+final todayPresentCountProvider = Provider<int>(
+  (ref) => ref
+      .watch(_adminPresentStreamProvider)
+      .maybeWhen(data: (c) => c, orElse: () => 0),
+);
+
+final todayAbsentCountProvider = Provider<int>(
+  (ref) => ref
+      .watch(_adminAbsentStreamProvider)
+      .maybeWhen(data: (c) => c, orElse: () => 0),
+);
+
+final todayLateCountProvider = Provider<int>(
+  (ref) => ref
+      .watch(_adminLateStreamProvider)
+      .maybeWhen(data: (c) => c, orElse: () => 0),
+);
+
 // ─────────────────────────────────────────
-//  TODAY COUNT PROVIDERS — return int (NOT AsyncValue<int>)
-//  Safe to call .toString() directly in UI.
+//  TEACHER — CLASS-SCOPED TODAY COUNTS
+//  Filtered to the teacher's assigned classIds only.
 // ─────────────────────────────────────────
 
-/// Present count today — reads from attendance_counts collection.
-/// Returns 0 while loading or on error.
-final todayPresentCountProvider = Provider<int>((ref) {
-  return ref
-      .watch(_todayPresentStreamProvider)
-      .maybeWhen(data: (count) => count, orElse: () => 0);
-});
-
-/// Absent count today — reads from attendance collection.
-final todayAbsentCountProvider = Provider<int>((ref) {
-  return ref
-      .watch(_todayAbsentStreamProvider)
-      .maybeWhen(data: (count) => count, orElse: () => 0);
-});
-
-/// Late count today — reads from attendance collection.
-final todayLateCountProvider = Provider<int>((ref) {
-  return ref
-      .watch(_todayLateStreamProvider)
-      .maybeWhen(data: (count) => count, orElse: () => 0);
-});
-
-final teacherClassIdsProvider = StreamProvider<List<String>>((ref) {
-  final user = ref.watch(currentUserProvider);
-  return user.when(
-    data: (u) {
-      if (u == null) return Stream.value([]);
-      return FirebaseFirestore.instance
-          .collection('teachers')
-          .where('userId', isEqualTo: u.id)
-          .limit(1)
-          .snapshots()
-          .map((snap) {
-        if (snap.docs.isEmpty) return <String>[];
-        final data = snap.docs.first.data();
-        final ids = data['assignedClassIds'];
-        if (ids == null) return <String>[];
-        return List<String>.from(ids as List);
-      });
-    },
-    loading: () => Stream.value([]),
-    error: (_, __) => Stream.value([]),
-  );
-});
- 
-// ─── Teacher's TODAY present count ───────────────────────────────────────────
-// Queries attendance_counts WHERE date == today AND classId IN teacher's classes.
-// Each classId is queried separately then summed (Firestore has no whereIn + count).
-final teacherPresentCountProvider = StreamProvider<int>((ref) {
-  final today      = ref.watch(todayStringProvider);
-  final classIds   = ref.watch(teacherClassIdsProvider);
- 
-  return classIds.when(
-    loading: () => Stream.value(0),
-    error: (_, __) => Stream.value(0),
-    data: (ids) {
-      if (ids.isEmpty) return Stream.value(0);
-      // Firestore streams for each classId, then combine
-      final streams = ids.map((id) => FirebaseFirestore.instance
-          .collection('attendance_counts')
-          .where('date', isEqualTo: today)
-          .where('classId', isEqualTo: id)
-          .snapshots()
-          .map((snap) => snap.docs.length));
- 
-      // Combine all streams into a single count
-      return _combineCountStreams(streams.toList());
-    },
-  );
-});
- 
-// ─── Teacher's TODAY absent count ────────────────────────────────────────────
-final teacherAbsentCountProvider = StreamProvider<int>((ref) {
-  final today    = ref.watch(todayStringProvider);
+final _teacherPresentStreamProvider = StreamProvider<int>((ref) {
+  final today = ref.watch(todayStringProvider);
   final classIds = ref.watch(teacherClassIdsProvider);
- 
+
   return classIds.when(
     loading: () => Stream.value(0),
     error: (_, __) => Stream.value(0),
     data: (ids) {
       if (ids.isEmpty) return Stream.value(0);
-      final streams = ids.map((id) => FirebaseFirestore.instance
-          .collection('attendance')
-          .where('date', isEqualTo: today)
-          .where('classId', isEqualTo: id)
-          .where('status', isEqualTo: 'absent')
-          .snapshots()
-          .map((snap) => snap.docs.length));
-      return _combineCountStreams(streams.toList());
+      // One stream per class, summed
+      final streams =
+          ids
+              .map(
+                (id) => FirebaseFirestore.instance
+                    .collection('attendance_counts')
+                    .where('date', isEqualTo: today)
+                    .where('classId', isEqualTo: id)
+                    .snapshots()
+                    .map((snap) => snap.docs.length),
+              )
+              .toList();
+      return _sumStreams(streams);
     },
   );
 });
- 
-// ─── Teacher's TODAY late count ───────────────────────────────────────────────
-final teacherLateCountProvider = StreamProvider<int>((ref) {
-  final today    = ref.watch(todayStringProvider);
+
+final _teacherAbsentStreamProvider = StreamProvider<int>((ref) {
+  final today = ref.watch(todayStringProvider);
   final classIds = ref.watch(teacherClassIdsProvider);
- 
+
   return classIds.when(
     loading: () => Stream.value(0),
     error: (_, __) => Stream.value(0),
     data: (ids) {
       if (ids.isEmpty) return Stream.value(0);
-      final streams = ids.map((id) => FirebaseFirestore.instance
-          .collection('attendance')
-          .where('date', isEqualTo: today)
-          .where('classId', isEqualTo: id)
-          .where('status', isEqualTo: 'late')
-          .snapshots()
-          .map((snap) => snap.docs.length));
-      return _combineCountStreams(streams.toList());
+      final streams =
+          ids
+              .map(
+                (id) => FirebaseFirestore.instance
+                    .collection('attendance')
+                    .where('date', isEqualTo: today)
+                    .where('classId', isEqualTo: id)
+                    .where('status', isEqualTo: 'absent')
+                    .snapshots()
+                    .map((snap) => snap.docs.length),
+              )
+              .toList();
+      return _sumStreams(streams);
     },
   );
 });
- 
-// ─── Int provider wrappers (plain int, no AsyncValue in UI) ──────────────────
-final teacherPresentCountIntProvider = Provider<int>((ref) {
-  return ref.watch(teacherPresentCountProvider).maybeWhen(
-        data: (c) => c,
-        orElse: () => 0,
-      );
+
+final _teacherLateStreamProvider = StreamProvider<int>((ref) {
+  final today = ref.watch(todayStringProvider);
+  final classIds = ref.watch(teacherClassIdsProvider);
+
+  return classIds.when(
+    loading: () => Stream.value(0),
+    error: (_, __) => Stream.value(0),
+    data: (ids) {
+      if (ids.isEmpty) return Stream.value(0);
+      final streams =
+          ids
+              .map(
+                (id) => FirebaseFirestore.instance
+                    .collection('attendance')
+                    .where('date', isEqualTo: today)
+                    .where('classId', isEqualTo: id)
+                    .where('status', isEqualTo: 'late')
+                    .snapshots()
+                    .map((snap) => snap.docs.length),
+              )
+              .toList();
+      return _sumStreams(streams);
+    },
+  );
 });
- 
-final teacherAbsentCountIntProvider = Provider<int>((ref) {
-  return ref.watch(teacherAbsentCountProvider).maybeWhen(
-        data: (c) => c,
-        orElse: () => 0,
-      );
-});
- 
-final teacherLateCountIntProvider = Provider<int>((ref) {
-  return ref.watch(teacherLateCountProvider).maybeWhen(
-        data: (c) => c,
-        orElse: () => 0,
-      );
-});
- 
-// ─── Helper: combine multiple int streams into a sum stream ──────────────────
-Stream<int> _combineCountStreams(List<Stream<int>> streams) {
-  if (streams.isEmpty) return Stream.value(0);
-  if (streams.length == 1) return streams.first;
- 
-  // Use async* to combine multiple streams
-  return () async* {
-    final counts = List<int>.filled(streams.length, 0);
-    final controllers = <Stream<int>>[];
- 
-    for (int i = 0; i < streams.length; i++) {
-      final idx = i;
-      controllers.add(streams[idx].map((c) {
-        counts[idx] = c;
-        return counts.fold<int>(0, (a, b) => a + b);
-      }));
-    }
- 
-    // Merge all streams
-    await for (final total in _merge(controllers)) {
-      yield total;
-    }
-  }();
-}
- 
-Stream<T> _merge<T>(List<Stream<T>> streams) async* {
-  final controller = StreamController<T>();
-  int active = streams.length;
-  for (final s in streams) {
-    s.listen(
-      controller.add,
-      onError: controller.addError,
-      onDone: () {
-        active--;
-        if (active == 0) controller.close();
-      },
-    );
-  }
-  yield* controller.stream;
-}
+
+/// Plain int wrappers for teacher counts
+final teacherPresentCountIntProvider = Provider<int>(
+  (ref) => ref
+      .watch(_teacherPresentStreamProvider)
+      .maybeWhen(data: (c) => c, orElse: () => 0),
+);
+
+final teacherAbsentCountIntProvider = Provider<int>(
+  (ref) => ref
+      .watch(_teacherAbsentStreamProvider)
+      .maybeWhen(data: (c) => c, orElse: () => 0),
+);
+
+final teacherLateCountIntProvider = Provider<int>(
+  (ref) => ref
+      .watch(_teacherLateStreamProvider)
+      .maybeWhen(data: (c) => c, orElse: () => 0),
+);
 
 // ─────────────────────────────────────────
-//  DATE-FILTERED PRESENT COUNTS (int providers)
+//  DATE-FILTERED PRESENT COUNTS (for by-date / by-class screens)
 // ─────────────────────────────────────────
 
-/// Present count for any specific date.
 final presentCountByDateProvider = StreamProvider.family<int, String>((
   ref,
   date,
@@ -289,7 +343,6 @@ final presentCountByDateProvider = StreamProvider.family<int, String>((
       .map((snap) => snap.docs.length);
 });
 
-/// Present count for a specific date + class combination.
 final presentCountByDateAndClassProvider =
     StreamProvider.family<int, ({String date, String classId})>((ref, params) {
       if (params.date.isEmpty || params.classId.isEmpty) return Stream.value(0);
@@ -301,7 +354,6 @@ final presentCountByDateAndClassProvider =
           .map((snap) => snap.docs.length);
     });
 
-/// Present count for a class across all dates.
 final presentCountByClassProvider = StreamProvider.family<int, String>((
   ref,
   classId,
@@ -334,9 +386,7 @@ final allTimeAbsentCountProvider = Provider<int>((ref) {
   return ref
       .watch(allTimeAttendanceProvider)
       .maybeWhen(
-        data:
-            (list) =>
-                list.where((a) => a.status == AttendanceStatus.absent).length,
+        data: (l) => l.where((a) => a.status == AttendanceStatus.absent).length,
         orElse: () => 0,
       );
 });
@@ -345,9 +395,7 @@ final allTimeLateCountProvider = Provider<int>((ref) {
   return ref
       .watch(allTimeAttendanceProvider)
       .maybeWhen(
-        data:
-            (list) =>
-                list.where((a) => a.status == AttendanceStatus.late).length,
+        data: (l) => l.where((a) => a.status == AttendanceStatus.late).length,
         orElse: () => 0,
       );
 });
@@ -377,7 +425,7 @@ final filteredAttendanceProvider = Provider<AsyncValue<List<AttendanceModel>>>((
 });
 
 // ─────────────────────────────────────────
-//  STUDENT ATTENDANCE STATS (utility)
+//  UTILITY
 // ─────────────────────────────────────────
 
 final studentAttendanceStatsProvider =

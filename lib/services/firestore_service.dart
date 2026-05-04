@@ -706,7 +706,6 @@ class FirestoreService {
       _firestore.collection('students').count().get(),
       _firestore.collection('teachers').count().get(),
       _firestore.collection('classes').count().get(),
-      // FIX: present records are in attendance_counts, NOT attendance
       _firestore
           .collection('attendance_counts')
           .where('date', isEqualTo: dateStr)

@@ -2,16 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ClassModel {
   final String id;
-
-  /// Raw class name segment, e.g. "IOT"
-  final String name;
-
-  /// Grade/section number, e.g. "1"
-  final String grade;
-
-  /// Year/level, e.g. "3"
-  final String level;
-
+  final String name; // e.g. "IOT"
+  final String grade; // e.g. "1"
+  final String level; // e.g. "3"
   final List<String> teacherIds;
   final List<String> teacherNames;
   final String roomId;
@@ -34,28 +27,22 @@ class ClassModel {
 
   // ─────────────────────────────────────────
   //  DISPLAY GETTERS
-  //  Structure: level = "3", name = "IOT", grade = "1"
-  //
-  //  getFullName()  → "3 IOT 1"     ← PRIMARY identifier, used everywhere
-  //  displayName    → "3 IOT 1"     ← alias for getFullName()
-  //  shortName      → "3 IOT"       ← level + name, no grade (chips / badges)
-  //  fullDisplay    → "3 IOT 1 (3 students)"  ← verbose, admin detail headers
+  //  level="3" + name="IOT" + grade="1"  →  "3 IOT 1"
   // ─────────────────────────────────────────
 
-  /// Primary combined identifier: "3 IOT 1"
-  /// Use this for Firestore className fields, UI labels, search, and timetable.
+  /// Primary identifier used across the app: "3 IOT 1"
   String getFullName() {
     final parts = <String>[];
     if (level.isNotEmpty) parts.add(level);
     if (name.isNotEmpty) parts.add(name);
     if (grade.isNotEmpty) parts.add(grade);
-    return parts.join(' ');
+    return parts.isNotEmpty ? parts.join(' ') : name;
   }
 
-  /// Alias — use in UI wherever a display label is needed.
+  /// Alias — used in UI labels
   String get displayName => getFullName();
 
-  /// Level + name only — used for filter chips and compact badges.
+  /// Short form without grade — used in badges
   String get shortName {
     final parts = <String>[];
     if (level.isNotEmpty) parts.add(level);
@@ -63,10 +50,7 @@ class ClassModel {
     return parts.isNotEmpty ? parts.join(' ') : name;
   }
 
-  /// Verbose label for admin detail screens.
-  String get fullDisplay =>
-      '${getFullName()}${studentCount > 0 ? ' ($studentCount students)' : ''}';
-
+  String get fullDisplay => getFullName();
   String get teacherId => teacherIds.isNotEmpty ? teacherIds.first : '';
   String get teacherName => teacherNames.isNotEmpty ? teacherNames.first : '';
 
@@ -99,8 +83,7 @@ class ClassModel {
       'name': name,
       'grade': grade,
       'level': level,
-      // ─── Store the combined name for fast reads / denormalization ───
-      'displayName': getFullName(),
+      'displayName': getFullName(), // denormalized for Firestore console
       'teacherIds': teacherIds,
       'teacherNames': teacherNames,
       'roomId': roomId,

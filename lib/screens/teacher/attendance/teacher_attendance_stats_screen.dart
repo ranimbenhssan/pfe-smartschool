@@ -12,10 +12,10 @@ class TeacherAttendanceStatsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // ── Teacher-scoped counts — plain int, no .maybeWhen in UI ───────────
-    final present = ref.watch(teacherPresentCountIntProvider); // int
-    final absent = ref.watch(teacherAbsentCountIntProvider); // int
-    final late = ref.watch(teacherLateCountIntProvider); // int
+    // Plain int — no .maybeWhen in UI
+    final present = ref.watch(teacherPresentCountIntProvider);
+    final absent = ref.watch(teacherAbsentCountIntProvider);
+    final late = ref.watch(teacherLateCountIntProvider);
     final total = present + absent + late;
     final rate = total > 0 ? ((present / total) * 100).toInt() : 0;
 
@@ -61,7 +61,7 @@ class TeacherAttendanceStatsScreen extends ConsumerWidget {
                       color: Colors.white70,
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   Text(
                     DateFormat('EEEE, d MMM yyyy').format(DateTime.now()),
                     style: AppTypography.caption.copyWith(
@@ -111,7 +111,7 @@ class TeacherAttendanceStatsScreen extends ConsumerWidget {
             const SizedBox(height: 24),
 
             // ── Progress bars ─────────────────────────────────────────────
-            _ProgressBar(
+            _Bar(
               isDark: isDark,
               label: 'Present',
               value: total > 0 ? present / total : 0,
@@ -119,7 +119,7 @@ class TeacherAttendanceStatsScreen extends ConsumerWidget {
               count: present,
             ),
             const SizedBox(height: 12),
-            _ProgressBar(
+            _Bar(
               isDark: isDark,
               label: 'Absent',
               value: total > 0 ? absent / total : 0,
@@ -127,7 +127,7 @@ class TeacherAttendanceStatsScreen extends ConsumerWidget {
               count: absent,
             ),
             const SizedBox(height: 12),
-            _ProgressBar(
+            _Bar(
               isDark: isDark,
               label: 'Late',
               value: total > 0 ? late / total : 0,
@@ -142,14 +142,14 @@ class TeacherAttendanceStatsScreen extends ConsumerWidget {
   }
 }
 
-class _ProgressBar extends StatelessWidget {
+class _Bar extends StatelessWidget {
   final bool isDark;
   final String label;
   final double value;
   final Color color;
   final int count;
 
-  const _ProgressBar({
+  const _Bar({
     required this.isDark,
     required this.label,
     required this.value,
