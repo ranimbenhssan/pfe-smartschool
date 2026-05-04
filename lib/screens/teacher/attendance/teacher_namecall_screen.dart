@@ -25,21 +25,26 @@ class TeacherNamecallScreen extends ConsumerStatefulWidget {
 }
 
 class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
-  // Current UI status for each student
+  // ── Current UI status for each student ──────────────────────────────────
   final Map<String, AttendanceStatus> _attendanceMap = {};
 
-  // Status snapshot taken immediately BEFORE a tap — drives counter logic
-  final Map<String, AttendanceStatus> _previousStatusMap = {};
+  // ── Local presence count cache — updated immediately on tap ─────────────
+  // Populated from Firestore on init, then kept in sync locally.
+  // Key: studentId, Value: count of 'present' documents for this student.
+  final Map<String, int> _presenceCountMap = {};
 
+  // ── Saving spinner per student ───────────────────────────────────────────
   final Map<String, bool> _savingMap = {};
+
   bool _isSubmitted = false;
   bool _isLoadingInit = true;
 
+  // ── Date ─────────────────────────────────────────────────────────────────
   late String _dateStr;
   late DateTime _dateTime;
   late bool _isPastDate;
 
-  // Resolved timetable slot (fetched once; works today AND past dates)
+  // ── Timetable slot fetched once in initState ─────────────────────────────
   TimetableModel? _resolvedSlot;
 
   static const _weekdays = [
@@ -56,7 +61,7 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
   String _fmt(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
-  // ───────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
   @override
   void initState() {
     super.initState();
@@ -84,10 +89,11 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
     if (mounted) setState(() => _isLoadingInit = false);
   }
 
-  // ───────────────────────────────────────
-  // Timetable slot — today: prefer active window, fallback to first slot.
-  // Past date: first slot for that day of week.
-  // ───────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
+  //  Resolve timetable slot.
+  //  Today:     prefer currently-active window; fallback to first slot.
+  //  Past date: first slot for that day of week.
+  // ─────────────────────────────────────────────────────────────────────────
   Future<void> _resolveTimetableSlot() async {
     if (widget.classId.isEmpty) return;
     try {
@@ -123,39 +129,92 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
     }
   }
 
-  // ───────────────────────────────────────
-  // Pre-fill _attendanceMap from existing Firestore records for _dateStr.
-  // Also seeds _previousStatusMap so the very first tap after load has
-  // accurate prior-state information.
-  // ───────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
+  //  Pre-fill attendance map AND presence count map from Firestore.
+  //
+  //  _attendanceMap  → current status for each student on _dateStr
+  //  _presenceCountMap → total present docs ever for each student
+  //                      (used for the stats display)
+  // ─────────────────────────────────────────────────────────────────────────
   Future<void> _loadExistingAttendance() async {
     try {
-      final snap =
+      // Today's attendance records for this class
+      final todaySnap =
           await FirebaseFirestore.instance
               .collection('attendance')
               .where('classId', isEqualTo: widget.classId)
               .where('date', isEqualTo: _dateStr)
               .get();
 
-      for (final doc in snap.docs) {
+      for (final doc in todaySnap.docs) {
         final d = doc.data();
         final sid = d['studentId']?.toString() ?? '';
         if (sid.isEmpty) continue;
-        final loaded = AttendanceStatus.values.firstWhere(
+        _attendanceMap[sid] = AttendanceStatus.values.firstWhere(
           (s) => s.name == (d['status']?.toString() ?? 'absent'),
           orElse: () => AttendanceStatus.absent,
         );
-        _attendanceMap[sid] = loaded;
-        _previousStatusMap[sid] = loaded; // seed previous = loaded value
       }
+
+      // Presence counts — query all present docs for each student in this class
+      final presentSnap =
+          await FirebaseFirestore.instance
+              .collection('attendance')
+              .where('classId', isEqualTo: widget.classId)
+              .where('status', isEqualTo: 'present')
+              .get();
+
+      // Group by studentId
+      final countMap = <String, int>{};
+      for (final doc in presentSnap.docs) {
+        final sid = doc.data()['studentId']?.toString() ?? '';
+        if (sid.isEmpty) continue;
+        countMap[sid] = (countMap[sid] ?? 0) + 1;
+      }
+
+      if (mounted) _presenceCountMap.addAll(countMap);
     } catch (e) {
       debugPrint('_loadExistingAttendance: $e');
     }
   }
 
-  // ───────────────────────────────────────
-  // Read className from the class doc → "Level Name Grade" e.g. "3 IOT 1"
-  // ───────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
+  //  CALCULATE PRESENCE COUNT (dynamic query)
+  //
+  //  Called after each Firestore write to re-sync the local count from the
+  //  source of truth.  Returns the total number of 'present' documents for
+  //  this student across all dates.
+  // ─────────────────────────────────────────────────────────────────────────
+  Future<int> _calculatePresenceCount(String studentId) async {
+    try {
+      final snap =
+          await FirebaseFirestore.instance
+              .collection('attendance')
+              .where('studentId', isEqualTo: studentId)
+              .where('status', isEqualTo: 'present')
+              .count()
+              .get();
+      return snap.count ?? 0;
+    } catch (_) {
+      // count() requires Firestore index; fallback to get() if not available
+      try {
+        final snap =
+            await FirebaseFirestore.instance
+                .collection('attendance')
+                .where('studentId', isEqualTo: studentId)
+                .where('status', isEqualTo: 'present')
+                .get();
+        return snap.docs.length;
+      } catch (e) {
+        debugPrint('_calculatePresenceCount fallback error: $e');
+        return _presenceCountMap[studentId] ?? 0;
+      }
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  //  Resolve className → "Level Name Grade" e.g. "3 IOT 1"
+  // ─────────────────────────────────────────────────────────────────────────
   Future<String> _resolveClassName(String classId, String fallback) async {
     try {
       final doc =
@@ -178,29 +237,27 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
     }
   }
 
-  // ───────────────────────────────────────────────────────────────────────
-  //  SAVE ATTENDANCE  — the core of all attendance state management.
+  // ─────────────────────────────────────────────────────────────────────────
+  //  SAVE ATTENDANCE — document-based presence tracking
   //
-  //  STATUS TRANSITION TABLE
-  //  ┌─────────────────────┬──────────────────────────────────────────────┐
-  //  │ prev → new          │ Counter action        │ Firestore action      │
-  //  ├─────────────────────┼───────────────────────┼───────────────────────┤
-  //  │ (none) → present    │ +1                    │ no doc written        │
-  //  │ (none) → absent/late│ none                  │ create doc            │
-  //  │ present → present   │ none (re-tap guard)   │ nothing               │
-  //  │ present → absent    │ -1                    │ create doc            │
-  //  │ present → late      │ -1                    │ create doc            │
-  //  │ absent  → present   │ +1                    │ delete doc            │
-  //  │ late    → present   │ +1                    │ delete doc            │
-  //  │ absent  → late      │ none                  │ update doc status     │
-  //  │ late    → absent    │ none                  │ update doc status     │
-  //  └─────────────────────┴───────────────────────┴───────────────────────┘
+  //  Every status is stored as a Firestore document (present included).
+  //  This allows:
+  //    • Counting present records via query  (_calculatePresenceCount)
+  //    • Deleting the specific present doc when toggled to absent/late
+  //    • Deleting the specific absence doc when toggled back to present
   //
-  //  _previousStatusMap[student.id] MUST be set BEFORE setState() updates
-  //  _attendanceMap so the prior value is captured correctly.
+  //  TRANSITION TABLE
+  //  ┌──────────────────────┬──────────────────────────────────────────────┐
+  //  │ new status           │ Firestore action                             │
+  //  ├──────────────────────┼──────────────────────────────────────────────┤
+  //  │ present              │ create present doc (or update existing)      │
+  //  │ absent / late        │ delete present doc if exists for this date   │
+  //  │                      │ create absence doc with all 5 context fields │
+  //  └──────────────────────┴──────────────────────────────────────────────┘
   //
-  //  WriteBatch keeps counter + doc atomic.
-  // ───────────────────────────────────────────────────────────────────────
+  //  After commit: _calculatePresenceCount() re-syncs the local cache and
+  //  setState() updates the UI count immediately.
+  // ─────────────────────────────────────────────────────────────────────────
   Future<void> _saveStudentAttendance(
     StudentModel student,
     AttendanceStatus newStatus,
@@ -212,16 +269,13 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
     final db = FirebaseFirestore.instance;
     final now = DateTime.now();
 
-    // Previous status captured by call site before setState
-    final prevStatus = _previousStatusMap[student.id];
-
     // Resolve "3 IOT 1" from class doc
     final resolvedClassName = await _resolveClassName(
       student.classId,
       student.className,
     );
 
-    // Session context from resolved slot
+    // Session context
     final slot = _resolvedSlot;
     final subject = slot?.subject ?? '';
     final roomId = slot?.roomId ?? '';
@@ -231,7 +285,7 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
     final sessionName =
         slot != null ? '$subject ($scheduledStart – $scheduledEnd)' : '';
 
-    // Fetch any existing attendance doc for this student + date
+    // Find any existing attendance doc for this student + date
     QuerySnapshot<Map<String, dynamic>> existingSnap;
     try {
       existingSnap =
@@ -250,31 +304,59 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
     final existingDoc =
         existingSnap.docs.isNotEmpty ? existingSnap.docs.first : null;
 
-    final studentRef = db.collection('students').doc(student.id);
-    final batch = db.batch();
-
     try {
       if (newStatus == AttendanceStatus.present) {
-        // ════════════════════════════════════════════════════════
-        //  PATH A: NEW STATUS = PRESENT
-        //  • Delete absence doc if it exists (was absent/late)
-        //  • Increment counter — ONLY if not already present
-        // ════════════════════════════════════════════════════════
-        if (existingDoc != null) {
-          batch.delete(existingDoc.reference);
-        }
+        // ══════════════════════════════════════════════════════════════════
+        //  PATH A — PRESENT
+        //  Store a present record so it can be queried and deleted later.
+        //  No counter field is touched — count is derived from docs.
+        // ══════════════════════════════════════════════════════════════════
+        final presentPayload = <String, dynamic>{
+          'studentId': student.id,
+          'studentName': student.name,
+          'classId': student.classId,
+          'className': resolvedClassName,
+          'date': _dateStr,
+          'status': 'present',
+          'entryTime': Timestamp.fromDate(now),
+          'exitTime': null,
+          // Minimal context — present records don't need full 5-field detail
+          'teacherId': teacherId,
+          'teacherName': teacherName,
+          'subject': subject,
+          'roomId': roomId,
+          'roomName': roomName,
+          'scheduledStartTime': scheduledStart,
+          'scheduledEndTime': scheduledEnd,
+          'sessionName': sessionName,
+          'recordedAt': Timestamp.fromDate(now),
+          'note': '',
+        };
 
-        if (prevStatus != AttendanceStatus.present) {
-          batch.update(studentRef, {'presenceCount': FieldValue.increment(1)});
+        if (existingDoc != null) {
+          await existingDoc.reference.update({
+            'status': 'present',
+            'recordedAt': Timestamp.fromDate(now),
+            'entryTime': Timestamp.fromDate(now),
+          });
+        } else {
+          await db.collection('attendance').add({
+            ...presentPayload,
+            'createdAt': FieldValue.serverTimestamp(),
+          });
         }
       } else {
-        // ════════════════════════════════════════════════════════
-        //  PATH B: NEW STATUS = ABSENT or LATE
-        //  • Decrement counter — ONLY if previous was present
-        //  • Write / update absence doc with all 5 context fields
-        // ════════════════════════════════════════════════════════
-        if (prevStatus == AttendanceStatus.present) {
-          batch.update(studentRef, {'presenceCount': FieldValue.increment(-1)});
+        // ══════════════════════════════════════════════════════════════════
+        //  PATH B — ABSENT / LATE
+        //  1. Delete the present doc for this date if it exists.
+        //     This is what keeps the count accurate — the doc is physically
+        //     removed, not just status-updated.
+        //  2. Write a new absence doc with all 5 context fields.
+        // ══════════════════════════════════════════════════════════════════
+
+        // Step 1: delete present doc
+        if (existingDoc != null && existingDoc.data()['status'] == 'present') {
+          await existingDoc.reference.delete();
         }
 
         final entryTimeForPast = DateTime(
@@ -314,25 +396,30 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
           'note': _isPastDate ? 'Manually entered for $_dateStr' : '',
         };
 
-        if (existingDoc != null) {
-          batch.update(existingDoc.reference, absencePayload);
+        // Step 2: write absence doc
+        if (existingDoc != null && existingDoc.data()['status'] != 'present') {
+          // Already an absence doc — just update it
+          await existingDoc.reference.update(absencePayload);
         } else {
-          final newRef = db.collection('attendance').doc();
-          batch.set(newRef, {
+          // Create new absence doc (present doc was deleted above, or no doc existed)
+          await db.collection('attendance').add({
             ...absencePayload,
             'createdAt': FieldValue.serverTimestamp(),
           });
         }
       }
 
-      await batch.commit();
+      // ── Re-sync presence count from source of truth ───────────────────
+      // This is the dynamic count: query all 'present' docs for this student.
+      final freshCount = await _calculatePresenceCount(student.id);
 
-      // Update previousStatusMap to reflect committed state
       if (mounted) {
-        _previousStatusMap[student.id] = newStatus;
+        setState(() {
+          _presenceCountMap[student.id] = freshCount;
+        });
       }
     } catch (e) {
-      debugPrint('Batch commit error: $e');
+      debugPrint('Save error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -346,9 +433,9 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
     if (mounted) setState(() => _savingMap[student.id] = false);
   }
 
-  // ─────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
   //  BUILD
-  // ─────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -434,16 +521,13 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
                         );
                       }
 
-                      // Default absent for any student not loaded from Firestore
+                      // Seed defaults for students not yet recorded
                       for (final s in studentList) {
                         _attendanceMap.putIfAbsent(
                           s.id,
                           () => AttendanceStatus.absent,
                         );
-                        _previousStatusMap.putIfAbsent(
-                          s.id,
-                          () => AttendanceStatus.absent,
-                        );
+                        _presenceCountMap.putIfAbsent(s.id, () => 0);
                       }
 
                       return Column(
@@ -461,8 +545,10 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
                             isPast: _isPastDate,
                           ),
 
+                          // Stats bar reads from live _attendanceMap
                           _StatsBar(
                             attendanceMap: _attendanceMap,
+                            presenceCountMap: _presenceCountMap,
                             total: studentList.length,
                             isDark: isDark,
                           ),
@@ -482,19 +568,18 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
                                     AttendanceStatus.absent;
                                 final isSaving =
                                     _savingMap[student.id] ?? false;
+                                final presenceCount =
+                                    _presenceCountMap[student.id] ?? 0;
 
                                 return _StudentCard(
                                   student: student,
                                   status: status,
+                                  presenceCount: presenceCount,
                                   isDark: isDark,
                                   isSaving: isSaving,
                                   isSubmitted: _isSubmitted,
                                   onStatusChanged: (newStatus) async {
-                                    // ── CRITICAL: capture prev BEFORE setState
-                                    _previousStatusMap[student.id] =
-                                        _attendanceMap[student.id] ??
-                                        AttendanceStatus.absent;
-
+                                    // Update UI immediately
                                     setState(
                                       () =>
                                           _attendanceMap[student.id] =
@@ -543,7 +628,7 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
                                           Text(
                                             _isPastDate
                                                 ? 'Past attendance saved ✅'
-                                                : 'Attendance saved — synced in real-time ✅',
+                                                : 'Attendance saved ✅',
                                             style: AppTypography.labelMedium
                                                 .copyWith(
                                                   color: AppColors.success,
@@ -652,7 +737,7 @@ class _SlotBanner extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'No timetable slot found — absence records will save without session context.',
+                'No timetable slot found — records will save without session context.',
                 style: AppTypography.caption,
               ),
             ),
@@ -847,23 +932,32 @@ class _DetailItem extends StatelessWidget {
 // ─────────────────────────────────────────
 class _StatsBar extends StatelessWidget {
   final Map<String, AttendanceStatus> attendanceMap;
+  final Map<String, int> presenceCountMap;
   final int total;
   final bool isDark;
 
   const _StatsBar({
     required this.attendanceMap,
+    required this.presenceCountMap,
     required this.total,
     required this.isDark,
   });
 
   @override
   Widget build(BuildContext context) {
-    final present =
+    // Present = students marked present RIGHT NOW in this session
+    final presentNow =
         attendanceMap.values.where((s) => s == AttendanceStatus.present).length;
     final absent =
         attendanceMap.values.where((s) => s == AttendanceStatus.absent).length;
     final late =
         attendanceMap.values.where((s) => s == AttendanceStatus.late).length;
+
+    // Total presence across all sessions (dynamic query result)
+    final totalPresence = presenceCountMap.values.fold<int>(
+      0,
+      (sum, c) => sum + c,
+    );
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -878,13 +972,25 @@ class _StatsBar extends StatelessWidget {
         ),
         child: Row(
           children: [
-            _StatPill('Present', present, AppColors.present),
+            _StatPill('Present', presentNow, AppColors.present),
             const SizedBox(width: 8),
             _StatPill('Late', late, AppColors.late),
             const SizedBox(width: 8),
             _StatPill('Absent', absent, AppColors.absent),
             const Spacer(),
-            Text('$total students', style: AppTypography.caption),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text('$total students', style: AppTypography.caption),
+                Text(
+                  '$totalPresence total presences',
+                  style: AppTypography.caption.copyWith(
+                    color: AppColors.present,
+                    fontSize: 10,
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),
@@ -921,6 +1027,7 @@ class _StatPill extends StatelessWidget {
 class _StudentCard extends StatelessWidget {
   final StudentModel student;
   final AttendanceStatus status;
+  final int presenceCount;
   final bool isDark;
   final bool isSaving;
   final bool isSubmitted;
@@ -929,6 +1036,7 @@ class _StudentCard extends StatelessWidget {
   const _StudentCard({
     required this.student,
     required this.status,
+    required this.presenceCount,
     required this.isDark,
     required this.isSaving,
     required this.isSubmitted,
@@ -954,18 +1062,45 @@ class _StudentCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          CircleAvatar(
-            radius: 20,
-            backgroundColor: AppColors.teacherColor.withValues(alpha: 0.15),
-            child: Text(
-              student.name.isNotEmpty ? student.name[0].toUpperCase() : '?',
-              style: AppTypography.labelLarge.copyWith(
-                color: AppColors.teacherColor,
+          // ── Avatar with presence count badge ──
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              CircleAvatar(
+                radius: 20,
+                backgroundColor: AppColors.teacherColor.withValues(alpha: 0.15),
+                child: Text(
+                  student.name.isNotEmpty ? student.name[0].toUpperCase() : '?',
+                  style: AppTypography.labelLarge.copyWith(
+                    color: AppColors.teacherColor,
+                  ),
+                ),
               ),
-            ),
+              // Presence count badge
+              Positioned(
+                right: -4,
+                bottom: -4,
+                child: Container(
+                  padding: const EdgeInsets.all(3),
+                  decoration: const BoxDecoration(
+                    color: AppColors.present,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Text(
+                    '$presenceCount',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 14),
 
+          // ── Name + class ──
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -981,6 +1116,7 @@ class _StudentCard extends StatelessWidget {
             ),
           ),
 
+          // ── Saving / submitted / buttons ──
           if (isSaving)
             const SizedBox(
               width: 24,
