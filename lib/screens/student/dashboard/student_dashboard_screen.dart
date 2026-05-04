@@ -1,12 +1,18 @@
+import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import '../../../theme/theme.dart';
 import '../../../widgets/widgets.dart';
 import '../../../providers/providers.dart';
-import '../../../navigation/app_routes.dart';
 import '../../../models/models.dart';
+import '../../../navigation/app_routes.dart';
 
+// ─────────────────────────────────────────────────────────────────────────────
+//  STUDENT DASHBOARD SCREEN
+// ─────────────────────────────────────────────────────────────────────────────
 class StudentDashboardScreen extends ConsumerStatefulWidget {
   const StudentDashboardScreen({super.key});
 
@@ -19,60 +25,48 @@ class _StudentDashboardScreenState
     extends ConsumerState<StudentDashboardScreen> {
   int _selectedIndex = 0;
 
-  final List<_NavItem> _navItems = const [
-    _NavItem(icon: Icons.dashboard_rounded, label: 'Dashboard'),
+  static const _navItems = [
+    _NavItem(icon: Icons.home_rounded, label: 'Home'),
     _NavItem(icon: Icons.how_to_reg_rounded, label: 'Attendance'),
     _NavItem(icon: Icons.calendar_today_rounded, label: 'Timetable'),
-    _NavItem(icon: Icons.sensors_rounded, label: 'Environment'),
-    _NavItem(icon: Icons.message_rounded, label: 'message'),
+    _NavItem(icon: Icons.message_rounded, label: 'Messages'),
   ];
+
+  final _screens = const [_DashboardBody()];
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final currentUser = ref.watch(currentUserProvider);
 
     return Scaffold(
       backgroundColor:
           isDark ? AppColors.darkBackground : AppColors.lightBackground,
-      appBar: _buildAppBar(isDark),
-      body:
-          _selectedIndex == 0
-              ? const _DashboardBody()
-              : _selectedIndex == 1
-              ? const _AttendanceQuickView()
-              : _selectedIndex == 2
-              ? const _TimetableTab()
-              : _selectedIndex == 3
-              ? const _EnvironmentQuickView()
-              : const _MessageQuickView(),
+      appBar: _buildAppBar(isDark, currentUser),
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: [
+          const _DashboardBody(),
+          // navigate on tap instead of embedding full screens
+          const _DashboardBody(),
+          const _DashboardBody(),
+          const _DashboardBody(),
+        ],
+      ),
       bottomNavigationBar: _buildBottomNav(isDark),
     );
   }
 
-  PreferredSizeWidget _buildAppBar(bool isDark) {
+  PreferredSizeWidget _buildAppBar(bool isDark, AsyncValue currentUser) {
     return AppBar(
       backgroundColor: isDark ? AppColors.darkSurface : AppColors.lightSurface,
       elevation: 0,
-      title: Row(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Image.asset(
-              'assets/images/logo.png',
-              width: 32,
-              height: 32,
-              fit: BoxFit.cover,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            'SmartSchool',
-            style: AppTypography.headingMedium.copyWith(
-              color: isDark ? AppColors.darkText : AppColors.lightText,
-              fontFamily: AppTypography.displayFont,
-            ),
-          ),
-        ],
+      title: Text(
+        'SmartSchool',
+        style: AppTypography.headingMedium.copyWith(
+          color: isDark ? AppColors.darkText : AppColors.lightText,
+          fontFamily: AppTypography.displayFont,
+        ),
       ),
       actions: [
         Consumer(
@@ -138,9 +132,23 @@ class _StudentDashboardScreenState
       ),
       child: BottomNavigationBar(
         currentIndex: _selectedIndex,
-        onTap: (index) => setState(() => _selectedIndex = index),
+        onTap: (index) {
+          setState(() => _selectedIndex = index);
+          switch (index) {
+            case 1:
+              context.push(AppRoutes.studentAttendance);
+              break;
+            case 2:
+              context.push(AppRoutes.studentTimetable);
+              break;
+            case 3:
+              context.push(AppRoutes.studentmessage);
+              break;
+          }
+        },
         backgroundColor: Colors.transparent,
         elevation: 0,
+        selectedItemColor: AppColors.studentColor,
         items:
             _navItems
                 .map(
@@ -155,82 +163,11 @@ class _StudentDashboardScreenState
   }
 }
 
-// ─────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 //  DASHBOARD BODY
-// ─────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 class _DashboardBody extends ConsumerWidget {
   const _DashboardBody();
-
-  Widget _buildRecentmessage(BuildContext context, bool isDark, WidgetRef ref) {
-    final currentUser = ref.watch(currentUserProvider);
-
-    return currentUser.when(
-      loading: () => const SizedBox.shrink(),
-      error: (_, __) => const SizedBox.shrink(),
-      data: (user) {
-        if (user == null) return const SizedBox.shrink();
-        final message = ref.watch(notificationsProvider(user.id));
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Recent message',
-                  style: AppTypography.headingMedium.copyWith(
-                    color: isDark ? AppColors.darkText : AppColors.lightText,
-                  ),
-                ),
-                TextButton(
-                  onPressed: () => context.push(AppRoutes.studentmessage),
-                  child: const Text('See all'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            message.when(
-              loading: () => const LoadingWidget(),
-              error: (_, __) => const SizedBox.shrink(),
-              data: (list) {
-                if (list.isEmpty) {
-                  return Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: isDark ? AppColors.darkCard : AppColors.lightCard,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color:
-                            isDark
-                                ? AppColors.darkBorder
-                                : AppColors.lightBorder,
-                      ),
-                    ),
-                    child: Text(
-                      'No message yet',
-                      style: AppTypography.bodySmall.copyWith(
-                        color:
-                            isDark
-                                ? AppColors.darkTextSecondary
-                                : AppColors.lightTextSecondary,
-                      ),
-                    ),
-                  );
-                }
-                return Column(
-                  children:
-                      list
-                          .take(3)
-                          .map((msg) => MessagesTile(message: msg))
-                          .toList(),
-                );
-              },
-            ),
-          ],
-        );
-      },
-    );
-  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -243,218 +180,101 @@ class _DashboardBody extends ConsumerWidget {
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ─── Greeting ───
-            // In _DashboardBody build method
-            // REPLACE the greeting section with:
-            currentUser.when(
-              loading: () => const SizedBox(height: 50),
-              error: (_, __) => const SizedBox.shrink(),
-              data: (user) {
-                if (user == null) return const SizedBox.shrink();
+        child: currentUser.when(
+          loading: () => const LoadingWidget(),
+          error: (_, __) => const SizedBox.shrink(),
+          data: (user) {
+            if (user == null) return const SizedBox.shrink();
 
-                // Get student info
-                final students = ref.watch(studentsProvider);
-                return students.when(
-                  loading:
-                      () => Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '${_getGreeting()}, ${user.name} 👋',
-                            style: AppTypography.headingLarge.copyWith(
-                              color:
-                                  isDark
-                                      ? AppColors.darkText
-                                      : AppColors.lightText,
-                            ),
-                          ),
-                        ],
-                      ),
-                  error: (_, __) => const SizedBox.shrink(),
-                  data: (list) {
-                    final student =
-                        list.where((s) => s.userId == user.id).firstOrNull;
-
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '${_getGreeting()} 👋',
-                          style: AppTypography.bodyMedium.copyWith(
-                            color:
-                                isDark
-                                    ? AppColors.darkTextSecondary
-                                    : AppColors.lightTextSecondary,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          user.name,
-                          style: AppTypography.headingLarge.copyWith(
-                            color:
-                                isDark
-                                    ? AppColors.darkText
-                                    : AppColors.lightText,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-
-                        // ─── Student Info Card ───
-                        if (student != null)
-                          Container(
-                            padding: const EdgeInsets.all(14),
-                            decoration: BoxDecoration(
-                              color: AppColors.studentColor.withValues(
-                                alpha: 0.08,
-                              ),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: AppColors.studentColor.withValues(
-                                  alpha: 0.25,
-                                ),
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 44,
-                                  height: 44,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.studentColor.withValues(
-                                      alpha: 0.15,
-                                    ),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: const Icon(
-                                    Icons.school_rounded,
-                                    color: AppColors.studentColor,
-                                    size: 22,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      // ─── Full display: Name – Level Class ───
-                                      Text(
-                                        student.fullDisplay,
-                                        style: AppTypography.labelLarge
-                                            .copyWith(
-                                              color: AppColors.studentColor,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Row(
-                                        children: [
-                                          _InfoBadge(
-                                            label: student.classDisplay,
-                                            icon: Icons.class_rounded,
-                                            color: AppColors.studentColor,
-                                          ),
-                                          const SizedBox(width: 8),
-                                          if (student.level.isNotEmpty)
-                                            _InfoBadge(
-                                              label: 'Level ${student.level}',
-                                              icon: Icons.layers_rounded,
-                                              color: AppColors.info,
-                                            ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                        const SizedBox(height: 4),
-                        Text(
-                          _formatDate(),
-                          style: AppTypography.bodySmall.copyWith(
-                            color:
-                                isDark
-                                    ? AppColors.darkTextSecondary
-                                    : AppColors.lightTextSecondary,
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                );
-              },
-            ),
-            const SizedBox(height: 24),
-
-            // ─── Today Attendance Status ───
-            _buildTodayStatus(context, isDark, ref),
-            const SizedBox(height: 24),
-
-            // ─── Quick Actions ───
-            Text(
-              'Quick Access',
-              style: AppTypography.headingMedium.copyWith(
-                color: isDark ? AppColors.darkText : AppColors.lightText,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _QuickAction(
-                  label: 'Attendance',
-                  icon: Icons.how_to_reg_rounded,
-                  color: AppColors.success,
-                  onTap: () => context.push(AppRoutes.studentAttendance),
+                // ─── Greeting ───
+                Text(
+                  '${_getGreeting()}, ${user.name} 👋',
+                  style: AppTypography.headingLarge.copyWith(
+                    color: isDark ? AppColors.darkText : AppColors.lightText,
+                  ),
                 ),
-                const SizedBox(width: 8),
-                _QuickAction(
-                  label: 'Timetable',
-                  icon: Icons.calendar_today_rounded,
-                  color: AppColors.info,
-                  onTap: () => context.push(AppRoutes.studentTimetable),
+                Text(
+                  _formatDate(),
+                  style: AppTypography.bodySmall.copyWith(
+                    color:
+                        isDark
+                            ? AppColors.darkTextSecondary
+                            : AppColors.lightTextSecondary,
+                  ),
                 ),
-                const SizedBox(width: 8),
-                _QuickAction(
-                  label: 'Environment',
-                  icon: Icons.sensors_rounded,
-                  color: AppColors.accent,
-                  onTap: () => context.push(AppRoutes.studentIot),
+                const SizedBox(height: 24),
+
+                // ─── Session-aware attendance status card ───
+                _SessionStatusCard(userId: user.id),
+                const SizedBox(height: 24),
+
+                // ─── Quick Actions ───
+                Text(
+                  'Quick Access',
+                  style: AppTypography.headingMedium.copyWith(
+                    color: isDark ? AppColors.darkText : AppColors.lightText,
+                  ),
                 ),
-                const SizedBox(width: 8),
-                _QuickAction(
-                  label: 'Messages',
-                  icon: Icons.message_rounded,
-                  color: AppColors.warning,
-                  onTap: () => context.push(AppRoutes.studentmessage),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    _QuickActionBtn(
+                      label: 'Attendance',
+                      icon: Icons.how_to_reg_rounded,
+                      color: AppColors.success,
+                      onTap: () => context.push(AppRoutes.studentAttendance),
+                    ),
+                    const SizedBox(width: 8),
+                    _QuickActionBtn(
+                      label: 'Timetable',
+                      icon: Icons.calendar_today_rounded,
+                      color: AppColors.info,
+                      onTap: () => context.push(AppRoutes.studentTimetable),
+                    ),
+                    const SizedBox(width: 8),
+                    _QuickActionBtn(
+                      label: 'Environment',
+                      icon: Icons.sensors_rounded,
+                      color: AppColors.accent,
+                      onTap: () => context.push(AppRoutes.studentIot),
+                    ),
+                    const SizedBox(width: 8),
+                    _QuickActionBtn(
+                      label: 'Messages',
+                      icon: Icons.message_rounded,
+                      color: AppColors.warning,
+                      onTap: () => context.push(AppRoutes.studentmessage),
+                    ),
+                  ],
                 ),
+                const SizedBox(height: 24),
+
+                // ─── Attendance stats summary ───
+                _buildAttendanceStats(context, isDark, ref, user.id),
+                const SizedBox(height: 24),
+
+                // ─── Today Timetable ───
+                _buildTodayTimetable(context, isDark, ref, user.id),
+                const SizedBox(height: 24),
+
+                // ─── Recent messages ───
+                _buildRecentMessages(context, isDark, ref, user.id),
+                const SizedBox(height: 20),
               ],
-            ),
-            const SizedBox(height: 24),
-
-            // ─── Today Timetable ───
-            _buildTodayTimetable(context, isDark, ref),
-            const SizedBox(height: 24),
-
-            // ─── Classroom Environment ───
-            _buildEnvironment(context, isDark, ref),
-            _buildRecentmessage(context, isDark, ref),
-            const SizedBox(height: 20),
-            const SizedBox(height: 20),
-          ],
+            );
+          },
         ),
       ),
     );
   }
 
   String _getGreeting() {
-    final hour = DateTime.now().hour;
-    if (hour < 12) return 'Good Morning';
-    if (hour < 17) return 'Good Afternoon';
+    final h = DateTime.now().hour;
+    if (h < 12) return 'Good Morning';
+    if (h < 17) return 'Good Afternoon';
     return 'Good Evening';
   }
 
@@ -486,307 +306,14 @@ class _DashboardBody extends ConsumerWidget {
     return '${days[now.weekday - 1]}, ${now.day} ${months[now.month - 1]} ${now.year}';
   }
 
-  Widget _buildTodayStatus(BuildContext context, bool isDark, WidgetRef ref) {
-    final currentUser = ref.watch(currentUserProvider);
-    final today = ref.watch(todayStringProvider);
-
-    return currentUser.when(
-      loading: () => const LoadingWidget(),
-      error: (_, __) => const SizedBox.shrink(),
-      data: (user) {
-        if (user == null) return const SizedBox.shrink();
-        final attendance = ref.watch(attendanceByStudentProvider(user.id));
-        return attendance.when(
-          loading: () => const LoadingWidget(),
-          error: (_, __) => const SizedBox.shrink(),
-          data: (list) {
-            final todayRecord = list.where((a) => a.date == today).firstOrNull;
-
-            final status = todayRecord?.status;
-            final color =
-                status == AttendanceStatus.present
-                    ? AppColors.success
-                    : status == AttendanceStatus.late
-                    ? AppColors.warning
-                    : status == AttendanceStatus.absent
-                    ? AppColors.error
-                    : AppColors.info;
-            final label =
-                status == AttendanceStatus.present
-                    ? 'Present Today ✅'
-                    : status == AttendanceStatus.late
-                    ? 'Late Today ⚠️'
-                    : status == AttendanceStatus.absent
-                    ? 'Absent Today ❌'
-                    : 'Not Recorded Yet';
-
-            return GestureDetector(
-              onTap: () => context.push(AppRoutes.studentAttendance),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: color.withValues(alpha: 0.3)),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: color.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(
-                        status == AttendanceStatus.present
-                            ? Icons.check_circle_rounded
-                            : status == AttendanceStatus.late
-                            ? Icons.watch_later_rounded
-                            : status == AttendanceStatus.absent
-                            ? Icons.cancel_rounded
-                            : Icons.help_outline_rounded,
-                        color: color,
-                        size: 24,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            label,
-                            style: AppTypography.labelLarge.copyWith(
-                              color: color,
-                            ),
-                          ),
-                          if (todayRecord?.entryTime != null)
-                            Text(
-                              'Entry time: ${todayRecord!.entryTime!.hour}:${todayRecord.entryTime!.minute.toString().padLeft(2, '0')}',
-                              style: AppTypography.caption,
-                            ),
-                        ],
-                      ),
-                    ),
-                    Icon(
-                      Icons.arrow_forward_ios_rounded,
-                      size: 14,
-                      color: color,
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildTodayTimetable(
+  Widget _buildAttendanceStats(
     BuildContext context,
     bool isDark,
     WidgetRef ref,
+    String userId,
   ) {
-    final currentUser = ref.watch(currentUserProvider);
-
-    return currentUser.when(
-      loading: () => const SizedBox.shrink(),
-      error: (_, __) => const SizedBox.shrink(),
-      data: (user) {
-        if (user == null) return const SizedBox.shrink();
-        final students = ref.watch(studentsProvider);
-
-        return students.when(
-          loading: () => const LoadingWidget(),
-          error: (_, __) => const SizedBox.shrink(),
-          data: (list) {
-            final student = list.where((s) => s.userId == user.id).firstOrNull;
-            if (student == null) return const SizedBox.shrink();
-
-            final timetable = ref.watch(
-              timetableByClassProvider(student.classId),
-            );
-
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      "Today's Classes",
-                      style: AppTypography.headingMedium.copyWith(
-                        color:
-                            isDark ? AppColors.darkText : AppColors.lightText,
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: () => context.push(AppRoutes.studentTimetable),
-                      child: const Text('Full schedule'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                timetable.when(
-                  data:
-                      (list) =>
-                          list.isEmpty
-                              ? Container(
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  color:
-                                      isDark
-                                          ? AppColors.darkCard
-                                          : AppColors.lightCard,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color:
-                                        isDark
-                                            ? AppColors.darkBorder
-                                            : AppColors.lightBorder,
-                                  ),
-                                ),
-                                child: Text(
-                                  'No classes today',
-                                  style: AppTypography.bodySmall.copyWith(
-                                    color:
-                                        isDark
-                                            ? AppColors.darkTextSecondary
-                                            : AppColors.lightTextSecondary,
-                                  ),
-                                ),
-                              )
-                              : Column(
-                                children:
-                                    list.map((entry) {
-                                      return Container(
-                                        padding: const EdgeInsets.all(14),
-                                        margin: const EdgeInsets.only(
-                                          bottom: 8,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color:
-                                              isDark
-                                                  ? AppColors.darkCard
-                                                  : AppColors.lightCard,
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                          border: Border.all(
-                                            color: AppColors.studentColor
-                                                .withValues(alpha: 0.3),
-                                          ),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Container(
-                                              width: 40,
-                                              height: 40,
-                                              decoration: BoxDecoration(
-                                                color: AppColors.studentColor
-                                                    .withValues(alpha: 0.12),
-                                                borderRadius:
-                                                    BorderRadius.circular(10),
-                                              ),
-                                              child: const Icon(
-                                                Icons.book_rounded,
-                                                color: AppColors.studentColor,
-                                                size: 18,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 12),
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment.center,
-                                                children: [
-                                                  Text(
-                                                    entry.subject,
-                                                    style: AppTypography
-                                                        .labelSmall
-                                                        .copyWith(
-                                                          color:
-                                                              isDark
-                                                                  ? AppColors
-                                                                      .darkText
-                                                                  : AppColors
-                                                                      .lightText,
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                        ),
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                    maxLines: 1,
-                                                  ),
-                                                  if (entry
-                                                      .teacherName
-                                                      .isNotEmpty)
-                                                    Text(
-                                                      entry.teacherName,
-                                                      style:
-                                                          AppTypography.caption,
-                                                      overflow:
-                                                          TextOverflow.ellipsis,
-                                                      maxLines: 1,
-                                                    ),
-                                                  if (entry.roomName.isNotEmpty)
-                                                    Row(
-                                                      children: [
-                                                        Icon(
-                                                          Icons
-                                                              .meeting_room_rounded,
-                                                          size: 10,
-                                                          color:
-                                                              AppColors
-                                                                  .studentColor,
-                                                        ),
-                                                        const SizedBox(
-                                                          width: 2,
-                                                        ),
-                                                        Expanded(
-                                                          child: Text(
-                                                            entry.roomName,
-                                                            style: AppTypography
-                                                                .caption
-                                                                .copyWith(
-                                                                  color:
-                                                                      AppColors
-                                                                          .studentColor,
-                                                                ),
-                                                            overflow:
-                                                                TextOverflow
-                                                                    .ellipsis,
-                                                            maxLines: 1,
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                ],
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      );
-                                    }).toList(),
-                              ),
-                  loading: () => const LoadingWidget(),
-                  error: (_, __) => const SizedBox.shrink(),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildEnvironment(BuildContext context, bool isDark, WidgetRef ref) {
-    final rooms = ref.watch(roomsProvider);
+    final attendance = ref.watch(attendanceByStudentProvider(userId));
+    final student = ref.watch(studentProvider(userId));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -795,79 +322,267 @@ class _DashboardBody extends ConsumerWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              'Classroom Environment',
+              'Attendance Summary',
               style: AppTypography.headingMedium.copyWith(
                 color: isDark ? AppColors.darkText : AppColors.lightText,
               ),
             ),
             TextButton(
-              onPressed: () => context.push(AppRoutes.studentIot),
-              child: const Text('Details'),
+              onPressed: () => context.push(AppRoutes.studentAttendance),
+              child: const Text('Full view'),
+            ),
+          ],
+        ),
+        student.when(
+          loading: () => const SizedBox.shrink(),
+          error: (_, __) => const SizedBox.shrink(),
+          data:
+              (s) => attendance.when(
+                loading: () => const SizedBox.shrink(),
+                error: (_, __) => const SizedBox.shrink(),
+                data: (list) {
+                  final presenceCount = s?.totalPresence ?? 0;
+                  final absent =
+                      list
+                          .where((a) => a.status == AttendanceStatus.absent)
+                          .length;
+                  final late =
+                      list
+                          .where((a) => a.status == AttendanceStatus.late)
+                          .length;
+                  final total = presenceCount + list.length;
+                  final rate =
+                      total > 0 ? ((presenceCount / total) * 100).toInt() : 0;
+
+                  return Padding(
+                    padding: EdgeInsets.zero,
+                    child: Row(
+                      children: [
+                        _StatChip('Present', presenceCount, AppColors.present),
+                        const SizedBox(width: 8),
+                        _StatChip('Absent', absent, AppColors.absent),
+                        const SizedBox(width: 8),
+                        _StatChip('Late', late, AppColors.late),
+                        const SizedBox(width: 8),
+                        _StatChip('Rate', rate, AppColors.info, suffix: '%'),
+                      ],
+                    ),
+                  );
+                },
+              ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTodayTimetable(
+    BuildContext context,
+    bool isDark,
+    WidgetRef ref,
+    String userId,
+  ) {
+    final students = ref.watch(studentsProvider);
+    return students.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (list) {
+        final student = list.where((s) => s.userId == userId).firstOrNull;
+        if (student == null) return const SizedBox.shrink();
+
+        final timetable = ref.watch(timetableByClassProvider(student.classId));
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "Today's Schedule",
+              style: AppTypography.headingMedium.copyWith(
+                color: isDark ? AppColors.darkText : AppColors.lightText,
+              ),
+            ),
+            const SizedBox(height: 8),
+            timetable.when(
+              loading: () => const LoadingWidget(),
+              error: (_, __) => const SizedBox.shrink(),
+              data: (entries) {
+                const days = [
+                  '',
+                  'Monday',
+                  'Tuesday',
+                  'Wednesday',
+                  'Thursday',
+                  'Friday',
+                  'Saturday',
+                  'Sunday',
+                ];
+                final today = days[DateTime.now().weekday];
+                final todayEntries =
+                    entries.where((e) => e.dayOfWeek == today).toList()
+                      ..sort((a, b) => a.startTime.compareTo(b.startTime));
+
+                if (todayEntries.isEmpty) {
+                  return Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: isDark ? AppColors.darkCard : AppColors.lightCard,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      'No classes today',
+                      style: AppTypography.caption,
+                    ),
+                  );
+                }
+
+                return Column(
+                  children:
+                      todayEntries
+                          .map(
+                            (e) => Container(
+                              padding: const EdgeInsets.all(12),
+                              margin: const EdgeInsets.only(bottom: 8),
+                              decoration: BoxDecoration(
+                                color:
+                                    isDark
+                                        ? AppColors.darkCard
+                                        : AppColors.lightCard,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: AppColors.studentColor.withValues(
+                                    alpha: 0.2,
+                                  ),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.studentColor.withValues(
+                                        alpha: 0.1,
+                                      ),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Column(
+                                      children: [
+                                        Text(
+                                          e.startTime,
+                                          style: AppTypography.labelSmall
+                                              .copyWith(
+                                                color: AppColors.studentColor,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                        ),
+                                        Text(
+                                          e.endTime,
+                                          style: AppTypography.caption.copyWith(
+                                            color: AppColors.studentColor,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          e.subject,
+                                          style: AppTypography.labelLarge
+                                              .copyWith(
+                                                color:
+                                                    isDark
+                                                        ? AppColors.darkText
+                                                        : AppColors.lightText,
+                                              ),
+                                        ),
+                                        if (e.roomName.isNotEmpty)
+                                          Text(
+                                            e.roomName,
+                                            style: AppTypography.caption
+                                                .copyWith(
+                                                  color: AppColors.studentColor,
+                                                ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                          .toList(),
+                );
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildRecentMessages(
+    BuildContext context,
+    bool isDark,
+    WidgetRef ref,
+    String userId,
+  ) {
+    final messages = ref.watch(notificationsProvider(userId));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Recent Messages',
+              style: AppTypography.headingMedium.copyWith(
+                color: isDark ? AppColors.darkText : AppColors.lightText,
+              ),
+            ),
+            TextButton(
+              onPressed: () => context.push(AppRoutes.studentmessage),
+              child: const Text('See all'),
             ),
           ],
         ),
         const SizedBox(height: 8),
-        rooms.when(
+        messages.when(
           loading: () => const LoadingWidget(),
           error: (_, __) => const SizedBox.shrink(),
           data: (list) {
-            if (list.isEmpty) return const SizedBox.shrink();
-            final room = list.first;
-            final color =
-                room.comfortScore >= 70
-                    ? AppColors.success
-                    : room.comfortScore >= 40
-                    ? AppColors.warning
-                    : AppColors.error;
-            return Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: isDark ? AppColors.darkCard : AppColors.lightCard,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: color.withValues(alpha: 0.3)),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(Icons.sensors_rounded, color: color, size: 22),
+            if (list.isEmpty) {
+              return Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: isDark ? AppColors.darkCard : AppColors.lightCard,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color:
+                        isDark ? AppColors.darkBorder : AppColors.lightBorder,
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          room.name,
-                          style: AppTypography.labelLarge.copyWith(
-                            color:
-                                isDark
-                                    ? AppColors.darkText
-                                    : AppColors.lightText,
-                          ),
-                        ),
-                        Text(
-                          room.comfortScore >= 70
-                              ? 'Comfortable environment'
-                              : room.comfortScore >= 40
-                              ? 'Average conditions'
-                              : 'Poor conditions',
-                          style: AppTypography.caption.copyWith(color: color),
-                        ),
-                      ],
-                    ),
+                ),
+                child: Text(
+                  'No messages yet',
+                  style: AppTypography.bodySmall.copyWith(
+                    color:
+                        isDark
+                            ? AppColors.darkTextSecondary
+                            : AppColors.lightTextSecondary,
                   ),
-                  Text(
-                    '${room.comfortScore.toInt()}%',
-                    style: AppTypography.headingMedium.copyWith(color: color),
-                  ),
-                ],
-              ),
+                ),
+              );
+            }
+            return Column(
+              children:
+                  list
+                      .take(3)
+                      .map((msg) => MessagesTile(message: msg))
+                      .toList(),
             );
           },
         ),
@@ -876,375 +591,261 @@ class _DashboardBody extends ConsumerWidget {
   }
 }
 
-// ─────────────────────────────────────────
-//  ATTENDANCE QUICK VIEW
-// ─────────────────────────────────────────
-class _AttendanceQuickView extends ConsumerWidget {
-  const _AttendanceQuickView();
+// ─────────────────────────────────────────────────────────────────────────────
+//  SESSION STATUS CARD
+//
+//  Shows the student's attendance status for the CURRENT timetable session.
+//  - Watches currentTimetableSlotProvider on the student's classId
+//  - For the current slot, queries attendance for today + this session
+//  - When the slot changes (new subject begins), the status auto-resets
+//  - Timer fires every 60s to re-evaluate which slot is current
+// ─────────────────────────────────────────────────────────────────────────────
+class _SessionStatusCard extends ConsumerStatefulWidget {
+  final String userId;
+  const _SessionStatusCard({required this.userId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final currentUser = ref.watch(currentUserProvider);
-
-    return currentUser.when(
-      loading: () => const LoadingWidget(),
-      error: (_, __) => const SizedBox.shrink(),
-      data: (user) {
-        if (user == null) return const SizedBox.shrink();
-        final attendance = ref.watch(attendanceByStudentProvider(user.id));
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'My Attendance',
-                    style: AppTypography.headingMedium.copyWith(
-                      color: isDark ? AppColors.darkText : AppColors.lightText,
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () => context.push(AppRoutes.studentAttendance),
-                    child: const Text('Full view'),
-                  ),
-                ],
-              ),
-            ),
-            attendance.when(
-              loading: () => const LoadingWidget(),
-              error: (_, __) => const SizedBox.shrink(),
-              data: (list) {
-                final present =
-                    list
-                        .where((a) => a.status == AttendanceStatus.present)
-                        .length;
-                final absent =
-                    list
-                        .where((a) => a.status == AttendanceStatus.absent)
-                        .length;
-                final late =
-                    list.where((a) => a.status == AttendanceStatus.late).length;
-                final total = list.length;
-                final rate = total > 0 ? ((present / total) * 100).toInt() : 0;
-
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    children: [
-                      _StatChip('Present', present, AppColors.present),
-                      const SizedBox(width: 8),
-                      _StatChip('Absent', absent, AppColors.absent),
-                      const SizedBox(width: 8),
-                      _StatChip('Late', late, AppColors.late),
-                      const SizedBox(width: 8),
-                      _StatChip('Rate', rate, AppColors.info, suffix: '%'),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ],
-        );
-      },
-    );
-  }
+  ConsumerState<_SessionStatusCard> createState() => _SessionStatusCardState();
 }
 
-// ─────────────────────────────────────────
-//  TIMETABLE QUICK VIEW
-// ─────────────────────────────────────────
-class _TimetableTab extends ConsumerWidget {
-  const _TimetableTab();
+class _SessionStatusCardState extends ConsumerState<_SessionStatusCard> {
+  Timer? _slotTimer;
+  String? _currentSlotId; // tracks slot changes for auto-refresh
+  AttendanceStatus? _sessionStatus;
+  AttendanceModel? _sessionRecord;
+  String _today = '';
+  bool _loading = true;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final currentUser = ref.watch(currentUserProvider);
+  void initState() {
+    super.initState();
+    _today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    // Poll every 60 seconds to detect slot changes
+    _slotTimer = Timer.periodic(
+      const Duration(seconds: 60),
+      (_) => _refreshStatus(),
+    );
+  }
 
-    return currentUser.when(
-      loading: () => const LoadingWidget(),
-      error:
-          (e, _) => EmptyState(
-            title: 'Error',
-            message: e.toString(),
-            icon: Icons.error_outline_rounded,
-          ),
-      data: (user) {
-        if (user == null) return const SizedBox.shrink();
-        final students = ref.watch(studentsProvider);
-        return students.when(
-          loading: () => const LoadingWidget(),
-          error:
-              (e, _) => EmptyState(
-                title: 'Error',
-                message: e.toString(),
-                icon: Icons.error_outline_rounded,
-              ),
-          data: (list) {
-            final student = list.where((s) => s.userId == user.id).firstOrNull;
-            if (student == null) {
-              return const EmptyState(
-                title: 'Not Found',
-                message: 'Student profile not found',
-                icon: Icons.person_off_rounded,
+  @override
+  void dispose() {
+    _slotTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _refreshStatus() async {
+    if (!mounted) return;
+    setState(() {}); // triggers rebuild → re-evaluates current slot
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final students = ref.watch(studentsProvider);
+
+    return students.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (list) {
+        final student =
+            list.where((s) => s.userId == widget.userId).firstOrNull;
+        if (student == null) return const SizedBox.shrink();
+
+        // Watch the live current slot for this student's class
+        final slotAsync = ref.watch(
+          currentTimetableSlotProvider(student.classId),
+        );
+
+        return slotAsync.when(
+          loading: () => const SizedBox.shrink(),
+          error: (_, __) => const SizedBox.shrink(),
+          data: (slot) {
+            // No active class right now
+            if (slot == null) {
+              return _buildCard(
+                isDark: isDark,
+                color: AppColors.info,
+                icon: Icons.school_rounded,
+                label: 'No class right now',
+                subtitle: 'Class: ${student.classDisplay}',
+                onTap: () => context.push(AppRoutes.studentAttendance),
               );
             }
-            final timetable = ref.watch(
-              timetableByClassProvider(student.classId),
-            );
-            return timetable.when(
-              loading: () => const LoadingWidget(),
-              error:
-                  (e, _) => EmptyState(
-                    title: 'Error',
-                    message: e.toString(),
-                    icon: Icons.error_outline_rounded,
-                  ),
-              data: (entries) {
-                if (entries.isEmpty) {
-                  return const EmptyState(
-                    title: 'No Timetable',
-                    message: 'No schedule available yet',
-                    icon: Icons.calendar_today_rounded,
-                  );
-                }
-                return SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'My Timetable',
-                            style: AppTypography.headingMedium.copyWith(
-                              color:
-                                  isDark
-                                      ? AppColors.darkText
-                                      : AppColors.lightText,
-                            ),
-                          ),
-                          TextButton(
-                            onPressed:
-                                () => context.push(AppRoutes.studentTimetable),
-                            child: const Text('Full view'),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      TimetableGrid(
-                        entries: entries,
-                        accentColor: AppColors.studentColor,
-                      ),
-                    ],
-                  ),
-                );
-              },
+
+            // Slot changed — auto-refresh attendance for new session
+            if (_currentSlotId != slot.id) {
+              _currentSlotId = slot.id;
+              _sessionStatus = null;
+              _sessionRecord = null;
+              _loading = true;
+
+              // Fetch attendance for this slot
+              _fetchSessionStatus(student.id, slot);
+            }
+
+            if (_loading) {
+              return _buildCard(
+                isDark: isDark,
+                color: AppColors.info,
+                icon: Icons.hourglass_empty_rounded,
+                label: 'Loading status...',
+                subtitle: slot.subject,
+                onTap: null,
+              );
+            }
+
+            final status = _sessionStatus;
+            final record = _sessionRecord;
+
+            final color =
+                status == AttendanceStatus.present
+                    ? AppColors.success
+                    : status == AttendanceStatus.late
+                    ? AppColors.warning
+                    : status == AttendanceStatus.absent
+                    ? AppColors.error
+                    : AppColors.info;
+
+            final label =
+                status == AttendanceStatus.present
+                    ? 'Present ✅'
+                    : status == AttendanceStatus.late
+                    ? 'Late ⚠️'
+                    : status == AttendanceStatus.absent
+                    ? 'Absent ❌'
+                    : 'Not yet recorded';
+
+            return _buildCard(
+              isDark: isDark,
+              color: color,
+              icon:
+                  status == AttendanceStatus.present
+                      ? Icons.check_circle_rounded
+                      : status == AttendanceStatus.late
+                      ? Icons.watch_later_rounded
+                      : status == AttendanceStatus.absent
+                      ? Icons.cancel_rounded
+                      : Icons.help_outline_rounded,
+              label: label,
+              subtitle: _buildSubtitle(slot, record),
+              onTap: () => context.push(AppRoutes.studentAttendance),
             );
           },
         );
       },
     );
   }
-}
 
-// ─────────────────────────────────────────
-//  ENVIRONMENT QUICK VIEW
-// ─────────────────────────────────────────
-class _EnvironmentQuickView extends ConsumerWidget {
-  const _EnvironmentQuickView();
+  Future<void> _fetchSessionStatus(
+    String studentId,
+    TimetableModel slot,
+  ) async {
+    try {
+      // Check absence doc first
+      final absSnap =
+          await FirebaseFirestore.instance
+              .collection('attendance')
+              .where('studentId', isEqualTo: studentId)
+              .where('date', isEqualTo: _today)
+              .limit(1)
+              .get();
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final rooms = ref.watch(roomsProvider);
+      AttendanceStatus? status;
+      AttendanceModel? record;
 
-    return rooms.when(
-      loading: () => const LoadingWidget(),
-      error:
-          (e, _) => EmptyState(
-            title: 'Error',
-            message: e.toString(),
-            icon: Icons.error_outline_rounded,
-          ),
-      data: (list) {
-        if (list.isEmpty) {
-          return const EmptyState(
-            title: 'No Rooms',
-            message: 'No rooms configured yet',
-            icon: Icons.meeting_room_outlined,
-          );
+      if (absSnap.docs.isNotEmpty) {
+        record = AttendanceModel.fromFirestore(absSnap.docs.first);
+        status = record.status;
+      } else {
+        // Check presence_tracking sub-collection
+        final trackingDoc =
+            await FirebaseFirestore.instance
+                .collection('students')
+                .doc(studentId)
+                .collection('presence_tracking')
+                .doc(_today)
+                .get();
+
+        if (trackingDoc.exists) {
+          status = AttendanceStatus.present;
         }
-        final roomId = list.first.id;
-        final sensorData = ref.watch(latestSensorDataProvider(roomId));
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              sensorData.when(
-                loading: () => const LoadingWidget(),
-                error: (_, __) => const SizedBox.shrink(),
-                data: (data) {
-                  if (data == null) {
-                    return const EmptyState(
-                      title: 'No Data',
-                      message: 'No sensor readings yet',
-                      icon: Icons.sensors_off_rounded,
-                    );
-                  }
-                  final color =
-                      data.comfortScore >= 70
-                          ? AppColors.success
-                          : data.comfortScore >= 40
-                          ? AppColors.warning
-                          : AppColors.error;
-                  return Column(
-                    children: [
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          gradient: AppColors.primaryGradient,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Column(
-                          children: [
-                            Text(
-                              '${data.comfortScore.toInt()}%',
-                              style: AppTypography.displayLarge.copyWith(
-                                color: color,
-                                fontSize: 48,
-                              ),
-                            ),
-                            Text(
-                              'Comfort Score',
-                              style: AppTypography.bodySmall.copyWith(
-                                color: Colors.white60,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              data.comfortRecommendation,
-                              style: AppTypography.caption.copyWith(
-                                color: Colors.white60,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      GridView.count(
-                        crossAxisCount: 2,
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        mainAxisSpacing: 12,
-                        crossAxisSpacing: 12,
-                        childAspectRatio: 1.2,
-                        children: [
-                          SensorGauge(
-                            label: 'Temperature',
-                            value: data.temperature,
-                            min: 0,
-                            max: 50,
-                            unit: '°C',
-                            icon: Icons.thermostat_rounded,
-                            color: AppColors.error,
-                          ),
-                          SensorGauge(
-                            label: 'Humidity',
-                            value: data.humidity,
-                            min: 0,
-                            max: 100,
-                            unit: '%',
-                            icon: Icons.water_drop_rounded,
-                            color: AppColors.info,
-                          ),
-                          SensorGauge(
-                            label: 'Light',
-                            value: data.lightLevel,
-                            min: 0,
-                            max: 1000,
-                            unit: 'lx',
-                            icon: Icons.light_mode_rounded,
-                            color: AppColors.warning,
-                          ),
-                          SensorGauge(
-                            label: 'Noise',
-                            value: data.noiseLevel,
-                            min: 0,
-                            max: 100,
-                            unit: 'dB',
-                            icon: Icons.volume_up_rounded,
-                            color: AppColors.success,
-                          ),
-                        ],
-                      ),
-                    ],
-                  );
-                },
-              ),
-              const SizedBox(height: 16),
-              AppButton(
-                label: 'View History',
-                onPressed: () => context.push(AppRoutes.studentIotHistory),
-                isOutlined: true,
-                width: double.infinity,
-                icon: Icons.history_rounded,
-              ),
-            ],
-          ),
-        );
-      },
-    );
+      }
+
+      if (mounted) {
+        setState(() {
+          _sessionStatus = status;
+          _sessionRecord = record;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('_fetchSessionStatus: $e');
+      if (mounted) setState(() => _loading = false);
+    }
   }
-}
 
-// ─────────────────────────────────────────
-//  message QUICK VIEW
-// ─────────────────────────────────────────
-class _MessageQuickView extends ConsumerWidget {
-  const _MessageQuickView();
+  String _buildSubtitle(TimetableModel slot, AttendanceModel? record) {
+    final parts = <String>[];
+    parts.add('${slot.subject} · ${slot.startTime}–${slot.endTime}');
+    if (slot.roomName.isNotEmpty) parts.add(slot.roomName);
+    if (record?.teacherName.isNotEmpty == true) {
+      parts.add(record!.teacherName);
+    }
+    return parts.join(' · ');
+  }
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final currentUser = ref.watch(currentUserProvider);
-
-    return currentUser.when(
-      loading: () => const LoadingWidget(),
-      error: (_, __) => const SizedBox.shrink(),
-      data: (user) {
-        if (user == null) return const SizedBox.shrink();
-        final message = ref.watch(notificationsProvider(user.id));
-        return message.when(
-          loading: () => const LoadingWidget(),
-          error:
-              (e, _) => EmptyState(
-                title: 'Error',
-                message: e.toString(),
-                icon: Icons.error_outline_rounded,
+  Widget _buildCard({
+    required bool isDark,
+    required Color color,
+    required IconData icon,
+    required String label,
+    required String subtitle,
+    required VoidCallback? onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(12),
               ),
-          data:
-              (list) =>
-                  list.isEmpty
-                      ? const EmptyState(
-                        title: 'No message',
-                        message: 'No message yet',
-                        icon: Icons.message_rounded,
-                      )
-                      : ListView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: list.length,
-                        itemBuilder:
-                            (context, index) =>
-                                MessagesTile(message: list[index]),
-                      ),
-        );
-      },
+              child: Icon(icon, color: color, size: 26),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: AppTypography.labelLarge.copyWith(
+                      color: isDark ? AppColors.darkText : AppColors.lightText,
+                    ),
+                  ),
+                  if (subtitle.isNotEmpty)
+                    Text(
+                      subtitle,
+                      style: AppTypography.caption.copyWith(color: color),
+                    ),
+                ],
+              ),
+            ),
+            if (onTap != null) Icon(Icons.chevron_right_rounded, color: color),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -1252,177 +853,78 @@ class _MessageQuickView extends ConsumerWidget {
 // ─────────────────────────────────────────
 //  PROFILE BOTTOM SHEET
 // ─────────────────────────────────────────
-class _InfoBadge extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final Color color;
-
-  const _InfoBadge({
-    required this.label,
-    required this.icon,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 11, color: color),
-          const SizedBox(width: 4),
-          Text(label, style: AppTypography.caption.copyWith(color: color)),
-        ],
-      ),
-    );
-  }
-}
-
 class _ProfileBottomSheet extends ConsumerWidget {
   const _ProfileBottomSheet();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final user = ref.watch(currentUserProvider);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final currentUser = ref.watch(currentUserProvider);
+    final authService = ref.read(authServiceProvider);
 
     return Container(
       padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(height: 20),
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              color: AppColors.studentColor.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Icon(
-              Icons.person_rounded,
-              color: AppColors.studentColor,
-              size: 32,
-            ),
-          ),
-          const SizedBox(height: 12),
-          user.when(
-            loading: () => const LoadingWidget(),
-            error: (_, __) => const Text('Student'),
-            data: (u) {
-              final students = ref.watch(studentsProvider);
-              final student = students.maybeWhen(
-                data:
-                    (list) => list.where((s) => s.userId == u?.id).firstOrNull,
-                orElse: () => null,
-              );
-
-              return Column(
-                children: [
-                  Text(
-                    u?.name ?? 'Student',
-                    style: AppTypography.headingMedium.copyWith(
-                      color: isDark ? AppColors.darkText : AppColors.lightText,
-                    ),
+      child: currentUser.when(
+        loading: () => const LoadingWidget(),
+        error: (_, __) => const SizedBox.shrink(),
+        data: (user) {
+          if (user == null) return const SizedBox.shrink();
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircleAvatar(
+                radius: 32,
+                backgroundColor: AppColors.studentColor.withValues(alpha: 0.15),
+                child: Text(
+                  user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
+                  style: AppTypography.headingLarge.copyWith(
+                    color: AppColors.studentColor,
                   ),
-                  Text(
-                    u?.email ?? '',
-                    style: AppTypography.bodySmall.copyWith(
-                      color:
-                          isDark
-                              ? AppColors.darkTextSecondary
-                              : AppColors.lightTextSecondary,
-                    ),
-                  ),
-                  if (student != null) ...[
-                    const SizedBox(height: 6),
-                    // ─── Class + Level display ───
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.studentColor.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        student.fullDisplay,
-                        style: AppTypography.labelSmall.copyWith(
-                          color: AppColors.studentColor,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  ] else ...[
-                    const SizedBox(height: 4),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.studentColor.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        'STUDENT',
-                        style: AppTypography.labelSmall.copyWith(
-                          color: AppColors.studentColor,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              );
-            },
-          ),
-          const SizedBox(height: 24),
-          AppButton(
-            label: 'Sign Out',
-            onPressed: () async {
-              Navigator.of(context).pop(); // close bottom sheet first
-              await ref.read(authServiceProvider).logout();
-              // ─── Router redirect handles going to login ───
-            },
-            isOutlined: true,
-            icon: Icons.logout_rounded,
-            width: double.infinity,
-            color: AppColors.error,
-          ),
-          const SizedBox(height: 12),
-        ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(user.name, style: AppTypography.headingMedium),
+              Text(user.email, style: AppTypography.caption),
+              const SizedBox(height: 24),
+              ListTile(
+                leading: const Icon(Icons.lock_outline_rounded),
+                title: const Text('Change Password'),
+                onTap: () {
+                  Navigator.pop(context);
+                  context.push(AppRoutes.changePassword);
+                },
+              ),
+              ListTile(
+                leading: const Icon(
+                  Icons.logout_rounded,
+                  color: AppColors.error,
+                ),
+                title: const Text(
+                  'Logout',
+                  style: TextStyle(color: AppColors.error),
+                ),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await authService.logout();
+                },
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 }
 
-// ─── Helper Widgets ───
-class _QuickAction extends StatelessWidget {
+// ─────────────────────────────────────────
+//  QUICK ACTION BUTTON
+// ─────────────────────────────────────────
+class _QuickActionBtn extends StatelessWidget {
   final String label;
   final IconData icon;
   final Color color;
   final VoidCallback onTap;
 
-  const _QuickAction({
+  const _QuickActionBtn({
     required this.label,
     required this.icon,
     required this.color,
@@ -1438,16 +940,16 @@ class _QuickAction extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 14),
           decoration: BoxDecoration(
             color: color.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: color.withValues(alpha: 0.2)),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: color.withValues(alpha: 0.25)),
           ),
           child: Column(
             children: [
-              Icon(icon, color: color, size: 20),
+              Icon(icon, color: color, size: 22),
               const SizedBox(height: 4),
               Text(
                 label,
-                style: AppTypography.labelSmall.copyWith(color: color),
+                style: AppTypography.caption.copyWith(color: color),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -1458,6 +960,9 @@ class _QuickAction extends StatelessWidget {
   }
 }
 
+// ─────────────────────────────────────────
+//  STAT CHIP
+// ─────────────────────────────────────────
 class _StatChip extends StatelessWidget {
   final String label;
   final int value;
@@ -1468,31 +973,34 @@ class _StatChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withValues(alpha: 0.2)),
-        ),
-        child: Column(
-          children: [
-            Text(
-              '$value$suffix',
-              style: AppTypography.headingSmall.copyWith(color: color),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        children: [
+          Text(
+            '$value$suffix',
+            style: AppTypography.labelLarge.copyWith(
+              color: color,
+              fontWeight: FontWeight.bold,
             ),
-            Text(label, style: AppTypography.caption),
-          ],
-        ),
+          ),
+          Text(label, style: AppTypography.caption.copyWith(color: color)),
+        ],
       ),
     );
   }
 }
 
+// ─────────────────────────────────────────
+//  INTERNAL MODELS
+// ─────────────────────────────────────────
 class _NavItem {
   final IconData icon;
   final String label;
-
   const _NavItem({required this.icon, required this.label});
 }
