@@ -359,34 +359,35 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
 
       // ─── Teacher ───
+      // ─── REPLACE the entire Teacher routes section in lib/navigation/app_router.dart
+      // Find the comment "// ─── Teacher ───" and replace everything up to "// ─── Student ───"
+      // with this block.
+
+      // ─── Teacher ─────────────────────────────────────────────────────────
       GoRoute(
         path: AppRoutes.teacherDashboard,
         name: 'teacher-dashboard',
         builder: (context, state) => const TeacherDashboardScreen(),
       ),
-      GoRoute(
-        path: AppRoutes.teacherAttendance,
-        name: 'teacher-attendance',
-        builder:
-            (context, state) => const TeacherAttendanceScreen(className: ''),
-      ),
-      GoRoute(
-        path: AppRoutes.teacherAttendanceToday,
-        name: 'teacher-attendance-today',
-        builder: (context, state) => const TeacherAttendanceTodayScreen(),
-      ),
-      // ─── NEW: Name Call ───
+
+      // teacherAttendanceToday REMOVED — only Namecall entry point remains.
+
+      // Namecall: the ONLY way a teacher marks attendance.
+      // Navigated to from the dashboard class cards and attendance screen.
       GoRoute(
         path: AppRoutes.teacherNameCall,
+        name: 'teacher-namecall',
         builder: (context, state) {
           final extra = state.extra;
-          String classId = '', className = '', targetDate = '';
+          String classId = '';
+          String className = '';
+          String targetDate = '';
           if (extra is Map<String, dynamic>) {
             classId = extra['classId']?.toString() ?? '';
             className = extra['className']?.toString() ?? '';
             targetDate = extra['targetDate']?.toString() ?? '';
           } else if (extra is String) {
-            classId = extra; // legacy
+            classId = extra;
           }
           return TeacherNamecallScreen(
             classId: classId,
@@ -395,14 +396,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           );
         },
       ),
+
+      // Attendance hub: stats, by-date filter, etc. (no today-list tab)
+      GoRoute(
+        path: AppRoutes.teacherAttendance,
+        name: 'teacher-attendance',
+        builder: (context, state) => const TeacherAttendanceScreen(),
+      ),
       GoRoute(
         path: AppRoutes.teacherAttendanceByDate,
         name: 'teacher-attendance-by-date',
         builder: (context, state) => const TeacherAttendanceByDateScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.teachermessageend,
-        builder: (context, state) => const TeachermessageendScreen(),
       ),
       GoRoute(
         path: AppRoutes.teacherAttendanceEdit,
@@ -453,6 +457,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 TeacherAlertDetailScreen(flagId: state.pathParameters['id']!),
       ),
       GoRoute(
+        path: AppRoutes.teachermessage,
+        name: 'teacher-message',
+        builder: (context, state) => const TeachermessageScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.teachermessageend,
+        name: 'teacher-message-send',
+        builder: (context, state) => const TeachermessageendScreen(),
+      ),
+      GoRoute(
         path: AppRoutes.teacherTimetable,
         name: 'teacher-timetable',
         builder: (context, state) => const TeacherTimetableScreen(),
@@ -461,11 +475,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '${AppRoutes.teacherTimetableDetail}/:id',
         name: 'teacher-timetable-detail',
         builder: (context, state) => const TeacherTimetableScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.teachermessage,
-        name: 'teacher-message',
-        builder: (context, state) => const TeachermessageScreen(),
       ),
 
       // ─── Student ───
@@ -506,7 +515,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.studentmessageend,
-        builder: (context, state) => const StudentNotificationSendScreen(),
+        builder: (context, state) => const StudentmessageendScreen(),
       ),
       GoRoute(
         path: AppRoutes.studentmessage,

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import '../../../theme/theme.dart';
 import '../../../widgets/widgets.dart';
 import '../../../providers/providers.dart';
 import '../../../navigation/app_routes.dart';
+import '../../../models/models.dart';
 
 class TeacherDashboardScreen extends ConsumerStatefulWidget {
   const TeacherDashboardScreen({super.key});
@@ -20,7 +22,6 @@ class _TeacherDashboardScreenState
 
   final List<_NavItem> _navItems = const [
     _NavItem(icon: Icons.dashboard_rounded, label: 'Dashboard'),
-    _NavItem(icon: Icons.how_to_reg_rounded, label: 'Attendance'),
     _NavItem(icon: Icons.sensors_rounded, label: 'IoT'),
     _NavItem(icon: Icons.people_rounded, label: 'Students'),
     _NavItem(icon: Icons.menu_rounded, label: 'More'),
@@ -34,16 +35,15 @@ class _TeacherDashboardScreenState
       backgroundColor:
           isDark ? AppColors.darkBackground : AppColors.lightBackground,
       appBar: _buildAppBar(isDark),
-      body:
-          _selectedIndex == 0
-              ? const _DashboardBody()
-              : _selectedIndex == 1
-              ? const _AttendanceQuickView()
-              : _selectedIndex == 2
-              ? const _IotQuickView()
-              : _selectedIndex == 3
-              ? const _StudentsQuickView()
-              : const _MoreMenu(),
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: const [
+          _DashboardBody(),
+          _IotQuickView(),
+          _StudentsQuickView(),
+          _MoreMenu(),
+        ],
+      ),
       bottomNavigationBar: _buildBottomNav(isDark),
     );
   }
@@ -99,7 +99,14 @@ class _TeacherDashboardScreenState
           onPressed: () => context.push(AppRoutes.teachermessage),
         ),
         GestureDetector(
-          onTap: () => _showProfileMenu(context),
+          onTap:
+              () => showModalBottomSheet(
+                context: context,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+                builder: (_) => const _ProfileBottomSheet(),
+              ),
           child: Container(
             margin: const EdgeInsets.only(right: 16, top: 8, bottom: 8),
             width: 36,
@@ -119,16 +126,6 @@ class _TeacherDashboardScreenState
     );
   }
 
-  void _showProfileMenu(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => const _ProfileBottomSheet(),
-    );
-  }
-
   Widget _buildBottomNav(bool isDark) {
     return Container(
       decoration: BoxDecoration(
@@ -141,9 +138,13 @@ class _TeacherDashboardScreenState
       ),
       child: BottomNavigationBar(
         currentIndex: _selectedIndex,
-        onTap: (index) => setState(() => _selectedIndex = index),
+        onTap: (i) => setState(() => _selectedIndex = i),
         backgroundColor: Colors.transparent,
         elevation: 0,
+        selectedItemColor: AppColors.teacherColor,
+        unselectedItemColor:
+            isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+        type: BottomNavigationBarType.fixed,
         items:
             _navItems
                 .map(
@@ -164,84 +165,21 @@ class _TeacherDashboardScreenState
 class _DashboardBody extends ConsumerWidget {
   const _DashboardBody();
 
-  Widget _buildRecentmessage(BuildContext context, bool isDark, WidgetRef ref) {
-    final currentUser = ref.watch(currentUserProvider);
-
-    return currentUser.when(
-      loading: () => const SizedBox.shrink(),
-      error: (_, __) => const SizedBox.shrink(),
-      data: (user) {
-        if (user == null) return const SizedBox.shrink();
-        final message = ref.watch(notificationsProvider(user.id));
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Recent message',
-                  style: AppTypography.headingMedium.copyWith(
-                    color: isDark ? AppColors.darkText : AppColors.lightText,
-                  ),
-                ),
-                TextButton(
-                  onPressed: () => context.push(AppRoutes.teachermessage),
-                  child: const Text('See all'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            message.when(
-              loading: () => const LoadingWidget(),
-              error: (_, __) => const SizedBox.shrink(),
-              data: (list) {
-                if (list.isEmpty) {
-                  return Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: isDark ? AppColors.darkCard : AppColors.lightCard,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color:
-                            isDark
-                                ? AppColors.darkBorder
-                                : AppColors.lightBorder,
-                      ),
-                    ),
-                    child: Text(
-                      'No message yet',
-                      style: AppTypography.bodySmall.copyWith(
-                        color:
-                            isDark
-                                ? AppColors.darkTextSecondary
-                                : AppColors.lightTextSecondary,
-                      ),
-                    ),
-                  );
-                }
-                return Column(
-                  children:
-                      list
-                          .take(3)
-                          .map((msg) => MessagesTile(message: msg))
-                          .toList(),
-                );
-              },
-            ),
-          ],
-        );
-      },
-    );
-  }
+  static const _weekdays = [
+    '',
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
+  ];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final currentUser = ref.watch(currentUserProvider);
-    final presentCount = ref.watch(todayPresentCountProvider);
-    final absentCount = ref.watch(todayAbsentCountProvider);
-    final lateCount = ref.watch(todayLateCountProvider);
 
     return RefreshIndicator(
       color: AppColors.teacherColor,
@@ -249,210 +187,138 @@ class _DashboardBody extends ConsumerWidget {
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ─── Greeting ───
-            currentUser.when(
-              loading: () => const SizedBox(height: 50),
-              error: (_, __) => const SizedBox.shrink(),
-              data:
-                  (user) => Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '${_getGreeting()}, ${user?.name ?? 'Teacher'} 👋',
-                        style: AppTypography.headingLarge.copyWith(
-                          color:
-                              isDark ? AppColors.darkText : AppColors.lightText,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _formatDate(),
-                        style: AppTypography.bodySmall.copyWith(
-                          color:
-                              isDark
-                                  ? AppColors.darkTextSecondary
-                                  : AppColors.lightTextSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-            ),
-            const SizedBox(height: 24),
+        child: currentUser.when(
+          loading: () => const LoadingWidget(),
+          error: (_, __) => const SizedBox.shrink(),
+          data: (user) {
+            if (user == null) return const SizedBox.shrink();
 
-            // ─── Today Attendance Card ───
-            GestureDetector(
-              onTap: () => context.push(AppRoutes.teacherAttendanceToday),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      AppColors.teacherColor.withValues(alpha: 0.8),
-                      AppColors.teacherColor,
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.teacherColor.withValues(alpha: 0.3),
-                      blurRadius: 20,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        'TODAY\'S ATTENDANCE',
-                        style: AppTypography.labelSmall.copyWith(
-                          color: Colors.white,
-                          letterSpacing: 1.0,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _AttendanceStat(
-                            label: 'Present',
-                            value: presentCount.toString(),
-                            icon: Icons.check_circle_rounded,
-                          ),
-                        ),
-                        Container(width: 1, height: 40, color: Colors.white24),
-                        Expanded(
-                          child: _AttendanceStat(
-                            label: 'Absent',
-                            value: absentCount.toString(),
-                            icon: Icons.cancel_rounded,
-                          ),
-                        ),
-                        Container(width: 1, height: 40, color: Colors.white24),
-                        Expanded(
-                          child: _AttendanceStat(
-                            label: 'Late',
-                            value: lateCount.toString(),
-                            icon: Icons.watch_later_rounded,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Text(
-                          'View full attendance',
-                          style: AppTypography.labelSmall.copyWith(
-                            color: Colors.white70,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        const Icon(
-                          Icons.arrow_forward_rounded,
-                          color: Colors.white70,
-                          size: 14,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
+            final hour = DateTime.now().hour;
+            final greeting =
+                hour < 12
+                    ? 'Good Morning'
+                    : hour < 17
+                    ? 'Good Afternoon'
+                    : 'Good Evening';
 
-            // ─── Quick Actions ───
-            Text(
-              'Quick Actions',
-              style: AppTypography.headingMedium.copyWith(
-                color: isDark ? AppColors.darkText : AppColors.lightText,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _QuickAction(
-                  label: 'Attendance',
-                  icon: Icons.how_to_reg_rounded,
-                  color: AppColors.success,
-                  onTap: () => context.push(AppRoutes.teacherAttendance),
+                // ── Greeting ────────────────────────────────────────────
+                Text(
+                  '$greeting, ${user.name} 👋',
+                  style: AppTypography.headingLarge.copyWith(
+                    color: isDark ? AppColors.darkText : AppColors.lightText,
+                  ),
                 ),
-                const SizedBox(width: 8),
-                _QuickAction(
-                  label: 'IoT Monitor',
-                  icon: Icons.sensors_rounded,
-                  color: AppColors.info,
-                  onTap: () => context.push(AppRoutes.teacherIot),
+                const SizedBox(height: 4),
+                Text(
+                  _formatDate(),
+                  style: AppTypography.bodySmall.copyWith(
+                    color:
+                        isDark
+                            ? AppColors.darkTextSecondary
+                            : AppColors.lightTextSecondary,
+                  ),
                 ),
-                const SizedBox(width: 8),
-                _QuickAction(
-                  label: 'AI Alerts',
-                  icon: Icons.warning_amber_rounded,
-                  color: AppColors.warning,
-                  onTap: () => context.push(AppRoutes.teacherAiAlerts),
+                const SizedBox(height: 24),
+
+                // ── TIMETABLE SÉANCES ─────────────────────────────────────
+                // Replaces the old attendance counter card.
+                _TimetableSeancesSection(teacherId: user.id, isDark: isDark),
+                const SizedBox(height: 24),
+
+                // ── Quick actions ────────────────────────────────────────
+                Text(
+                  'Quick Actions',
+                  style: AppTypography.headingMedium.copyWith(
+                    color: isDark ? AppColors.darkText : AppColors.lightText,
+                  ),
                 ),
-                const SizedBox(width: 8),
-                _QuickAction(
-                  label: 'Timetable',
-                  icon: Icons.calendar_today_rounded,
-                  color: AppColors.accent,
-                  onTap: () => context.push(AppRoutes.teacherTimetable),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    // ── Namecall — shows date picker, defaults today ────────
+                    _QuickAction(
+                      label: 'Namecall',
+                      icon: Icons.how_to_reg_rounded,
+                      color: AppColors.teacherColor,
+                      onTap: () async {
+                        // Show date picker; default = today
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: DateTime.now(),
+                          firstDate: DateTime(2024),
+                          lastDate: DateTime.now().add(const Duration(days: 1)),
+                          builder:
+                              (ctx, child) => Theme(
+                                data: Theme.of(ctx).copyWith(
+                                  colorScheme: Theme.of(
+                                    ctx,
+                                  ).colorScheme.copyWith(
+                                    primary: AppColors.teacherColor,
+                                  ),
+                                ),
+                                child: child!,
+                              ),
+                        );
+                        if (!context.mounted) return;
+                        // Navigate to namecall with selected or today's date.
+                        // classId/className left empty — namecall screen
+                        // resolves classes from timetable for the selected date.
+                        final dateStr =
+                            picked != null
+                                ? '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}'
+                                : '';
+                        context.push(
+                          AppRoutes.teacherNameCall,
+                          extra: {
+                            'classId': '',
+                            'className': '',
+                            'targetDate': dateStr,
+                          },
+                        );
+                      },
+                    ),
+                    const SizedBox(width: 10),
+                    _QuickAction(
+                      label: 'Timetable',
+                      icon: Icons.calendar_today_rounded,
+                      color: AppColors.info,
+                      onTap: () => context.push(AppRoutes.teacherTimetable),
+                    ),
+                    const SizedBox(width: 10),
+                    _QuickAction(
+                      label: 'Students',
+                      icon: Icons.people_rounded,
+                      color: AppColors.success,
+                      onTap: () => context.push(AppRoutes.teacherStudents),
+                    ),
+                    const SizedBox(width: 10),
+                    _QuickAction(
+                      label: 'IoT',
+                      icon: Icons.sensors_rounded,
+                      color: AppColors.accent,
+                      onTap: () => context.push(AppRoutes.teacherIot),
+                    ),
+                  ],
                 ),
+                const SizedBox(height: 24),
+
+                // ── AI Flags ─────────────────────────────────────────────
+                _buildAiFlags(context, isDark, ref),
+                const SizedBox(height: 20),
               ],
-            ),
-            const SizedBox(height: 24),
-
-            // ─── Classroom IoT ───
-            _buildClassroomIot(context, isDark, ref),
-            const SizedBox(height: 24),
-
-            // ─── Recent AI Alerts ───
-            _buildRecentAlerts(context, isDark, ref),
-            const SizedBox(height: 20),
-
-            // ─── Recent message ───
-            _buildRecentmessage(context, isDark, ref),
-            const SizedBox(height: 20),
-          ],
+            );
+          },
         ),
       ),
     );
   }
 
-  String _getGreeting() {
-    final hour = DateTime.now().hour;
-    if (hour < 12) return 'Good Morning';
-    if (hour < 17) return 'Good Afternoon';
-    return 'Good Evening';
-  }
-
   String _formatDate() {
     final now = DateTime.now();
-    const days = [
-      'Monday',
-      'Tuesday',
-      'Wednesday',
-      'Thursday',
-      'Friday',
-      'Saturday',
-      'Sunday',
-    ];
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     const months = [
       'Jan',
       'Feb',
@@ -470,9 +336,8 @@ class _DashboardBody extends ConsumerWidget {
     return '${days[now.weekday - 1]}, ${now.day} ${months[now.month - 1]} ${now.year}';
   }
 
-  Widget _buildClassroomIot(BuildContext context, bool isDark, WidgetRef ref) {
-    final rooms = ref.watch(roomsProvider);
-
+  Widget _buildAiFlags(BuildContext context, bool isDark, WidgetRef ref) {
+    final flags = ref.watch(activeAiFlagsProvider);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -480,168 +345,249 @@ class _DashboardBody extends ConsumerWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              'Classroom Environment',
+              'AI Alerts',
               style: AppTypography.headingMedium.copyWith(
                 color: isDark ? AppColors.darkText : AppColors.lightText,
               ),
             ),
             TextButton(
-              onPressed: () => context.push(AppRoutes.teacherIot),
+              onPressed: () => context.push(AppRoutes.teacherAiAlerts),
               child: const Text('See all'),
             ),
           ],
         ),
         const SizedBox(height: 8),
-        rooms.when(
-          loading: () => const LoadingWidget(),
+        flags.when(
+          loading: () => const SizedBox.shrink(),
           error: (_, __) => const SizedBox.shrink(),
           data: (list) {
             if (list.isEmpty) {
               return const EmptyState(
-                title: 'No Rooms',
-                message: 'No rooms configured yet',
-                icon: Icons.meeting_room_outlined,
+                title: 'No Alerts',
+                message: 'No active AI alerts',
+                icon: Icons.check_circle_outline_rounded,
               );
             }
-            final room = list.first;
-            final color =
-                room.comfortScore >= 70
-                    ? AppColors.success
-                    : room.comfortScore >= 40
-                    ? AppColors.warning
-                    : AppColors.error;
-            return GestureDetector(
-              onTap: () => context.push(AppRoutes.teacherIot),
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: isDark ? AppColors.darkCard : AppColors.lightCard,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: color.withValues(alpha: 0.3)),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: color.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(
-                        Icons.meeting_room_rounded,
-                        color: color,
-                        size: 22,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            room.name,
-                            style: AppTypography.labelLarge.copyWith(
-                              color:
-                                  isDark
-                                      ? AppColors.darkText
-                                      : AppColors.lightText,
-                            ),
-                          ),
-                          Text(
-                            'Floor ${room.floor}',
-                            style: AppTypography.caption,
-                          ),
-                        ],
-                      ),
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          '${room.comfortScore.toInt()}%',
-                          style: AppTypography.headingMedium.copyWith(
-                            color: color,
-                          ),
+            return Column(
+              children:
+                  list
+                      .take(3)
+                      .map(
+                        (flag) => AlertCard(
+                          flag: flag,
+                          onTap:
+                              () => context.push(
+                                '${AppRoutes.teacherAlertDetail}/${flag.id}',
+                              ),
                         ),
-                        Text(
-                          room.comfortScore >= 70
-                              ? 'Good'
-                              : room.comfortScore >= 40
-                              ? 'Average'
-                              : 'Poor',
-                          style: AppTypography.caption.copyWith(color: color),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
+                      )
+                      .toList(),
             );
           },
         ),
       ],
     );
   }
+}
 
-  Widget _buildRecentAlerts(BuildContext context, bool isDark, WidgetRef ref) {
-    final currentUser = ref.watch(currentUserProvider);
+// ─────────────────────────────────────────────────────────────────────────────
+//  TIMETABLE SÉANCES SECTION
+//
+//  Fetches today's timetable entries for the logged-in teacher.
+//  Groups entries that share the same subject + time window
+//  (same session taught to multiple classes simultaneously) into one card.
+//  Numbered sequentially by start time: "Séance 1.", "Séance 2." …
+//  Active session is highlighted.
+//  Tapping → Namecall for the first classId in that session.
+// ─────────────────────────────────────────────────────────────────────────────
+class _TimetableSeancesSection extends ConsumerWidget {
+  final String teacherId;
+  final bool isDark;
 
-    return currentUser.when(
-      loading: () => const SizedBox.shrink(),
-      error: (_, __) => const SizedBox.shrink(),
-      data: (user) {
-        if (user == null) return const SizedBox.shrink();
+  static const _weekdays = [
+    '',
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
+  ];
 
-        final alerts = ref.watch(aiFlagsByClassProvider(user.id));
+  const _TimetableSeancesSection({
+    required this.teacherId,
+    required this.isDark,
+  });
+
+  /// Group timetable entries that share the same subject + startTime + endTime
+  /// into a single séance (one slot can cover multiple classes).
+  List<_Seance> _groupIntoSeances(List<TimetableModel> entries) {
+    final map = <String, _Seance>{};
+    for (final e in entries) {
+      // Key: subject + start + end — distinct session slot
+      final key = '${e.subject}|${e.startTime}|${e.endTime}';
+      if (map.containsKey(key)) {
+        map[key]!.entries.add(e);
+      } else {
+        map[key] = _Seance(entries: [e]);
+      }
+    }
+    // Sort by start time, then number them
+    final sorted =
+        map.values.toList()..sort((a, b) => a.startTime.compareTo(b.startTime));
+    for (int i = 0; i < sorted.length; i++) {
+      sorted[i].number = i + 1;
+    }
+    return sorted;
+  }
+
+  bool _isActive(_Seance seance) {
+    final now = DateTime.now();
+    final curr =
+        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    return curr.compareTo(seance.startTime) >= 0 &&
+        curr.compareTo(seance.endTime) <= 0;
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final today = ref.watch(todayStringProvider);
+    final dayName = _weekdays[DateTime.now().weekday];
+    final timetable = ref.watch(timetableByTeacherProvider(teacherId));
+
+    // Determine if tomorrow needs showing (after 15:00, show tomorrow's schedule)
+    final now = DateTime.now();
+    final showTomorrow = now.hour >= 15;
+    final tomorrow = DateTime.now().add(const Duration(days: 1));
+    final tomorrowName = _weekdays[tomorrow.weekday];
+
+    final displayDay = showTomorrow ? tomorrowName : dayName;
+    final displayLabel =
+        showTomorrow
+            ? 'Timetable tomorrow ${tomorrow.day}.${tomorrow.month.toString().padLeft(2, '0')}.'
+            : "Today's Timetable";
+
+    return timetable.when(
+      loading: () => const LoadingWidget(),
+      error:
+          (e, _) => EmptyState(
+            title: 'Error',
+            message: e.toString(),
+            icon: Icons.error_outline_rounded,
+          ),
+      data: (allEntries) {
+        // Filter to the display day
+        final dayEntries =
+            allEntries.where((e) => e.dayOfWeek == displayDay).toList();
+
+        final seances = _groupIntoSeances(dayEntries);
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // ── Header row ────────────────────────────────────────────
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'Recent AI Alerts',
-                  style: AppTypography.headingMedium.copyWith(
-                    color: isDark ? AppColors.darkText : AppColors.lightText,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        displayLabel,
+                        style: AppTypography.headingMedium.copyWith(
+                          color:
+                              isDark ? AppColors.darkText : AppColors.lightText,
+                        ),
+                      ),
+                      if (!showTomorrow && seances.isNotEmpty)
+                        Text(
+                          '${seances.length} session${seances.length == 1 ? '' : 's'}',
+                          style: AppTypography.caption.copyWith(
+                            color:
+                                isDark
+                                    ? AppColors.darkTextSecondary
+                                    : AppColors.lightTextSecondary,
+                          ),
+                        ),
+                    ],
                   ),
                 ),
                 TextButton(
-                  onPressed: () => context.push(AppRoutes.teacherAiAlerts),
-                  child: const Text('See all'),
+                  onPressed: () => context.push(AppRoutes.teacherTimetable),
+                  child: const Text('Full view'),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            alerts.when(
-              loading: () => const LoadingWidget(),
-              error: (_, __) => const SizedBox.shrink(),
-              data: (list) {
-                if (list.isEmpty) {
-                  return const EmptyState(
-                    title: 'No Active Alerts',
-                    message: 'All students are doing well!',
-                    icon: Icons.check_circle_outline_rounded,
-                  );
-                }
-                return Column(
-                  children:
-                      list
-                          .take(3)
-                          .map(
-                            (flag) => AlertCard(
-                              flag: flag,
-                              onTap:
-                                  () => context.push(
-                                    '${AppRoutes.teacherAlertDetail}/${flag.id}',
-                                  ),
-                            ),
-                          )
-                          .toList(),
-                );
-              },
-            ),
+            const SizedBox(height: 12),
+
+            if (seances.isEmpty)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: isDark ? AppColors.darkCard : AppColors.lightCard,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color:
+                        isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    Icon(
+                      Icons.event_available_rounded,
+                      size: 32,
+                      color:
+                          isDark
+                              ? AppColors.darkTextHint
+                              : AppColors.lightTextHint,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      showTomorrow
+                          ? 'No classes scheduled tomorrow'
+                          : 'No classes scheduled today',
+                      style: AppTypography.caption.copyWith(
+                        color:
+                            isDark
+                                ? AppColors.darkTextSecondary
+                                : AppColors.lightTextSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              // ── Horizontal scrollable séance cards ────────────────────
+              SizedBox(
+                height: 168,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: seances.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 10),
+                  itemBuilder: (context, index) {
+                    final seance = seances[index];
+                    final active = !showTomorrow && _isActive(seance);
+                    return _SeanceCard(
+                      seance: seance,
+                      isActive: active,
+                      isDark: isDark,
+                      onTap: () {
+                        // Navigate to Namecall for the first class in this session
+                        final firstEntry = seance.entries.first;
+                        context.push(
+                          AppRoutes.teacherNameCall,
+                          extra: {
+                            'classId': firstEntry.classId,
+                            'className': firstEntry.className,
+                          },
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
           ],
         );
       },
@@ -649,99 +595,184 @@ class _DashboardBody extends ConsumerWidget {
   }
 }
 
-// ─────────────────────────────────────────
-//  ATTENDANCE QUICK VIEW
-// ─────────────────────────────────────────
-class _AttendanceQuickView extends ConsumerWidget {
-  const _AttendanceQuickView();
+// ─────────────────────────────────────────────────────────────────────────────
+//  SÉANCE DATA CLASS
+// ─────────────────────────────────────────────────────────────────────────────
+class _Seance {
+  int number = 1;
+  final List<TimetableModel> entries;
+
+  _Seance({required this.entries});
+
+  String get subject => entries.first.subject;
+  String get startTime => entries.first.startTime;
+  String get endTime => entries.first.endTime;
+
+  /// "2DNI1, 2DNI2" — comma-joined class names using className field
+  /// (stored as "Level Name Grade" e.g. "2 DNI 1")
+  String get classesLabel => entries
+      .map((e) {
+        // className is already "Level Name Grade" format — compact it for display
+        // by removing spaces: "2 DNI 1" → "2DNI1"
+        final raw = e.className.trim();
+        return raw.replaceAll(' ', '');
+      })
+      .toSet()
+      .join(', ');
+
+  /// All classIds for this session (for multi-class namecall)
+  List<String> get classIds => entries.map((e) => e.classId).toSet().toList();
+
+  /// Room name — same for all entries in the session (same slot = same room).
+  /// Falls back to roomId if roomName is empty.
+  String get roomLabel {
+    final rn = entries.first.roomName.trim();
+    if (rn.isNotEmpty) return rn;
+    final ri = entries.first.roomId.trim();
+    return ri.isNotEmpty ? ri : '';
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  SÉANCE CARD
+//  Matches the reference image: session number, subject, classes, time slot.
+//  Active session has accent/highlighted background.
+// ─────────────────────────────────────────────────────────────────────────────
+class _SeanceCard extends StatelessWidget {
+  final _Seance seance;
+  final bool isActive;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  const _SeanceCard({
+    required this.seance,
+    required this.isActive,
+    required this.isDark,
+    required this.onTap,
+  });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final today = ref.watch(todayStringProvider);
-    final attendance = ref.watch(attendanceByDateProvider(today));
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+  Widget build(BuildContext context) {
+    // Active card: teacher-color tinted. Inactive: card background.
+    final bgColor =
+        isActive
+            ? AppColors.teacherColor.withValues(alpha: 0.22)
+            : (isDark ? AppColors.darkCard : const Color(0xFF2A2E35));
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                "Today's Attendance",
-                style: AppTypography.headingMedium.copyWith(
-                  color: isDark ? AppColors.darkText : AppColors.lightText,
-                ),
-              ),
-              TextButton(
-                onPressed: () => context.push(AppRoutes.teacherAttendance),
-                child: const Text('Full view'),
-              ),
-            ],
-          ),
+    final borderColor =
+        isActive
+            ? AppColors.teacherColor.withValues(alpha: 0.6)
+            : (isDark
+                ? AppColors.darkBorder
+                : Colors.white.withValues(alpha: 0.08));
+
+    final labelColor = isActive ? AppColors.teacherColor : Colors.white54;
+
+    final subjectColor = Colors.white;
+    final classColor = Colors.white70;
+    final timeColor = Colors.white54;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        width: 140,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: borderColor),
+          boxShadow:
+              isActive
+                  ? [
+                    BoxShadow(
+                      color: AppColors.teacherColor.withValues(alpha: 0.25),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                  : null,
         ),
-        Expanded(
-          child: attendance.when(
-            loading: () => const LoadingWidget(),
-            error:
-                (e, _) => EmptyState(
-                  title: 'Error',
-                  message: e.toString(),
-                  icon: Icons.error_outline_rounded,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            // ── Session number ──
+            Text(
+              'Séance ${seance.number}.',
+              style: AppTypography.caption.copyWith(
+                color: labelColor,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+
+            // ── Subject ──
+            Text(
+              seance.subject,
+              style: AppTypography.headingMedium.copyWith(
+                color: subjectColor,
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+
+            // ── Classes ──
+            Text(
+              seance.classesLabel,
+              style: AppTypography.labelSmall.copyWith(color: classColor),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+
+            // ── Room ──
+            if (seance.roomLabel.isNotEmpty)
+              Row(
+                children: [
+                  Icon(
+                    Icons.meeting_room_rounded,
+                    size: 11,
+                    color:
+                        isActive
+                            ? AppColors.teacherColor.withValues(alpha: 0.8)
+                            : Colors.white38,
+                  ),
+                  const SizedBox(width: 3),
+                  Expanded(
+                    child: Text(
+                      seance.roomLabel,
+                      style: AppTypography.caption.copyWith(
+                        color:
+                            isActive
+                                ? AppColors.teacherColor.withValues(alpha: 0.85)
+                                : Colors.white38,
+                        fontSize: 10,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+
+            // ── Time slot ──
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  seance.startTime,
+                  style: AppTypography.caption.copyWith(color: timeColor),
                 ),
-            data:
-                (list) =>
-                    list.isEmpty
-                        ? const EmptyState(
-                          title: 'No Attendance',
-                          message: 'No records for today yet',
-                          icon: Icons.event_busy_rounded,
-                        )
-                        : ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          itemCount: list.length,
-                          itemBuilder: (context, index) {
-                            final record = list[index];
-                            return Container(
-                              padding: const EdgeInsets.all(14),
-                              margin: const EdgeInsets.only(bottom: 8),
-                              decoration: BoxDecoration(
-                                color:
-                                    isDark
-                                        ? AppColors.darkCard
-                                        : AppColors.lightCard,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color:
-                                      isDark
-                                          ? AppColors.darkBorder
-                                          : AppColors.lightBorder,
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      record.studentName,
-                                      style: AppTypography.labelLarge.copyWith(
-                                        color:
-                                            isDark
-                                                ? AppColors.darkText
-                                                : AppColors.lightText,
-                                      ),
-                                    ),
-                                  ),
-                                  AttendanceBadge(status: record.status),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-          ),
+                Text(
+                  seance.endTime,
+                  style: AppTypography.caption.copyWith(color: timeColor),
+                ),
+              ],
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
@@ -754,94 +785,21 @@ class _IotQuickView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final rooms = ref.watch(roomsProvider);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return rooms.when(
-      loading: () => const LoadingWidget(),
-      error:
-          (e, _) => EmptyState(
-            title: 'Error',
-            message: e.toString(),
-            icon: Icons.error_outline_rounded,
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.sensors_rounded, size: 56, color: AppColors.accent),
+          const SizedBox(height: 16),
+          Text('IoT Monitor', style: AppTypography.headingMedium),
+          const SizedBox(height: 8),
+          AppButton(
+            label: 'Open IoT Dashboard',
+            onPressed: () => context.push(AppRoutes.teacherIot),
+            icon: Icons.sensors_rounded,
           ),
-      data:
-          (list) =>
-              list.isEmpty
-                  ? const EmptyState(
-                    title: 'No Rooms',
-                    message: 'No rooms configured yet',
-                    icon: Icons.meeting_room_outlined,
-                  )
-                  : ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: list.length,
-                    itemBuilder: (context, index) {
-                      final room = list[index];
-                      final color =
-                          room.comfortScore >= 70
-                              ? AppColors.success
-                              : room.comfortScore >= 40
-                              ? AppColors.warning
-                              : AppColors.error;
-                      return GestureDetector(
-                        onTap: () => context.push(AppRoutes.teacherIot),
-                        child: Container(
-                          padding: const EdgeInsets.all(16),
-                          margin: const EdgeInsets.only(bottom: 12),
-                          decoration: BoxDecoration(
-                            color:
-                                isDark
-                                    ? AppColors.darkCard
-                                    : AppColors.lightCard,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: color.withValues(alpha: 0.3),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 44,
-                                height: 44,
-                                decoration: BoxDecoration(
-                                  color: color.withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Icon(
-                                  Icons.meeting_room_rounded,
-                                  color: color,
-                                  size: 22,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      room.name,
-                                      style: AppTypography.labelLarge,
-                                    ),
-                                    Text(
-                                      'Floor ${room.floor}',
-                                      style: AppTypography.caption,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Text(
-                                '${room.comfortScore.toInt()}%',
-                                style: AppTypography.headingSmall.copyWith(
-                                  color: color,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+        ],
+      ),
     );
   }
 }
@@ -854,53 +812,21 @@ class _StudentsQuickView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final students = ref.watch(filteredStudentsProvider);
-
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: AppTextField(
-            label: '',
-            hint: 'Search students...',
-            prefixIcon: const Icon(Icons.search_rounded, size: 18),
-            onChanged:
-                (val) =>
-                    ref.read(studentSearchQueryProvider.notifier).state = val,
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.people_rounded, size: 56, color: AppColors.success),
+          const SizedBox(height: 16),
+          Text('My Students', style: AppTypography.headingMedium),
+          const SizedBox(height: 8),
+          AppButton(
+            label: 'View Students',
+            onPressed: () => context.push(AppRoutes.teacherStudents),
+            icon: Icons.people_rounded,
           ),
-        ),
-        Expanded(
-          child: students.when(
-            loading: () => const LoadingWidget(),
-            error:
-                (e, _) => EmptyState(
-                  title: 'Error',
-                  message: e.toString(),
-                  icon: Icons.error_outline_rounded,
-                ),
-            data:
-                (list) =>
-                    list.isEmpty
-                        ? const EmptyState(
-                          title: 'No Students',
-                          message: 'No students found',
-                          icon: Icons.people_outline_rounded,
-                        )
-                        : ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          itemCount: list.length,
-                          itemBuilder:
-                              (context, index) => StudentCard(
-                                student: list[index],
-                                onTap:
-                                    () => context.push(
-                                      '${AppRoutes.teacherStudentProfile}/${list[index].id}',
-                                    ),
-                              ),
-                        ),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -915,12 +841,30 @@ class _MoreMenu extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final items = [
+    const items = [
       _MoreItem(
-        label: 'My Timetable',
+        label: 'Attendance Stats',
+        icon: Icons.bar_chart_rounded,
+        color: AppColors.teacherColor,
+        route: AppRoutes.teacherAttendanceStats,
+      ),
+      _MoreItem(
+        label: 'Attendance by Date',
         icon: Icons.calendar_today_rounded,
+        color: AppColors.info,
+        route: AppRoutes.teacherAttendanceByDate,
+      ),
+      _MoreItem(
+        label: 'Timetable',
+        icon: Icons.schedule_rounded,
         color: AppColors.accent,
         route: AppRoutes.teacherTimetable,
+      ),
+      _MoreItem(
+        label: 'My Students',
+        icon: Icons.people_rounded,
+        color: AppColors.success,
+        route: AppRoutes.teacherStudents,
       ),
       _MoreItem(
         label: 'AI Alerts',
@@ -929,9 +873,15 @@ class _MoreMenu extends StatelessWidget {
         route: AppRoutes.teacherAiAlerts,
       ),
       _MoreItem(
-        label: 'message',
+        label: 'IoT Monitor',
+        icon: Icons.sensors_rounded,
+        color: AppColors.accent,
+        route: AppRoutes.teacherIot,
+      ),
+      _MoreItem(
+        label: 'Messages',
         icon: Icons.message_rounded,
-        color: AppColors.info,
+        color: AppColors.secondary,
         route: AppRoutes.teachermessage,
       ),
     ];
@@ -987,20 +937,6 @@ class _MoreMenu extends StatelessWidget {
   }
 }
 
-class _MoreItem {
-  final String label;
-  final IconData icon;
-  final Color color;
-  final String route;
-
-  const _MoreItem({
-    required this.label,
-    required this.icon,
-    required this.color,
-    required this.route,
-  });
-}
-
 // ─────────────────────────────────────────
 //  PROFILE BOTTOM SHEET
 // ─────────────────────────────────────────
@@ -1009,8 +945,8 @@ class _ProfileBottomSheet extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final user = ref.watch(currentUserProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final user = ref.watch(currentUserProvider);
 
     return Container(
       padding: const EdgeInsets.all(24),
@@ -1059,28 +995,11 @@ class _ProfileBottomSheet extends ConsumerWidget {
                     ),
                     Text(
                       u?.email ?? '',
-                      style: AppTypography.bodySmall.copyWith(
+                      style: AppTypography.caption.copyWith(
                         color:
                             isDark
                                 ? AppColors.darkTextSecondary
                                 : AppColors.lightTextSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.teacherColor.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        'TEACHER',
-                        style: AppTypography.labelSmall.copyWith(
-                          color: AppColors.teacherColor,
-                        ),
                       ),
                     ),
                   ],
@@ -1088,11 +1007,21 @@ class _ProfileBottomSheet extends ConsumerWidget {
           ),
           const SizedBox(height: 24),
           AppButton(
-            label: 'Sign Out',
+            label: 'Change Password',
+            onPressed: () {
+              Navigator.pop(context);
+              context.push(AppRoutes.changePassword);
+            },
+            isOutlined: true,
+            icon: Icons.lock_outline_rounded,
+            width: double.infinity,
+          ),
+          const SizedBox(height: 12),
+          AppButton(
+            label: 'Logout',
             onPressed: () async {
-              Navigator.of(context).pop(); // close bottom sheet first
+              Navigator.pop(context);
               await ref.read(authServiceProvider).logout();
-              // ─── Router redirect handles going to login ───
             },
             isOutlined: true,
             icon: Icons.logout_rounded,
@@ -1106,40 +1035,9 @@ class _ProfileBottomSheet extends ConsumerWidget {
   }
 }
 
-// ─── Helper Widgets ───
-class _AttendanceStat extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-
-  const _AttendanceStat({
-    required this.label,
-    required this.value,
-    required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Icon(icon, color: Colors.white70, size: 20),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: AppTypography.statNumber.copyWith(
-            color: Colors.white,
-            fontSize: 22,
-          ),
-        ),
-        Text(
-          label,
-          style: AppTypography.caption.copyWith(color: Colors.white70),
-        ),
-      ],
-    );
-  }
-}
-
+// ─────────────────────────────────────────
+//  QUICK ACTION
+// ─────────────────────────────────────────
 class _QuickAction extends StatelessWidget {
   final String label;
   final IconData icon;
@@ -1182,9 +1080,24 @@ class _QuickAction extends StatelessWidget {
   }
 }
 
+// ─────────────────────────────────────────
+//  INTERNAL MODELS
+// ─────────────────────────────────────────
 class _NavItem {
   final IconData icon;
   final String label;
-
   const _NavItem({required this.icon, required this.label});
+}
+
+class _MoreItem {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final String route;
+  const _MoreItem({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.route,
+  });
 }

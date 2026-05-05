@@ -45,9 +45,7 @@ class AppRoutes {
   // ─── Teacher ───
   static const String teacherDashboard = '/teacher/dashboard';
   static const String teacherAttendance = '/teacher/attendance';
-  static const String teacherAttendanceToday = '/teacher/attendance/today';
-  static const String teacherNameCall =
-      '/teacher/attendance/namecall'; // ← NEW
+  static const String teacherNameCall = '/teacher/attendance/namecall'; // ← NEW
   static const String teacherAttendanceByDate = '/teacher/attendance/by-date';
   static const String teacherAttendanceEdit = '/teacher/attendance/edit';
   static const String teacherAttendanceStats = '/teacher/attendance/stats';

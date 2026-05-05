@@ -422,31 +422,31 @@ class _DashboardBody extends ConsumerWidget {
     return Row(
       children: [
         _QuickAction(
-          label: 'Students',
-          icon: Icons.people_rounded,
+          label: 'RFID Logs',
+          icon: Icons.nfc_rounded,
           color: AppColors.info,
-          onTap: () => context.push(AppRoutes.adminStudents),
+          onTap: () => context.push(AppRoutes.adminRfid),
         ),
         const SizedBox(width: 10),
         _QuickAction(
-          label: 'Attendance',
-          icon: Icons.how_to_reg_rounded,
+          label: 'Timetable',
+          icon: Icons.calendar_today_rounded,
           color: AppColors.success,
-          onTap: () => context.push(AppRoutes.adminAttendance),
+          onTap: () => context.push(AppRoutes.adminTimetable),
         ),
         const SizedBox(width: 10),
         _QuickAction(
-          label: 'Classes',
-          icon: Icons.class_rounded,
+          label: 'Messages',
+          icon: Icons.notifications_rounded,
           color: AppColors.accent,
-          onTap: () => context.push(AppRoutes.adminClasses),
+          onTap: () => context.push(AppRoutes.adminmessage),
         ),
         const SizedBox(width: 10),
         _QuickAction(
-          label: 'Teachers',
-          icon: Icons.person_rounded,
+          label: 'Settings',
+          icon: Icons.settings_rounded,
           color: AppColors.warning,
-          onTap: () => context.push(AppRoutes.adminTeachers),
+          onTap: () => context.push(AppRoutes.adminSettings),
         ),
       ],
     );

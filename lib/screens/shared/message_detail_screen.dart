@@ -59,12 +59,12 @@ class NotificationDetailscreen extends ConsumerWidget {
       case MessageType.report:
         return 'Report';
       case MessageType.general:
-        return 'message';
+        return 'Message';
     }
   }
 
   String _formatDateTime(DateTime dt) {
-    final months = [
+    const months = [
       'Jan',
       'Feb',
       'Mar',
@@ -78,9 +78,9 @@ class NotificationDetailscreen extends ConsumerWidget {
       'Nov',
       'Dec',
     ];
-    final hour = dt.hour.toString().padLeft(2, '0');
-    final min = dt.minute.toString().padLeft(2, '0');
-    return '${dt.day} ${months[dt.month - 1]} ${dt.year} at $hour:$min';
+    final h = dt.hour.toString().padLeft(2, '0');
+    final m = dt.minute.toString().padLeft(2, '0');
+    return '${dt.day} ${months[dt.month - 1]} ${dt.year} at $h:$m';
   }
 
   @override
@@ -88,7 +88,6 @@ class NotificationDetailscreen extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final color = _typeColor(message.messageType);
 
-    // Mark as read
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!message.isRead) {
         ref.read(firestoreServiceProvider).markNotificationRead(message.id);
@@ -103,30 +102,11 @@ class NotificationDetailscreen extends ConsumerWidget {
         backgroundColor:
             isDark ? AppColors.darkSurface : AppColors.lightSurface,
         actions: [
-          // ─── Reply only if sender exists and is not current user ───
-          if (message.senderId.isNotEmpty)
-            Consumer(
-              builder: (context, ref, _) {
-                final currentUser = ref.watch(currentUserProvider);
-                return currentUser.when(
-                  loading: () => const SizedBox.shrink(),
-                  error: (_, __) => const SizedBox.shrink(),
-                  data: (user) {
-                    // ─── Don't show reply to own messages ───
-                    if (user?.id == message.senderId) {
-                      return const SizedBox.shrink();
-                    }
-                    return IconButton(
-                      icon: const Icon(Icons.reply_rounded),
-                      tooltip: 'Reply',
-                      onPressed:
-                          () =>
-                              context.push(AppRoutes.messageReply, extra: message),
-                    );
-                  },
-                );
-              },
-            ),
+          IconButton(
+            icon: const Icon(Icons.reply_rounded),
+            onPressed:
+                () => context.push(AppRoutes.messageReply, extra: message),
+          ),
         ],
       ),
       body: SingleChildScrollView(
@@ -134,371 +114,322 @@ class NotificationDetailscreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ─── Type badge + title ───
+            // ─── Type badge ───────────────────────────────────────────────
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: color.withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(_typeIcon(message.messageType), color: color, size: 14),
+                  const SizedBox(width: 6),
+                  Text(
+                    _typeLabel(message.messageType),
+                    style: AppTypography.labelSmall.copyWith(color: color),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // ─── Title ────────────────────────────────────────────────────
+            Text(
+              message.title,
+              style: AppTypography.headingMedium.copyWith(
+                color: isDark ? AppColors.darkText : AppColors.lightText,
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            // ─── Meta ─────────────────────────────────────────────────────
             Row(
               children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Icon(
-                    _typeIcon(message.messageType),
-                    color: color,
-                    size: 24,
-                  ),
+                const Icon(
+                  Icons.person_outline_rounded,
+                  size: 14,
+                  color: Colors.grey,
                 ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: color.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          _typeLabel(message.messageType),
-                          style: AppTypography.labelSmall.copyWith(
-                            color: color,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        message.title,
-                        style: AppTypography.headingMedium.copyWith(
-                          color:
-                              isDark ? AppColors.darkText : AppColors.lightText,
-                        ),
-                      ),
-                    ],
-                  ),
+                const SizedBox(width: 4),
+                Text(
+                  message.senderName.isNotEmpty ? message.senderName : 'System',
+                  style: AppTypography.caption,
+                ),
+                const SizedBox(width: 12),
+                const Icon(
+                  Icons.access_time_rounded,
+                  size: 14,
+                  color: Colors.grey,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  _formatDateTime(message.createdAt),
+                  style: AppTypography.caption,
                 ),
               ],
             ),
-            // ─── Show "In reply to" if this is a reply ───
-            if (message.isReply) ...[
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.accent.withValues(alpha: 0.06),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: AppColors.accent.withValues(alpha: 0.2),
+            if (message.recipientLabel.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  const Icon(
+                    Icons.group_outlined,
+                    size: 14,
+                    color: Colors.grey,
                   ),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 3,
-                      height: 30,
-                      decoration: BoxDecoration(
-                        color: AppColors.accent,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    const Icon(
-                      Icons.reply_rounded,
-                      size: 14,
-                      color: AppColors.accent,
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        'In reply to: ${message.replyToTitle}',
-                        style: AppTypography.caption.copyWith(
-                          color: AppColors.accent,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'To: ${message.recipientLabel}',
+                    style: AppTypography.caption,
+                  ),
+                ],
               ),
             ],
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
+            const Divider(),
+            const SizedBox(height: 16),
 
-            // ─── Info card ───
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: isDark ? AppColors.darkCard : AppColors.lightCard,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
-                ),
-              ),
-              child: Column(
-                children: [
-                  // Sender
-                  _InfoRow(
-                    isDark: isDark,
-                    icon: Icons.person_rounded,
-                    label: 'From',
-                    value:
-                        message.senderName.isNotEmpty
-                            ? '${message.senderName} (${_capitalize(message.senderRole)})'
-                            : 'System',
-                    color: color,
-                  ),
-                  const Divider(height: 20),
-
-                  // Date & time
-                  _InfoRow(
-                    isDark: isDark,
-                    icon: Icons.access_time_rounded,
-                    label: 'Sent',
-                    value: _formatDateTime(message.createdAt),
-                    color: color,
-                  ),
-                  const Divider(height: 20),
-
-                  // Recipients
-                  _InfoRow(
-                    isDark: isDark,
-                    icon: Icons.group_rounded,
-                    label: 'To',
-                    value: _getRecipientLabel(),
-                    color: color,
-                  ),
-                ],
+            // ─── Body ─────────────────────────────────────────────────────
+            Text(
+              message.message,
+              style: AppTypography.bodyMedium.copyWith(
+                color: isDark ? AppColors.darkText : AppColors.lightText,
+                height: 1.6,
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
 
-            // ─── message body ───
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: isDark ? AppColors.darkCard : AppColors.lightCard,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'message',
-                    style: AppTypography.labelMedium.copyWith(
-                      color:
-                          isDark
-                              ? AppColors.darkTextSecondary
-                              : AppColors.lightTextSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    message.message,
-                    style: AppTypography.bodyMedium.copyWith(
-                      color: isDark ? AppColors.darkText : AppColors.lightText,
-                      height: 1.6,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // ─── Attachments ───
+            // ─── Attachments ──────────────────────────────────────────────
             if (message.attachments.isNotEmpty) ...[
-              const SizedBox(height: 20),
               Text(
-                'Attachments (${message.attachments.length})',
-                style: AppTypography.headingSmall.copyWith(
+                'Attachments',
+                style: AppTypography.labelLarge.copyWith(
                   color: isDark ? AppColors.darkText : AppColors.lightText,
                 ),
               ),
               const SizedBox(height: 10),
               ...message.attachments.map(
-                (att) => _AttachmentTile(attachment: att, isDark: isDark),
+                (att) => _AttachmentWidget(att: att, isDark: isDark),
               ),
+              const SizedBox(height: 16),
             ],
-            const SizedBox(height: 32),
+
+            // ─── Reply ────────────────────────────────────────────────────
+            if (message.replyToTitle.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isDark ? AppColors.darkCard : AppColors.lightCard,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color:
+                        isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.reply_rounded,
+                      size: 16,
+                      color: Colors.grey,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Re: ${message.replyToTitle}',
+                        style: AppTypography.caption.copyWith(
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
           ],
         ),
       ),
     );
   }
+}
 
-  String _getRecipientLabel() {
-    switch (message.senderRole) {
-      case 'admin':
-        return 'All school members';
-      case 'teacher':
-        return 'Class students';
-      case 'student':
-        return 'Selected recipients';
-      default:
-        return 'You';
+// ─────────────────────────────────────────────────────────────────────────────
+//  ATTACHMENT WIDGET
+//  • Images → inline preview (Image.network)
+//  • PDFs and documents → download button that launches Cloudinary URL
+//  • Falls back gracefully if URL is empty
+// ─────────────────────────────────────────────────────────────────────────────
+class _AttachmentWidget extends StatelessWidget {
+  final AttachmentModel att;
+  final bool isDark;
+
+  const _AttachmentWidget({required this.att, required this.isDark});
+
+  Future<void> _launch(BuildContext context) async {
+    if (att.url.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('File URL not available')));
+      return;
+    }
+    final uri = Uri.parse(att.url);
+    final canLaunch = await canLaunchUrl(uri);
+    if (canLaunch) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Could not open file')));
+      }
     }
   }
 
-  String _capitalize(String s) {
-    if (s.isEmpty) return s;
-    return s[0].toUpperCase() + s.substring(1);
-  }
-}
-
-// ─── Info Row ────────────────────────────────────────────────────────────────
-class _InfoRow extends StatelessWidget {
-  final bool isDark;
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color color;
-
-  const _InfoRow({
-    required this.isDark,
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 32,
-          height: 32,
+    // ── Image → show inline preview with tap to open full ──────────────────
+    if (att.type == AttachmentType.image && att.url.isNotEmpty) {
+      return GestureDetector(
+        onTap: () => _launch(context),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 10),
           decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.info.withValues(alpha: 0.3)),
           ),
-          child: Icon(icon, size: 16, color: color),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: AppTypography.caption.copyWith(
-                  color:
-                      isDark
-                          ? AppColors.darkTextSecondary
-                          : AppColors.lightTextSecondary,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Stack(
+              children: [
+                Image.network(
+                  att.url,
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                  height: 200,
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return Container(
+                      height: 200,
+                      alignment: Alignment.center,
+                      color: isDark ? AppColors.darkCard : AppColors.lightCard,
+                      child: CircularProgressIndicator(
+                        value:
+                            loadingProgress.expectedTotalBytes != null
+                                ? loadingProgress.cumulativeBytesLoaded /
+                                    loadingProgress.expectedTotalBytes!
+                                : null,
+                        color: AppColors.info,
+                      ),
+                    );
+                  },
+                  errorBuilder:
+                      (_, __, ___) => Container(
+                        height: 80,
+                        alignment: Alignment.center,
+                        color:
+                            isDark ? AppColors.darkCard : AppColors.lightCard,
+                        child: const Icon(
+                          Icons.broken_image_rounded,
+                          color: Colors.grey,
+                        ),
+                      ),
                 ),
-              ),
-              Text(
-                value,
-                style: AppTypography.labelMedium.copyWith(
-                  color: isDark ? AppColors.darkText : AppColors.lightText,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ─── Attachment Tile ──────────────────────────────────────────────────────────
-class _AttachmentTile extends StatelessWidget {
-  final AttachmentModel attachment;
-  final bool isDark;
-
-  const _AttachmentTile({required this.attachment, required this.isDark});
-
-  IconData get _icon {
-    switch (attachment.type) {
-      case AttachmentType.image:
-        return Icons.image_rounded;
-      case AttachmentType.pdf:
-        return Icons.picture_as_pdf_rounded;
-      case AttachmentType.document:
-        return Icons.insert_drive_file_rounded;
-    }
-  }
-
-  Color get _color {
-    switch (attachment.type) {
-      case AttachmentType.image:
-        return AppColors.info;
-      case AttachmentType.pdf:
-        return AppColors.error;
-      case AttachmentType.document:
-        return AppColors.accent;
-    }
-  }
-
-  String _formatSize(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) {
-      return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    }
-    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () async {
-        if (attachment.url.isNotEmpty) {
-          final uri = Uri.parse(attachment.url);
-          if (await canLaunchUrl(uri)) {
-            await launchUrl(uri, mode: LaunchMode.externalApplication);
-          }
-        }
-      },
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        margin: const EdgeInsets.only(bottom: 10),
-        decoration: BoxDecoration(
-          color: isDark ? AppColors.darkCard : AppColors.lightCard,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: _color.withValues(alpha: 0.3)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: _color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(_icon, color: _color, size: 20),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    attachment.name,
-                    style: AppTypography.labelMedium.copyWith(
-                      color: isDark ? AppColors.darkText : AppColors.lightText,
+                // Open indicator
+                Positioned(
+                  bottom: 8,
+                  right: 8,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
                     ),
-                    overflow: TextOverflow.ellipsis,
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.open_in_new_rounded,
+                          size: 12,
+                          color: Colors.white,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          att.name,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
                   ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // ── PDF / Document → download button ────────────────────────────────────
+    final color =
+        att.type == AttachmentType.pdf ? AppColors.error : AppColors.accent;
+    final icon =
+        att.type == AttachmentType.pdf
+            ? Icons.picture_as_pdf_rounded
+            : Icons.insert_drive_file_rounded;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 24),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  att.name,
+                  style: AppTypography.labelSmall.copyWith(
+                    color: isDark ? AppColors.darkText : AppColors.lightText,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (att.sizeBytes > 0)
                   Text(
-                    _formatSize(attachment.sizeBytes),
+                    att.sizeBytes < 1024 * 1024
+                        ? '${(att.sizeBytes / 1024).toStringAsFixed(1)} KB'
+                        : '${(att.sizeBytes / (1024 * 1024)).toStringAsFixed(1)} MB',
                     style: AppTypography.caption,
                   ),
-                ],
-              ),
+              ],
             ),
-            Icon(Icons.download_rounded, color: _color, size: 20),
-          ],
-        ),
+          ),
+          const SizedBox(width: 8),
+          // ── Download button ───────────────────────────────────────────────
+          TextButton.icon(
+            onPressed: att.url.isNotEmpty ? () => _launch(context) : null,
+            icon: const Icon(Icons.download_rounded, size: 16),
+            label: const Text('Open'),
+            style: TextButton.styleFrom(
+              foregroundColor: color,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            ),
+          ),
+        ],
       ),
     );
   }

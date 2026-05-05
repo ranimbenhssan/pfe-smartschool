@@ -183,18 +183,20 @@ class NotificationService {
           'title': title,
           'message': body,
           'messageType': type,
-          'senderId': senderId,
-          'senderName': senderName,
-          'senderRole': senderRole,
-          'attachments': attachments,
+          'senderId': senderId, // ← was missing
+          'senderName': senderName, // ← was missing
+          'senderRole': senderRole, // ← was missing
+          'attachments': attachments, // ← was missing
           'recipientLabel': 'Whole School',
+          'replyToId': '',
+          'replyToTitle': '',
           'isRead': false,
           'createdAt': FieldValue.serverTimestamp(),
         });
       }
       return true;
     } catch (e) {
-      debugPrint('[FCM] Error: $e');
+      debugPrint('[FCM] sendToAll error: $e');
       return false;
     }
   }
@@ -208,7 +210,7 @@ class NotificationService {
     String senderId = '',
     String senderName = '',
     String senderRole = '',
-    List<Map<String, dynamic>> attachments = const [],
+    List<Map<String, dynamic>> attachments = const [], // ← was missing
     String className = '',
   }) async {
     try {
@@ -228,15 +230,17 @@ class NotificationService {
           'senderId': senderId,
           'senderName': senderName,
           'senderRole': senderRole,
-          'attachments': attachments,
+          'attachments': attachments, // ← was missing
           'recipientLabel': className.isNotEmpty ? 'Class $className' : 'Class',
+          'replyToId': '',
+          'replyToTitle': '',
           'isRead': false,
           'createdAt': FieldValue.serverTimestamp(),
         });
       }
       return true;
     } catch (e) {
-      debugPrint('[FCM] Error: $e');
+      debugPrint('[FCM] sendToClass error: $e');
       return false;
     }
   }
