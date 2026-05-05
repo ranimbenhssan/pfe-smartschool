@@ -21,6 +21,17 @@ class _AdminmessageendScreenState extends ConsumerState<AdminmessageendScreen> {
   List<String> _selectedStudentIds = [];
   List<String> _selectedTeacherIds = [];
 
+  // ─────────────────────────────────────────────────────────────────────────
+  //  SEND
+  //  attachments come from MessageComposeWidget — each AttachmentModel.url
+  //  already holds the Cloudinary secure_url (uploaded before onSend fires).
+  //  attMaps serialises url + name + type + sizeBytes into Firestore-safe maps.
+  //
+  //  FIXES:
+  //  • sendToAll now receives senderId, senderName, senderRole, attachments
+  //  • sendToClass now receives the same + className
+  //  • Every branch passes attMaps so no attachment is silently dropped
+  // ─────────────────────────────────────────────────────────────────────────
   Future<void> _send(
     String title,
     String message,
@@ -33,80 +44,119 @@ class _AdminmessageendScreenState extends ConsumerState<AdminmessageendScreen> {
     setState(() => _isLoading = true);
 
     final service = ref.read(notificationServiceProvider);
+    // Serialise once — each map contains url, name, type, sizeBytes
     final attMaps = attachments.map((a) => a.toMap()).toList();
 
     try {
-      Future<bool> send(String userId) => service.sendToUser(
-        userId,
-        title,
-        message,
-        type: messageType.name,
-        senderId: currentUser.id,
-        senderName: currentUser.name,
-        senderRole: 'admin',
-        attachments: attMaps,
-      );
+      // Helper — sends to a single userId
+      Future<void> sendOne(String userId, {String recipientLabel = ''}) =>
+          service.sendToUser(
+            userId,
+            title,
+            message,
+            type: messageType.name,
+            senderId: currentUser.id,
+            senderName: currentUser.name,
+            senderRole: 'admin',
+            attachments: attMaps, // ← was missing in some branches
+            recipientLabel: recipientLabel,
+          );
 
       switch (_targetType) {
+        // ── Whole school ────────────────────────────────────────────────────
         case 'whole_school':
-          await service.sendToAll(title, message, type: messageType.name);
+          await service.sendToAll(
+            title,
+            message,
+            type: messageType.name,
+            senderId: currentUser.id, // ← was missing
+            senderName: currentUser.name, // ← was missing
+            senderRole: 'admin', // ← was missing
+            attachments: attMaps, // ← was missing
+          );
           break;
 
+        // ── Class(es) ───────────────────────────────────────────────────────
         case 'class':
           for (final classId in _selectedClassIds) {
+            // Resolve display name for recipientLabel
+            final classDoc = await ref
+                .read(firestoreServiceProvider)
+                .getClass(classId);
+            final className =
+                classDoc?.getFullName() ?? classDoc?.displayName ?? classId;
+
             await service.sendToClass(
               classId,
               title,
               message,
               type: messageType.name,
+              senderId: currentUser.id,
+              senderName: currentUser.name,
+              senderRole: 'admin',
+              attachments: attMaps, // ← was missing
+              className: className,
             );
           }
           break;
 
+        // ── Student(s) ──────────────────────────────────────────────────────
         case 'student':
           for (final studentId in _selectedStudentIds) {
             final student = await ref
                 .read(firestoreServiceProvider)
                 .getStudent(studentId);
-            if (student?.userId != null && student!.userId.isNotEmpty) {
-              await send(student.userId);
+            if (student != null && student.userId.isNotEmpty) {
+              await sendOne(student.userId, recipientLabel: student.name);
             }
           }
           break;
 
+        // ── Teacher(s) ──────────────────────────────────────────────────────
         case 'teacher':
-          for (final id in _selectedTeacherIds) {
-            await send(id);
+          for (final teacherId in _selectedTeacherIds) {
+            await sendOne(teacherId);
           }
           break;
 
+        // ── Mixed ───────────────────────────────────────────────────────────
         case 'mixed':
-          for (final id in _selectedTeacherIds) {
-            await send(id);
+          for (final teacherId in _selectedTeacherIds) {
+            await sendOne(teacherId);
           }
           for (final classId in _selectedClassIds) {
+            final classDoc = await ref
+                .read(firestoreServiceProvider)
+                .getClass(classId);
+            final className =
+                classDoc?.getFullName() ?? classDoc?.displayName ?? classId;
             await service.sendToClass(
               classId,
               title,
               message,
               type: messageType.name,
+              senderId: currentUser.id,
+              senderName: currentUser.name,
+              senderRole: 'admin',
+              attachments: attMaps,
+              className: className,
             );
           }
           for (final studentId in _selectedStudentIds) {
             final student = await ref
                 .read(firestoreServiceProvider)
                 .getStudent(studentId);
-            if (student?.userId != null && student!.userId.isNotEmpty) {
-              await send(student.userId);
+            if (student != null && student.userId.isNotEmpty) {
+              await sendOne(student.userId, recipientLabel: student.name);
             }
           }
           break;
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('message sent successfully ✅')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Message sent ✅')));
         setState(() {
           _targetType = 'whole_school';
           _selectedClassIds = [];
@@ -121,10 +171,12 @@ class _AdminmessageendScreenState extends ConsumerState<AdminmessageendScreen> {
         ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
-
     if (mounted) setState(() => _isLoading = false);
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  //  BUILD
+  // ─────────────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -133,7 +185,7 @@ class _AdminmessageendScreenState extends ConsumerState<AdminmessageendScreen> {
       backgroundColor:
           isDark ? AppColors.darkBackground : AppColors.lightBackground,
       appBar: AppBar(
-        title: const Text('Send message'),
+        title: const Text('Send Message'),
         backgroundColor:
             isDark ? AppColors.darkSurface : AppColors.lightSurface,
       ),
@@ -142,7 +194,6 @@ class _AdminmessageendScreenState extends ConsumerState<AdminmessageendScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ─── Target ───
             Text(
               'Send To',
               style: AppTypography.labelMedium.copyWith(
@@ -164,8 +215,6 @@ class _AdminmessageendScreenState extends ConsumerState<AdminmessageendScreen> {
               _buildTeacherSelector(isDark),
 
             const SizedBox(height: 8),
-
-            // ─── Compose ───
             MessageComposeWidget(
               allowedTypes: ['announcement', 'form', 'note', 'general'],
               isLoading: _isLoading,
@@ -178,7 +227,7 @@ class _AdminmessageendScreenState extends ConsumerState<AdminmessageendScreen> {
   }
 
   Widget _buildTargetSelector(bool isDark) {
-    final options = [
+    const options = [
       _Opt('whole_school', 'Whole School', Icons.school_rounded),
       _Opt('class', 'Class(es)', Icons.class_rounded),
       _Opt('student', 'Student(s)', Icons.person_rounded),
@@ -190,7 +239,7 @@ class _AdminmessageendScreenState extends ConsumerState<AdminmessageendScreen> {
       runSpacing: 8,
       children:
           options.map((opt) {
-            final isSelected = _targetType == opt.value;
+            final sel = _targetType == opt.value;
             return GestureDetector(
               onTap:
                   () => setState(() {
@@ -206,7 +255,7 @@ class _AdminmessageendScreenState extends ConsumerState<AdminmessageendScreen> {
                 ),
                 decoration: BoxDecoration(
                   color:
-                      isSelected
+                      sel
                           ? AppColors.accent.withValues(alpha: 0.15)
                           : isDark
                           ? AppColors.darkCard
@@ -214,12 +263,11 @@ class _AdminmessageendScreenState extends ConsumerState<AdminmessageendScreen> {
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
                     color:
-                        isSelected
+                        sel
                             ? AppColors.accent
                             : isDark
                             ? AppColors.darkBorder
                             : AppColors.lightBorder,
-                    width: isSelected ? 2 : 1,
                   ),
                 ),
                 child: Row(
@@ -227,14 +275,14 @@ class _AdminmessageendScreenState extends ConsumerState<AdminmessageendScreen> {
                   children: [
                     Icon(
                       opt.icon,
-                      size: 16,
-                      color: isSelected ? AppColors.accent : null,
+                      size: 14,
+                      color: sel ? AppColors.accent : null,
                     ),
                     const SizedBox(width: 6),
                     Text(
                       opt.label,
                       style: AppTypography.labelSmall.copyWith(
-                        color: isSelected ? AppColors.accent : null,
+                        color: sel ? AppColors.accent : null,
                       ),
                     ),
                   ],
@@ -245,86 +293,82 @@ class _AdminmessageendScreenState extends ConsumerState<AdminmessageendScreen> {
     );
   }
 
-  // REPLACE _buildClassSelector:
   Widget _buildClassSelector(bool isDark) {
     final classes = ref.watch(classesProvider);
     return classes.when(
       loading: () => const LoadingWidget(),
-      error: (e, _) => Text('Error: $e'),
+      error: (_, __) => const SizedBox.shrink(),
       data:
           (list) => SearchableSelector<ClassModel>(
             isDark: isDark,
             title: 'Select Class(es)',
-            hint: 'Search by class name or grade...',
+            hint: 'Search classes...',
             items: list,
-            labelOf: (c) => c.displayName,
-            subtitleOf: (c) => c.grade,
+            labelOf: (c) => c.getFullName(), // defined in class_model output
             idOf: (c) => c.id,
             selectedIds: _selectedClassIds,
-            activeColor: AppColors.accent,
             onToggle:
-                (cls, isSelected) => setState(
+                (c, sel) => setState(
                   () =>
-                      isSelected
-                          ? _selectedClassIds.remove(cls.id)
-                          : _selectedClassIds.add(cls.id),
+                      sel
+                          ? _selectedClassIds.add(c.id)
+                          : _selectedClassIds.remove(c.id),
                 ),
+            activeColor: AppColors.accent,
           ),
     );
   }
 
-  // REPLACE _buildStudentSelector:
   Widget _buildStudentSelector(bool isDark) {
     final students = ref.watch(studentsProvider);
     return students.when(
       loading: () => const LoadingWidget(),
-      error: (e, _) => Text('Error: $e'),
+      error: (_, __) => const SizedBox.shrink(),
       data:
           (list) => SearchableSelector<StudentModel>(
             isDark: isDark,
             title: 'Select Student(s)',
-            hint: 'Search by name or class...',
+            hint: 'Search students...',
             items: list,
             labelOf: (s) => s.name,
-            subtitleOf: (s) => s.classDisplay,
+            subtitleOf: (s) => s.className,
             idOf: (s) => s.id,
             selectedIds: _selectedStudentIds,
-            activeColor: AppColors.studentColor,
             onToggle:
-                (s, isSelected) => setState(
+                (s, sel) => setState(
                   () =>
-                      isSelected
-                          ? _selectedStudentIds.remove(s.id)
-                          : _selectedStudentIds.add(s.id),
+                      sel
+                          ? _selectedStudentIds.add(s.id)
+                          : _selectedStudentIds.remove(s.id),
                 ),
+            activeColor: AppColors.accent,
           ),
     );
   }
 
-  // REPLACE _buildTeacherSelector:
   Widget _buildTeacherSelector(bool isDark) {
     final teachers = ref.watch(teachersProvider);
     return teachers.when(
       loading: () => const LoadingWidget(),
-      error: (e, _) => Text('Error: $e'),
+      error: (_, __) => const SizedBox.shrink(),
       data:
           (list) => SearchableSelector<TeacherModel>(
             isDark: isDark,
             title: 'Select Teacher(s)',
-            hint: 'Search by name or subject...',
+            hint: 'Search teachers...',
             items: list,
             labelOf: (t) => t.name,
-            subtitleOf: (t) => t.assignedClassNames.join(', '),
+            subtitleOf: (t) => t.subject,
             idOf: (t) => t.id,
             selectedIds: _selectedTeacherIds,
-            activeColor: AppColors.teacherColor,
             onToggle:
-                (t, isSelected) => setState(
+                (t, sel) => setState(
                   () =>
-                      isSelected
-                          ? _selectedTeacherIds.remove(t.id)
-                          : _selectedTeacherIds.add(t.id),
+                      sel
+                          ? _selectedTeacherIds.add(t.id)
+                          : _selectedTeacherIds.remove(t.id),
                 ),
+            activeColor: AppColors.accent,
           ),
     );
   }

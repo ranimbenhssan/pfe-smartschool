@@ -1,6 +1,10 @@
+import 'dart:io';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:open_file/open_file.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../theme/theme.dart';
 import '../../models/models.dart';
@@ -9,11 +13,10 @@ import 'package:pfe_smartschool/navigation/app_routes.dart';
 
 class NotificationDetailscreen extends ConsumerWidget {
   final NotificationModel message;
-
   const NotificationDetailscreen({super.key, required this.message});
 
-  Color _typeColor(MessageType type) {
-    switch (type) {
+  Color _typeColor(MessageType t) {
+    switch (t) {
       case MessageType.announcement:
         return Colors.blue;
       case MessageType.form:
@@ -29,8 +32,8 @@ class NotificationDetailscreen extends ConsumerWidget {
     }
   }
 
-  IconData _typeIcon(MessageType type) {
-    switch (type) {
+  IconData _typeIcon(MessageType t) {
+    switch (t) {
       case MessageType.announcement:
         return Icons.campaign_rounded;
       case MessageType.form:
@@ -46,8 +49,8 @@ class NotificationDetailscreen extends ConsumerWidget {
     }
   }
 
-  String _typeLabel(MessageType type) {
-    switch (type) {
+  String _typeLabel(MessageType t) {
+    switch (t) {
       case MessageType.announcement:
         return 'Announcement';
       case MessageType.form:
@@ -64,7 +67,7 @@ class NotificationDetailscreen extends ConsumerWidget {
   }
 
   String _formatDateTime(DateTime dt) {
-    const months = [
+    const m = [
       'Jan',
       'Feb',
       'Mar',
@@ -79,8 +82,8 @@ class NotificationDetailscreen extends ConsumerWidget {
       'Dec',
     ];
     final h = dt.hour.toString().padLeft(2, '0');
-    final m = dt.minute.toString().padLeft(2, '0');
-    return '${dt.day} ${months[dt.month - 1]} ${dt.year} at $h:$m';
+    final min = dt.minute.toString().padLeft(2, '0');
+    return '${dt.day} ${m[dt.month - 1]} ${dt.year} at $h:$min';
   }
 
   @override
@@ -101,20 +104,13 @@ class NotificationDetailscreen extends ConsumerWidget {
         title: const Text('Message'),
         backgroundColor:
             isDark ? AppColors.darkSurface : AppColors.lightSurface,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.reply_rounded),
-            onPressed:
-                () => context.push(AppRoutes.messageReply, extra: message),
-          ),
-        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ─── Type badge ───────────────────────────────────────────────
+            // ── Type badge ──────────────────────────────────────────────────
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
@@ -136,7 +132,7 @@ class NotificationDetailscreen extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
 
-            // ─── Title ────────────────────────────────────────────────────
+            // ── Title ───────────────────────────────────────────────────────
             Text(
               message.title,
               style: AppTypography.headingMedium.copyWith(
@@ -145,7 +141,7 @@ class NotificationDetailscreen extends ConsumerWidget {
             ),
             const SizedBox(height: 8),
 
-            // ─── Meta ─────────────────────────────────────────────────────
+            // ── Meta ────────────────────────────────────────────────────────
             Row(
               children: [
                 const Icon(
@@ -192,7 +188,7 @@ class NotificationDetailscreen extends ConsumerWidget {
             const Divider(),
             const SizedBox(height: 16),
 
-            // ─── Body ─────────────────────────────────────────────────────
+            // ── Body ────────────────────────────────────────────────────────
             Text(
               message.message,
               style: AppTypography.bodyMedium.copyWith(
@@ -202,10 +198,10 @@ class NotificationDetailscreen extends ConsumerWidget {
             ),
             const SizedBox(height: 24),
 
-            // ─── Attachments ──────────────────────────────────────────────
+            // ── Attachments ─────────────────────────────────────────────────
             if (message.attachments.isNotEmpty) ...[
               Text(
-                'Attachments',
+                'Attachments (${message.attachments.length})',
                 style: AppTypography.labelLarge.copyWith(
                   color: isDark ? AppColors.darkText : AppColors.lightText,
                 ),
@@ -217,7 +213,7 @@ class NotificationDetailscreen extends ConsumerWidget {
               const SizedBox(height: 16),
             ],
 
-            // ─── Reply ────────────────────────────────────────────────────
+            // ── Reply indicator ─────────────────────────────────────────────
             if (message.replyToTitle.isNotEmpty)
               Container(
                 padding: const EdgeInsets.all(12),
@@ -257,42 +253,119 @@ class NotificationDetailscreen extends ConsumerWidget {
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  ATTACHMENT WIDGET
-//  • Images → inline preview (Image.network)
-//  • PDFs and documents → download button that launches Cloudinary URL
-//  • Falls back gracefully if URL is empty
+//
+//  Images   → inline Image.network preview + tap to open in browser
+//  PDF/Docs → Download with dio to temp dir (preserving extension),
+//             then open with open_file (native OS handler).
+//             Loading spinner shown while downloading.
 // ─────────────────────────────────────────────────────────────────────────────
-class _AttachmentWidget extends StatelessWidget {
+class _AttachmentWidget extends StatefulWidget {
   final AttachmentModel att;
   final bool isDark;
-
   const _AttachmentWidget({required this.att, required this.isDark});
 
-  Future<void> _launch(BuildContext context) async {
-    if (att.url.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('File URL not available')));
+  @override
+  State<_AttachmentWidget> createState() => _AttachmentWidgetState();
+}
+
+class _AttachmentWidgetState extends State<_AttachmentWidget> {
+  bool _isOpening = false;
+  double? _downloadProgress; // 0.0–1.0, null when idle
+
+  // ── Derive MIME-friendly extension from the stored file name ──────────────
+  String get _extension {
+    final name = widget.att.name;
+    final dot = name.lastIndexOf('.');
+    if (dot != -1) return name.substring(dot).toLowerCase(); // ".pdf"
+    // Fallback: try the URL
+    final urlDot = widget.att.url.lastIndexOf('.');
+    if (urlDot != -1) {
+      final ext = widget.att.url.substring(urlDot).split('?').first;
+      if (ext.length <= 5) return ext;
+    }
+    return '';
+  }
+
+  // ── Download file with dio then open with open_file ───────────────────────
+  Future<void> _openFile(BuildContext context) async {
+    if (widget.att.url.isEmpty) {
+      _snack(context, 'File URL not available');
       return;
     }
-    final uri = Uri.parse(att.url);
-    final canLaunch = await canLaunchUrl(uri);
-    if (canLaunch) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
-      if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Could not open file')));
+
+    setState(() {
+      _isOpening = true;
+      _downloadProgress = 0;
+    });
+
+    try {
+      final tempDir = await getTemporaryDirectory();
+      // Build a safe local filename with the correct extension
+      final safeName = widget.att.name.replaceAll(RegExp(r'[^\w.\-]'), '_');
+      final savePath = '${tempDir.path}/$safeName';
+
+      // Download with dio (supports progress + range headers)
+      await Dio().download(
+        widget.att.url,
+        savePath,
+        onReceiveProgress: (received, total) {
+          if (total > 0 && mounted) {
+            setState(() => _downloadProgress = received / total);
+          }
+        },
+        options: Options(
+          // Some CDNs need this to avoid redirect loops
+          followRedirects: true,
+          maxRedirects: 5,
+          responseType: ResponseType.bytes,
+        ),
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _isOpening = false;
+        _downloadProgress = null;
+      });
+
+      // Open with native OS handler (PDF viewer, Word, etc.)
+      final result = await OpenFile.open(savePath);
+      if (result.type != ResultType.done && mounted) {
+        _snack(context, 'Could not open file: ${result.message}');
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isOpening = false;
+          _downloadProgress = null;
+        });
+        _snack(context, 'Download failed: $e');
       }
     }
   }
 
+  // ── Fallback: open image/URL in browser ───────────────────────────────────
+  Future<void> _openInBrowser(BuildContext context) async {
+    final uri = Uri.parse(widget.att.url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      _snack(context, 'Could not open URL');
+    }
+  }
+
+  void _snack(BuildContext ctx, String msg) {
+    ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
   @override
   Widget build(BuildContext context) {
-    // ── Image → show inline preview with tap to open full ──────────────────
+    final att = widget.att;
+    final isDark = widget.isDark;
+
+    // ── IMAGE: show inline preview ─────────────────────────────────────────
     if (att.type == AttachmentType.image && att.url.isNotEmpty) {
       return GestureDetector(
-        onTap: () => _launch(context),
+        onTap: () => _openInBrowser(context),
         child: Container(
           margin: const EdgeInsets.only(bottom: 10),
           decoration: BoxDecoration(
@@ -305,20 +378,20 @@ class _AttachmentWidget extends StatelessWidget {
               children: [
                 Image.network(
                   att.url,
-                  fit: BoxFit.cover,
                   width: double.infinity,
                   height: 200,
-                  loadingBuilder: (context, child, loadingProgress) {
-                    if (loadingProgress == null) return child;
+                  fit: BoxFit.cover,
+                  loadingBuilder: (ctx, child, prog) {
+                    if (prog == null) return child;
                     return Container(
                       height: 200,
                       alignment: Alignment.center,
                       color: isDark ? AppColors.darkCard : AppColors.lightCard,
                       child: CircularProgressIndicator(
                         value:
-                            loadingProgress.expectedTotalBytes != null
-                                ? loadingProgress.cumulativeBytesLoaded /
-                                    loadingProgress.expectedTotalBytes!
+                            prog.expectedTotalBytes != null
+                                ? prog.cumulativeBytesLoaded /
+                                    prog.expectedTotalBytes!
                                 : null,
                         color: AppColors.info,
                       ),
@@ -336,7 +409,6 @@ class _AttachmentWidget extends StatelessWidget {
                         ),
                       ),
                 ),
-                // Open indicator
                 Positioned(
                   bottom: 8,
                   right: 8,
@@ -377,7 +449,7 @@ class _AttachmentWidget extends StatelessWidget {
       );
     }
 
-    // ── PDF / Document → download button ────────────────────────────────────
+    // ── PDF / DOCUMENT ─────────────────────────────────────────────────────
     final color =
         att.type == AttachmentType.pdf ? AppColors.error : AppColors.accent;
     final icon =
@@ -395,8 +467,10 @@ class _AttachmentWidget extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(icon, color: color, size: 24),
+          Icon(icon, color: color, size: 26),
           const SizedBox(width: 12),
+
+          // ── File info ───────────────────────────────────────────────────────
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -415,20 +489,47 @@ class _AttachmentWidget extends StatelessWidget {
                         : '${(att.sizeBytes / (1024 * 1024)).toStringAsFixed(1)} MB',
                     style: AppTypography.caption,
                   ),
+                // Download progress bar
+                if (_downloadProgress != null) ...[
+                  const SizedBox(height: 6),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(2),
+                    child: LinearProgressIndicator(
+                      value: _downloadProgress,
+                      backgroundColor: color.withValues(alpha: 0.15),
+                      valueColor: AlwaysStoppedAnimation<Color>(color),
+                      minHeight: 4,
+                    ),
+                  ),
+                  Text(
+                    '${((_downloadProgress ?? 0) * 100).toInt()}% downloading…',
+                    style: AppTypography.caption.copyWith(color: color),
+                  ),
+                ],
               ],
             ),
           ),
           const SizedBox(width: 8),
-          // ── Download button ───────────────────────────────────────────────
-          TextButton.icon(
-            onPressed: att.url.isNotEmpty ? () => _launch(context) : null,
-            icon: const Icon(Icons.download_rounded, size: 16),
-            label: const Text('Open'),
-            style: TextButton.styleFrom(
-              foregroundColor: color,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            ),
-          ),
+
+          // ── Open / loading button ───────────────────────────────────────────
+          _isOpening
+              ? SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2, color: color),
+              )
+              : TextButton.icon(
+                onPressed: att.url.isNotEmpty ? () => _openFile(context) : null,
+                icon: const Icon(Icons.open_in_new_rounded, size: 16),
+                label: const Text('Open'),
+                style: TextButton.styleFrom(
+                  foregroundColor: color,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                ),
+              ),
         ],
       ),
     );
