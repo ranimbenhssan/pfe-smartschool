@@ -71,8 +71,16 @@ class CloudinaryService {
 
       request.fields['upload_preset'] = _uploadPreset;
       request.fields['folder'] = 'smartschool/messages';
-      request.fields['use_filename'] = 'auto';
-      request.fields['unique_filename'] = 'auto';
+
+      // ── public_id with extension embedded ────────────────────────────────
+      // use_filename / unique_filename are blocked by unsigned presets.
+      // Instead, set public_id = timestamp_originalname INCLUDING the
+      // extension so Cloudinary keeps it in the secure_url.
+      final safeName = fileName
+          .replaceAll(' ', '_')
+          .replaceAll(RegExp(r'[^\w.\-]'), '');
+      request.fields['public_id'] =
+          '${DateTime.now().millisecondsSinceEpoch}_$safeName';
 
       // Attach the file with the correct MIME type
       request.files.add(
