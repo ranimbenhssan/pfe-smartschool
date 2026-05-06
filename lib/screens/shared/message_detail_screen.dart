@@ -288,18 +288,11 @@ class _AttachmentTileState extends State<_AttachmentTile> {
     return '';
   }
 
-  // ── Cloudinary URL with fl_attachment flag forces a content-disposition
-  //    header that tells the browser/OS to treat this as a download ──────────
-  String get _downloadUrl {
-    if (att.url.isEmpty) return '';
-    // Insert /fl_attachment/ into Cloudinary URL if not already present
-    // e.g. https://res.cloudinary.com/xxx/raw/upload/v123/file.pdf
-    //   → https://res.cloudinary.com/xxx/raw/upload/fl_attachment/v123/file.pdf
-    if (att.url.contains('/upload/') && !att.url.contains('fl_attachment')) {
-      return att.url.replaceFirst('/upload/', '/upload/fl_attachment/');
-    }
-    return att.url;
-  }
+  // ── Use the raw Cloudinary URL directly ──────────────────────────────────
+  // fl_attachment transformation requires a paid Cloudinary plan and returns
+  // HTTP 401 on free tier. The raw URL is publicly accessible and http.get
+  // downloads the bytes directly without needing the transformation flag.
+  String get _downloadUrl => att.url;
 
   Future<void> _open() async {
     if (att.url.isEmpty) {
