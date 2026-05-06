@@ -1,4 +1,3 @@
-// ignore: file_names
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../theme/theme.dart';
@@ -23,6 +22,7 @@ class _TeachermessageendScreenState
   List<String> _selectedTeacherIds = [];
   List<String> _selectedStudentIds = [];
 
+  // ── SEND ─────────────────────────────────────────────────────────────────
   Future<void> _send(
     String title,
     String message,
@@ -42,31 +42,29 @@ class _TeachermessageendScreenState
     }
 
     setState(() => _isLoading = true);
+
     final service = ref.read(notificationServiceProvider);
     final attMaps = attachments.map((a) => a.toMap()).toList();
 
-    try {
-      Future<bool> sendToUser(String userId) => service.sendToUser(
-        userId,
-        title,
-        message,
-        type: messageType.name,
-        senderId: currentUser.id,
-        senderName: currentUser.name,
-        senderRole: 'teacher',
-        attachments: attMaps,
-      );
+    Future<void> sendToUser(String userId) => service.sendToUser(
+      userId,
+      title,
+      message,
+      type: messageType.name,
+      senderId: currentUser.id,
+      senderName: currentUser.name,
+      senderRole: 'teacher',
+      attachments: attMaps,
+    );
 
+    try {
       if (_targetType == 'class') {
         for (final classId in _selectedClassIds) {
-          // Get all students in selected classes
-          final studentsSnap = await ref
+          final students = await ref
               .read(firestoreServiceProvider)
               .getStudentsByClassOnce(classId);
-          for (final student in studentsSnap) {
-            if (student.userId.isNotEmpty) {
-              await sendToUser(student.userId);
-            }
+          for (final s in students) {
+            if (s.userId.isNotEmpty) await sendToUser(s.userId);
           }
         }
       } else if (_targetType == 'teacher') {
@@ -75,23 +73,19 @@ class _TeachermessageendScreenState
         }
       } else if (_targetType == 'student') {
         for (final studentId in _selectedStudentIds) {
-          final student = await ref
+          final s = await ref
               .read(firestoreServiceProvider)
               .getStudent(studentId);
-          if (student?.userId != null && student!.userId.isNotEmpty) {
-            await sendToUser(student.userId);
-          }
+          if (s != null && s.userId.isNotEmpty) await sendToUser(s.userId);
         }
       } else {
-        // mixed
+        // mixed — class + teacher
         for (final classId in _selectedClassIds) {
-          final studentsSnap = await ref
+          final students = await ref
               .read(firestoreServiceProvider)
               .getStudentsByClassOnce(classId);
-          for (final student in studentsSnap) {
-            if (student.userId.isNotEmpty) {
-              await sendToUser(student.userId);
-            }
+          for (final s in students) {
+            if (s.userId.isNotEmpty) await sendToUser(s.userId);
           }
         }
         for (final id in _selectedTeacherIds) {
@@ -100,9 +94,9 @@ class _TeachermessageendScreenState
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('message sent successfully ✅')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Message sent ✅')));
         setState(() {
           _targetType = 'class';
           _selectedClassIds = [];
@@ -120,16 +114,16 @@ class _TeachermessageendScreenState
     if (mounted) setState(() => _isLoading = false);
   }
 
+  // ── BUILD ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final currentUser = ref.watch(currentUserProvider);
 
     return Scaffold(
       backgroundColor:
           isDark ? AppColors.darkBackground : AppColors.lightBackground,
       appBar: AppBar(
-        title: const Text('Send message'),
+        title: const Text('Send Message'),
         backgroundColor:
             isDark ? AppColors.darkSurface : AppColors.lightSurface,
       ),
@@ -138,7 +132,7 @@ class _TeachermessageendScreenState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ─── Target type ───
+            // ── Target chips ───────────────────────────────────────────────
             Text(
               'Send To',
               style: AppTypography.labelMedium.copyWith(
@@ -166,75 +160,20 @@ class _TeachermessageendScreenState
             ),
             const SizedBox(height: 16),
 
-            // ─── Class selector ───
+            // ── Class selector — teacher's assigned classes only ────────────
+            // Shown for 'class' and 'mixed' targets
             if (_targetType == 'class' || _targetType == 'mixed')
-              currentUser.when(
-                loading: () => const LoadingWidget(),
-                error: (_, __) => const SizedBox.shrink(),
-                data: (user) {
-                  if (user == null) return const SizedBox.shrink();
-                  // Show only teacher's assigned classes
-                  final teachers = ref.watch(teachersProvider);
-                  return teachers.when(
-                    loading: () => const LoadingWidget(),
-                    error: (e, _) => Text('Error: $e'),
-                    data: (list) {
-                      final teacher =
-                          list.where((t) => t.userId == user.id).firstOrNull;
-                      final myClasses = teacher?.assignedClassIds ?? [];
-                      final classes = ref.watch(classesProvider);
-                      return classes.when(
-                        loading: () => const LoadingWidget(),
-                        error: (e, _) => Text('Error: $e'),
-                        data: (allClasses) {
-                          final filtered =
-                              allClasses
-                                  .where((c) => myClasses.contains(c.id))
-                                  .toList();
-                          return SelectorSection(
-                            isDark: isDark,
-                            title: 'Select Class(es)',
-                            child: Column(
-                              children:
-                                  filtered.map((cls) {
-                                    final isSelected = _selectedClassIds
-                                        .contains(cls.id);
-                                    return SelectTile(
-                                      isDark: isDark,
-                                      label: cls.displayName,
-                                      isSelected: isSelected,
-                                      onTap:
-                                          () => setState(
-                                            () =>
-                                                isSelected
-                                                    ? _selectedClassIds.remove(
-                                                      cls.id,
-                                                    )
-                                                    : _selectedClassIds.add(
-                                                      cls.id,
-                                                    ),
-                                          ),
-                                    );
-                                  }).toList(),
-                            ),
-                          );
-                        },
-                      );
-                    },
-                  );
-                },
-              ),
+              _buildClassSelector(isDark),
 
-            // ─── Teacher selector ───
+            // ── Teacher selector ────────────────────────────────────────────
+            // Shown for 'teacher' and 'mixed' targets
             if (_targetType == 'teacher' || _targetType == 'mixed')
               _buildTeacherSelector(isDark),
 
-            // ─── Student selector ───
+            // ── Student selector ─────────────────────────────────────────────
             if (_targetType == 'student') _buildStudentSelector(isDark),
 
             const SizedBox(height: 8),
-
-            // ─── Compose ───
             MessageComposeWidget(
               allowedTypes: ['course', 'note', 'general'],
               isLoading: _isLoading,
@@ -246,8 +185,9 @@ class _TeachermessageendScreenState
     );
   }
 
+  // ── Chip ──────────────────────────────────────────────────────────────────
   Widget _chip(bool isDark, String value, String label, IconData icon) {
-    final isSelected = _targetType == value;
+    final sel = _targetType == value;
     return GestureDetector(
       onTap:
           () => setState(() {
@@ -260,7 +200,7 @@ class _TeachermessageendScreenState
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color:
-              isSelected
+              sel
                   ? AppColors.teacherColor.withValues(alpha: 0.12)
                   : isDark
                   ? AppColors.darkCard
@@ -268,7 +208,7 @@ class _TeachermessageendScreenState
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color:
-                isSelected
+                sel
                     ? AppColors.teacherColor
                     : isDark
                     ? AppColors.darkBorder
@@ -278,16 +218,12 @@ class _TeachermessageendScreenState
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              size: 14,
-              color: isSelected ? AppColors.teacherColor : null,
-            ),
+            Icon(icon, size: 14, color: sel ? AppColors.teacherColor : null),
             const SizedBox(width: 4),
             Text(
               label,
               style: AppTypography.labelSmall.copyWith(
-                color: isSelected ? AppColors.teacherColor : null,
+                color: sel ? AppColors.teacherColor : null,
               ),
             ),
           ],
@@ -296,79 +232,174 @@ class _TeachermessageendScreenState
     );
   }
 
-  // REPLACE _buildTeacherSelector:
-  Widget _buildTeacherSelector(bool isDark) {
-    final teachers = ref.watch(teachersProvider);
-    return teachers.when(
+  // ── CLASS SELECTOR ────────────────────────────────────────────────────────
+  // Shows ONLY the classes assigned to this teacher (via assignedClassIds)
+  // Uses teacherClassIdsProvider then looks up ClassModel for each id.
+  Widget _buildClassSelector(bool isDark) {
+    final classIdsAsync = ref.watch(teacherClassIdsProvider);
+
+    return classIdsAsync.when(
       loading: () => const LoadingWidget(),
       error: (e, _) => Text('Error: $e'),
-      data:
-          (list) => SearchableSelector<TeacherModel>(
-            isDark: isDark,
-            title: 'Select Teacher(s)',
-            hint: 'Search by name...',
-            items: list,
-            labelOf: (t) => t.name,
-            subtitleOf: (t) => t.subject.isNotEmpty ? t.subject : '',
-            idOf: (t) => t.id,
-            selectedIds: _selectedTeacherIds,
-            activeColor: AppColors.teacherColor,
-            onToggle:
-                (t, isSelected) => setState(
-                  () =>
-                      isSelected
-                          ? _selectedTeacherIds.remove(t.id)
-                          : _selectedTeacherIds.add(t.id),
+      data: (classIds) {
+        if (classIds.isEmpty) {
+          return Container(
+            padding: const EdgeInsets.all(14),
+            margin: const EdgeInsets.only(bottom: 16),
+            decoration: BoxDecoration(
+              color: isDark ? AppColors.darkCard : AppColors.lightCard,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.class_outlined,
+                  color:
+                      isDark ? AppColors.darkTextHint : AppColors.lightTextHint,
+                  size: 18,
                 ),
-          ),
+                const SizedBox(width: 10),
+                Text('No classes assigned yet', style: AppTypography.caption),
+              ],
+            ),
+          );
+        }
+
+        // Resolve ClassModel objects for the assigned classIds
+        final classesAsync = ref.watch(classesProvider);
+        return classesAsync.when(
+          loading: () => const LoadingWidget(),
+          error: (e, _) => Text('Error: $e'),
+          data: (allClasses) {
+            // Filter to only the teacher's assigned classes
+            final myClasses =
+                allClasses.where((c) => classIds.contains(c.id)).toList();
+
+            if (myClasses.isEmpty) {
+              return Container(
+                padding: const EdgeInsets.all(14),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: isDark ? AppColors.darkCard : AppColors.lightCard,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color:
+                        isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                  ),
+                ),
+                child: Text(
+                  'Assigned classes not found',
+                  style: AppTypography.caption,
+                ),
+              );
+            }
+
+            return SearchableSelector<ClassModel>(
+              isDark: isDark,
+              title: 'Select Class(es)',
+              hint: 'Search by class name...',
+              items: myClasses,
+              labelOf: (c) => c.displayName,
+              subtitleOf: (c) => c.grade,
+              idOf: (c) => c.id,
+              selectedIds: _selectedClassIds,
+              activeColor: AppColors.teacherColor,
+              onToggle:
+                  (cls, isCurrentlySelected) => setState(() {
+                    if (isCurrentlySelected) {
+                      _selectedClassIds.remove(cls.id);
+                    } else {
+                      _selectedClassIds.add(cls.id);
+                    }
+                  }),
+            );
+          },
+        );
+      },
     );
   }
 
-  // REPLACE _buildStudentSelector (or class selector):
-  Widget _buildStudentSelector(bool isDark) {
-    final students = ref.watch(studentsProvider);
-    return students.when(
+  // ── TEACHER SELECTOR ─────────────────────────────────────────────────────
+  Widget _buildTeacherSelector(bool isDark) {
+    final currentUserAsync = ref.watch(currentUserProvider);
+    final teachers = ref.watch(teachersProvider);
+
+    return teachers.when(
       loading: () => const LoadingWidget(),
       error: (e, _) => Text('Error: $e'),
-      data:
-          (list) => SearchableSelector<StudentModel>(
-            isDark: isDark,
-            title: 'Select Student(s)',
-            hint: 'Search by name or class...',
-            items: list,
-            labelOf: (s) => s.name,
-            subtitleOf: (s) => s.classDisplay,
-            idOf: (s) => s.id,
-            selectedIds: _selectedStudentIds,
-            activeColor: AppColors.studentColor,
-            onToggle:
-                (s, isSelected) => setState(
-                  () =>
-                      isSelected
-                          ? _selectedStudentIds.remove(s.id)
-                          : _selectedStudentIds.add(s.id),
-                ),
-          ),
+      data: (list) {
+        // Exclude self from the list
+        final selfId = currentUserAsync.value?.id ?? '';
+        final others = list.where((t) => t.userId != selfId).toList();
+
+        return SearchableSelector<TeacherModel>(
+          isDark: isDark,
+          title: 'Select Teacher(s)',
+          hint: 'Search by name...',
+          items: others,
+          labelOf: (t) => t.name,
+          subtitleOf: (t) => t.subject.isNotEmpty ? t.subject : '',
+          idOf: (t) => t.id,
+          selectedIds: _selectedTeacherIds,
+          activeColor: AppColors.teacherColor,
+          onToggle:
+              (t, isCurrentlySelected) => setState(() {
+                if (isCurrentlySelected) {
+                  _selectedTeacherIds.remove(t.id);
+                } else {
+                  _selectedTeacherIds.add(t.id);
+                }
+              }),
+        );
+      },
     );
   }
-  Widget _buildClassSelector(bool isDark, List<ClassModel> myClasses) {
-    return SearchableSelector<ClassModel>(
-      isDark: isDark,
-      title: 'Select Class(es)',
-      hint: 'Search by class name...',
-      items: myClasses,
-      labelOf: (c) => c.displayName,
-      subtitleOf: (c) => c.grade,
-      idOf: (c) => c.id,
-      selectedIds: _selectedClassIds,
-      activeColor: AppColors.teacherColor,
-      onToggle:
-          (cls, isSelected) => setState(
-            () =>
-                isSelected
-                    ? _selectedClassIds.remove(cls.id)
-                    : _selectedClassIds.add(cls.id),
-          ),
+
+  // ── STUDENT SELECTOR ─────────────────────────────────────────────────────
+  // Shows all students in teacher's assigned classes
+  Widget _buildStudentSelector(bool isDark) {
+    final classIdsAsync = ref.watch(teacherClassIdsProvider);
+
+    return classIdsAsync.when(
+      loading: () => const LoadingWidget(),
+      error: (e, _) => Text('Error: $e'),
+      data: (classIds) {
+        final students = ref.watch(studentsProvider);
+        return students.when(
+          loading: () => const LoadingWidget(),
+          error: (e, _) => Text('Error: $e'),
+          data: (list) {
+            // Only students in this teacher's classes
+            final myStudents =
+                classIds.isEmpty
+                    ? list
+                    : list.where((s) => classIds.contains(s.classId)).toList();
+
+            return SearchableSelector<StudentModel>(
+              isDark: isDark,
+              title: 'Select Student(s)',
+              hint: 'Search by name...',
+              items: myStudents,
+              labelOf: (s) => s.name,
+              subtitleOf: (s) => s.classDisplay,
+              idOf: (s) => s.id,
+              selectedIds: _selectedStudentIds,
+              activeColor: AppColors.teacherColor,
+              onToggle:
+                  (s, isCurrentlySelected) => setState(() {
+                    if (isCurrentlySelected) {
+                      _selectedStudentIds.remove(s.id);
+                    } else {
+                      _selectedStudentIds.add(s.id);
+                    }
+                  }),
+            );
+          },
+        );
+      },
     );
   }
 }
