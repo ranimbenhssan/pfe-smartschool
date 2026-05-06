@@ -21,6 +21,7 @@ class _AdminmessageendScreenState extends ConsumerState<AdminmessageendScreen> {
   List<String> _selectedStudentIds = [];
   List<String> _selectedTeacherIds = [];
 
+  // ── SEND ─────────────────────────────────────────────────────────────────
   Future<void> _send(
     String title,
     String message,
@@ -33,29 +34,23 @@ class _AdminmessageendScreenState extends ConsumerState<AdminmessageendScreen> {
     setState(() => _isLoading = true);
 
     final service = ref.read(notificationServiceProvider);
-
-    // ── Serialise attachments ONCE here — every branch must use this list ──
-    // AttachmentModel.url already contains the Cloudinary secure_url because
-    // MessageComposeWidget uploads to Cloudinary before calling onSend().
     final attMaps = attachments.map((a) => a.toMap()).toList();
 
-    try {
-      // ── Helper: send to a single userId ──────────────────────────────────
-      Future<void> sendOne(String userId, {String recipientLabel = ''}) =>
-          service.sendToUser(
-            userId,
-            title,
-            message,
-            type: messageType.name,
-            senderId: currentUser.id,
-            senderName: currentUser.name,
-            senderRole: 'admin',
-            attachments: attMaps, // ← Cloudinary URLs included
-            recipientLabel: recipientLabel,
-          );
+    Future<void> sendOne(String userId, {String recipientLabel = ''}) =>
+        service.sendToUser(
+          userId,
+          title,
+          message,
+          type: messageType.name,
+          senderId: currentUser.id,
+          senderName: currentUser.name,
+          senderRole: 'admin',
+          attachments: attMaps,
+          recipientLabel: recipientLabel,
+        );
 
+    try {
       switch (_targetType) {
-        // ── Whole school ────────────────────────────────────────────────────
         case 'whole_school':
           await service.sendToAll(
             title,
@@ -64,18 +59,16 @@ class _AdminmessageendScreenState extends ConsumerState<AdminmessageendScreen> {
             senderId: currentUser.id,
             senderName: currentUser.name,
             senderRole: 'admin',
-            attachments: attMaps, // ← FIX: was missing
+            attachments: attMaps,
           );
           break;
 
-        // ── Class(es) ───────────────────────────────────────────────────────
         case 'class':
           for (final classId in _selectedClassIds) {
-            final classDoc = await ref
+            final cls = await ref
                 .read(firestoreServiceProvider)
                 .getClass(classId);
-            final className = classDoc?.displayName ?? classId;
-
+            final className = cls?.displayName ?? classId;
             await service.sendToClass(
               classId,
               title,
@@ -84,13 +77,12 @@ class _AdminmessageendScreenState extends ConsumerState<AdminmessageendScreen> {
               senderId: currentUser.id,
               senderName: currentUser.name,
               senderRole: 'admin',
-              attachments: attMaps, // ← FIX: was missing
+              attachments: attMaps,
               className: className,
             );
           }
           break;
 
-        // ── Student(s) ──────────────────────────────────────────────────────
         case 'student':
           for (final studentId in _selectedStudentIds) {
             final student = await ref
@@ -102,23 +94,21 @@ class _AdminmessageendScreenState extends ConsumerState<AdminmessageendScreen> {
           }
           break;
 
-        // ── Teacher(s) ──────────────────────────────────────────────────────
         case 'teacher':
           for (final teacherId in _selectedTeacherIds) {
             await sendOne(teacherId);
           }
           break;
 
-        // ── Mixed ───────────────────────────────────────────────────────────
         case 'mixed':
           for (final teacherId in _selectedTeacherIds) {
             await sendOne(teacherId);
           }
           for (final classId in _selectedClassIds) {
-            final classDoc = await ref
+            final cls = await ref
                 .read(firestoreServiceProvider)
                 .getClass(classId);
-            final className = classDoc?.displayName ?? classId;
+            final className = cls?.displayName ?? classId;
             await service.sendToClass(
               classId,
               title,
@@ -127,7 +117,7 @@ class _AdminmessageendScreenState extends ConsumerState<AdminmessageendScreen> {
               senderId: currentUser.id,
               senderName: currentUser.name,
               senderRole: 'admin',
-              attachments: attMaps, // ← FIX: was missing
+              attachments: attMaps,
               className: className,
             );
           }
@@ -163,7 +153,7 @@ class _AdminmessageendScreenState extends ConsumerState<AdminmessageendScreen> {
     if (mounted) setState(() => _isLoading = false);
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
+  // ── BUILD ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -193,12 +183,14 @@ class _AdminmessageendScreenState extends ConsumerState<AdminmessageendScreen> {
             const SizedBox(height: 8),
             _buildTargetSelector(isDark),
             const SizedBox(height: 16),
+
             if (_targetType == 'class' || _targetType == 'mixed')
               _buildClassSelector(isDark),
             if (_targetType == 'student' || _targetType == 'mixed')
               _buildStudentSelector(isDark),
             if (_targetType == 'teacher' || _targetType == 'mixed')
               _buildTeacherSelector(isDark),
+
             const SizedBox(height: 8),
             MessageComposeWidget(
               allowedTypes: ['announcement', 'form', 'note', 'general'],
@@ -211,8 +203,9 @@ class _AdminmessageendScreenState extends ConsumerState<AdminmessageendScreen> {
     );
   }
 
+  // ── TARGET TYPE CHIPS ─────────────────────────────────────────────────────
   Widget _buildTargetSelector(bool isDark) {
-    const options = [
+    const opts = [
       _Opt('whole_school', 'Whole School', Icons.school_rounded),
       _Opt('class', 'Class(es)', Icons.class_rounded),
       _Opt('student', 'Student(s)', Icons.person_rounded),
@@ -223,7 +216,7 @@ class _AdminmessageendScreenState extends ConsumerState<AdminmessageendScreen> {
       spacing: 8,
       runSpacing: 8,
       children:
-          options.map((opt) {
+          opts.map((opt) {
             final sel = _targetType == opt.value;
             return GestureDetector(
               onTap:
@@ -253,6 +246,7 @@ class _AdminmessageendScreenState extends ConsumerState<AdminmessageendScreen> {
                             : isDark
                             ? AppColors.darkBorder
                             : AppColors.lightBorder,
+                    width: sel ? 2 : 1,
                   ),
                 ),
                 child: Row(
@@ -260,7 +254,7 @@ class _AdminmessageendScreenState extends ConsumerState<AdminmessageendScreen> {
                   children: [
                     Icon(
                       opt.icon,
-                      size: 14,
+                      size: 16,
                       color: sel ? AppColors.accent : null,
                     ),
                     const SizedBox(width: 6),
@@ -278,82 +272,91 @@ class _AdminmessageendScreenState extends ConsumerState<AdminmessageendScreen> {
     );
   }
 
+  // ── CLASS SELECTOR ────────────────────────────────────────────────────────
   Widget _buildClassSelector(bool isDark) {
     final classes = ref.watch(classesProvider);
     return classes.when(
       loading: () => const LoadingWidget(),
-      error: (_, __) => const SizedBox.shrink(),
+      error: (e, _) => Text('Error: $e'),
       data:
           (list) => SearchableSelector<ClassModel>(
             isDark: isDark,
             title: 'Select Class(es)',
-            hint: 'Search classes...',
+            hint: 'Search by name...',
             items: list,
             labelOf: (c) => c.displayName,
+            subtitleOf: (c) => c.grade,
             idOf: (c) => c.id,
             selectedIds: _selectedClassIds,
-            onToggle:
-                (c, sel) => setState(
-                  () =>
-                      sel
-                          ? _selectedClassIds.add(c.id)
-                          : _selectedClassIds.remove(c.id),
-                ),
             activeColor: AppColors.accent,
+            onToggle:
+                (cls, isCurrentlySelected) => setState(() {
+                  // isCurrentlySelected = true means it's already in the list → remove
+                  // isCurrentlySelected = false means it's not in the list → add
+                  if (isCurrentlySelected) {
+                    _selectedClassIds.remove(cls.id);
+                  } else {
+                    _selectedClassIds.add(cls.id);
+                  }
+                }),
           ),
     );
   }
 
+  // ── STUDENT SELECTOR ──────────────────────────────────────────────────────
   Widget _buildStudentSelector(bool isDark) {
     final students = ref.watch(studentsProvider);
     return students.when(
       loading: () => const LoadingWidget(),
-      error: (_, __) => const SizedBox.shrink(),
+      error: (e, _) => Text('Error: $e'),
       data:
           (list) => SearchableSelector<StudentModel>(
             isDark: isDark,
             title: 'Select Student(s)',
-            hint: 'Search students...',
+            hint: 'Search by name or class...',
             items: list,
             labelOf: (s) => s.name,
-            subtitleOf: (s) => s.className,
+            subtitleOf: (s) => s.classDisplay,
             idOf: (s) => s.id,
             selectedIds: _selectedStudentIds,
-            onToggle:
-                (s, sel) => setState(
-                  () =>
-                      sel
-                          ? _selectedStudentIds.add(s.id)
-                          : _selectedStudentIds.remove(s.id),
-                ),
             activeColor: AppColors.accent,
+            onToggle:
+                (s, isCurrentlySelected) => setState(() {
+                  if (isCurrentlySelected) {
+                    _selectedStudentIds.remove(s.id);
+                  } else {
+                    _selectedStudentIds.add(s.id);
+                  }
+                }),
           ),
     );
   }
 
+  // ── TEACHER SELECTOR ──────────────────────────────────────────────────────
   Widget _buildTeacherSelector(bool isDark) {
     final teachers = ref.watch(teachersProvider);
     return teachers.when(
       loading: () => const LoadingWidget(),
-      error: (_, __) => const SizedBox.shrink(),
+      error: (e, _) => Text('Error: $e'),
       data:
           (list) => SearchableSelector<TeacherModel>(
             isDark: isDark,
             title: 'Select Teacher(s)',
-            hint: 'Search teachers...',
+            hint: 'Search by name or subject...',
             items: list,
             labelOf: (t) => t.name,
-            subtitleOf: (t) => t.subject,
+            subtitleOf: (t) => t.subject.isNotEmpty ? t.subject : '',
             idOf: (t) => t.id,
             selectedIds: _selectedTeacherIds,
-            onToggle:
-                (t, sel) => setState(
-                  () =>
-                      sel
-                          ? _selectedTeacherIds.add(t.id)
-                          : _selectedTeacherIds.remove(t.id),
-                ),
             activeColor: AppColors.accent,
+            onToggle:
+                (t, isCurrentlySelected) => setState(() {
+                  if (isCurrentlySelected) {
+                    _selectedTeacherIds.remove(t.id);
+                  } else {
+                    _selectedTeacherIds.add(t.id);
+                  }
+                }),
           ),
     );
   }
