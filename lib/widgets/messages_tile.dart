@@ -196,50 +196,74 @@ class MessagesTile extends StatelessWidget {
               const SizedBox(height: 8),
               Wrap(
                 spacing: 6,
+                runSpacing: 4,
                 children:
                     message.attachments.map((att) {
-                      return Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color:
-                              isDark
-                                  ? AppColors.darkBackground
-                                  : AppColors.lightBackground,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
+                      final color =
+                          att.type == AttachmentType.image
+                              ? AppColors.info
+                              : att.type == AttachmentType.pdf
+                              ? AppColors.error
+                              : AppColors.accent;
+                      final icon =
+                          att.type == AttachmentType.image
+                              ? Icons.image_rounded
+                              : att.type == AttachmentType.pdf
+                              ? Icons.picture_as_pdf_rounded
+                              : Icons.insert_drive_file_rounded;
+
+                      // Shorten UUID-style names from image_picker
+                      // e.g. "scaled_b0c9d6df-4443-4a2e-90fa..." → "image.jpg"
+                      final ext =
+                          att.name.contains('.')
+                              ? '.${att.name.split('.').last}'
+                              : '';
+                      final hasUuid = RegExp(
+                        r'[0-9a-f]{4,}-[0-9a-f]{4,}',
+                        caseSensitive: false,
+                      ).hasMatch(att.name);
+                      final displayName =
+                          hasUuid
+                              ? (att.type == AttachmentType.image
+                                  ? 'image$ext'
+                                  : 'file$ext')
+                              : att.name;
+
+                      return ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 140),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
                             color:
                                 isDark
-                                    ? AppColors.darkBorder
-                                    : AppColors.lightBorder,
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              att.type == AttachmentType.image
-                                  ? Icons.image_rounded
-                                  : att.type == AttachmentType.pdf
-                                  ? Icons.picture_as_pdf_rounded
-                                  : Icons.insert_drive_file_rounded,
-                              size: 12,
+                                    ? AppColors.darkBackground
+                                    : AppColors.lightBackground,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
                               color:
-                                  att.type == AttachmentType.image
-                                      ? AppColors.info
-                                      : att.type == AttachmentType.pdf
-                                      ? AppColors.error
-                                      : AppColors.accent,
+                                  isDark
+                                      ? AppColors.darkBorder
+                                      : AppColors.lightBorder,
                             ),
-                            const SizedBox(width: 4),
-                            Text(
-                              att.name,
-                              style: AppTypography.caption,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(icon, size: 12, color: color),
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text(
+                                  displayName,
+                                  style: AppTypography.caption,
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       );
                     }).toList(),

@@ -358,12 +358,7 @@ class _AttachmentTileState extends State<_AttachmentTile> {
     // ── IMAGE ─────────────────────────────────────────────────────────────
     if (att.type == AttachmentType.image && att.url.isNotEmpty) {
       return GestureDetector(
-        onTap: () async {
-          final uri = Uri.parse(att.url);
-          if (await canLaunchUrl(uri)) {
-            await launchUrl(uri, mode: LaunchMode.externalApplication);
-          }
-        },
+        onTap: _open, // download to temp file → OpenFile (native viewer)
         child: Container(
           margin: const EdgeInsets.only(bottom: 10),
           decoration: BoxDecoration(
@@ -440,6 +435,28 @@ class _AttachmentTileState extends State<_AttachmentTile> {
                     ),
                   ),
                 ),
+                // Loading overlay while downloading
+                if (_loading)
+                  Positioned.fill(
+                    child: Container(
+                      color: Colors.black45,
+                      alignment: Alignment.center,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const CircularProgressIndicator(color: Colors.white),
+                          const SizedBox(height: 8),
+                          Text(
+                            _status,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
