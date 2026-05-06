@@ -133,8 +133,17 @@ class NotificationService {
   }
 
   // ─── Send to single user ───
+  // ─── REPLACE sendToUser() in lib/services/notification_service.dart ──────────
+  //
+  // When a teacher or student sends a direct message to someone else,
+  // they need to see it in their own inbox. We write TWO docs:
+  //   1. userId = recipientId  (the receiver sees it)
+  //   2. userId = senderId     (the sender sees it in their own inbox)
+  // For broadcasts (sendToAll/sendToClass), the sender is already included
+  // in the loop, so no extra doc is needed there.
+
   Future<bool> sendToUser(
-    String userId,
+    String recipientUserId,
     String title,
     String body, {
     String type = 'general',
@@ -145,8 +154,9 @@ class NotificationService {
     String recipientLabel = '',
   }) async {
     try {
-      await _db.collection('notifications').add({
-        'userId': userId,
+      final batch = _db.batch();
+
+      final payload = {
         'title': title,
         'message': body,
         'messageType': type,
@@ -155,12 +165,32 @@ class NotificationService {
         'senderRole': senderRole,
         'attachments': attachments,
         'recipientLabel': recipientLabel,
+        'replyToId': '',
+        'replyToTitle': '',
         'isRead': false,
         'createdAt': FieldValue.serverTimestamp(),
+      };
+
+      // Doc 1: recipient receives the message
+      batch.set(_db.collection('notifications').doc(), {
+        ...payload,
+        'userId': recipientUserId,
       });
+
+      // Doc 2: sender sees it in their own inbox (only if sender != recipient)
+      if (senderId.isNotEmpty && senderId != recipientUserId) {
+        batch.set(_db.collection('notifications').doc(), {
+          ...payload,
+          'userId': senderId,
+          'isRead': true, // mark as read for sender — they wrote it
+          'recipientLabel': recipientLabel.isNotEmpty ? recipientLabel : 'Sent',
+        });
+      }
+
+      await batch.commit();
       return true;
     } catch (e) {
-      debugPrint('[FCM] Error: $e');
+      debugPrint('[FCM] sendToUser error: $e');
       return false;
     }
   }
