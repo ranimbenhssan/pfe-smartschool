@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -45,8 +46,8 @@ class _MessageComposeWidgetState extends ConsumerState<MessageComposeWidget> {
     super.dispose();
   }
 
-  // ─── Upload to Cloudinary (free) ───
-  Future<void> _uploadFile(
+  // ── Upload to Cloudinary ─────────────────────────────────────────────────
+  Future<void> _uploadBytes(
     Uint8List bytes,
     String fileName,
     AttachmentType type,
@@ -64,13 +65,16 @@ class _MessageComposeWidgetState extends ConsumerState<MessageComposeWidget> {
       setState(() => _attachments.add(attachment));
     } else {
       setState(
-        () => _uploadError = 'Upload failed. Check your internet connection.',
+        () =>
+            _uploadError =
+                'Upload failed. Please check your connection and try again.',
       );
     }
 
     setState(() => _isUploading = false);
   }
 
+  // ── Pick image from gallery ──────────────────────────────────────────────
   Future<void> _pickImage() async {
     try {
       final picker = ImagePicker();
@@ -86,55 +90,90 @@ class _MessageComposeWidgetState extends ConsumerState<MessageComposeWidget> {
               ? image.name
               : 'image_${DateTime.now().millisecondsSinceEpoch}.jpg';
 
-      await _uploadFile(bytes, fileName, AttachmentType.image);
+      await _uploadBytes(bytes, fileName, AttachmentType.image);
     } catch (e) {
       setState(() => _uploadError = 'Could not pick image: $e');
     }
   }
 
+  // ── Pick file (PDF, DOCX, etc.) ──────────────────────────────────────────
   Future<void> _pickFile() async {
     try {
       final result = await FilePicker.platform.pickFiles(
         allowMultiple: false,
         type: FileType.custom,
-        allowedExtensions: ['pdf', 'doc', 'docx', 'txt', 'xlsx'],
-        withData: true, // ← required to get bytes
+        allowedExtensions: ['pdf', 'doc', 'docx', 'txt', 'xlsx', 'csv'],
+        withData: true, // requests in-memory bytes
       );
 
       if (result == null || result.files.isEmpty) return;
 
-      final file = result.files.first;
-      final bytes = file.bytes;
+      final picked = result.files.first;
+      Uint8List? bytes = picked.bytes;
 
+      // ── Fallback: read from path if withData returned null ────────────────
+      // On Android 10+ (scoped storage) or when picking from Google Drive,
+      // file_picker may return null bytes even with withData:true.
+      // Reading from the path directly always works.
       if (bytes == null) {
-        setState(
-          () => _uploadError = 'Could not read file. Try a different file.',
-        );
+        final path = picked.path;
+        if (path == null) {
+          setState(
+            () => _uploadError = 'Could not read file. Try a different file.',
+          );
+          return;
+        }
+        bytes = await File(path).readAsBytes();
+      }
+
+      if (bytes.isEmpty) {
+        setState(() => _uploadError = 'File is empty.');
         return;
       }
 
-      final ext = file.extension?.toLowerCase() ?? '';
+      final ext = picked.extension?.toLowerCase() ?? '';
       final type = ext == 'pdf' ? AttachmentType.pdf : AttachmentType.document;
 
-      await _uploadFile(bytes, file.name, type);
+      await _uploadBytes(bytes, picked.name, type);
     } catch (e) {
       setState(() => _uploadError = 'Could not pick file: $e');
     }
   }
 
-  void _removeAttachment(int index) {
-    setState(() => _attachments.removeAt(index));
+  void _removeAttachment(int index) =>
+      setState(() => _attachments.removeAt(index));
+
+  String _typeLabel(MessageType t) {
+    switch (t) {
+      case MessageType.announcement:
+        return 'Announcement';
+      case MessageType.form:
+        return 'Form';
+      case MessageType.note:
+        return 'Note';
+      case MessageType.course:
+        return 'Course';
+      case MessageType.report:
+        return 'Report';
+      case MessageType.general:
+        return 'General';
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    final allowed =
+        MessageType.values
+            .where((t) => widget.allowedTypes.contains(t.name))
+            .toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ─── Message Type selector ───
-        if (widget.allowedTypes.length > 1) ...[
+        // ── Message type selector ──────────────────────────────────────────
+        if (allowed.length > 1) ...[
           Text(
             'Message Type',
             style: AppTypography.labelMedium.copyWith(
@@ -149,19 +188,15 @@ class _MessageComposeWidgetState extends ConsumerState<MessageComposeWidget> {
             scrollDirection: Axis.horizontal,
             child: Row(
               children:
-                  widget.allowedTypes.map((typeStr) {
-                    final msgType = MessageType.values.firstWhere(
-                      (t) => t.name == typeStr,
-                      orElse: () => MessageType.general,
-                    );
+                  allowed.map((msgType) {
                     final isSelected = _selectedType == msgType;
                     return GestureDetector(
                       onTap: () => setState(() => _selectedType = msgType),
                       child: Container(
                         margin: const EdgeInsets.only(right: 8),
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 8,
+                          horizontal: 12,
+                          vertical: 6,
                         ),
                         decoration: BoxDecoration(
                           color:
@@ -170,7 +205,7 @@ class _MessageComposeWidgetState extends ConsumerState<MessageComposeWidget> {
                                   : isDark
                                   ? AppColors.darkCard
                                   : AppColors.lightCard,
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(8),
                           border: Border.all(
                             color:
                                 isSelected
@@ -194,7 +229,7 @@ class _MessageComposeWidgetState extends ConsumerState<MessageComposeWidget> {
           const SizedBox(height: 14),
         ],
 
-        // ─── Title ───
+        // ── Title ──────────────────────────────────────────────────────────
         TextField(
           controller: _titleController,
           decoration: InputDecoration(
@@ -206,7 +241,7 @@ class _MessageComposeWidgetState extends ConsumerState<MessageComposeWidget> {
         ),
         const SizedBox(height: 12),
 
-        // ─── Message body ───
+        // ── Message body ────────────────────────────────────────────────────
         TextField(
           controller: _messageController,
           maxLines: 4,
@@ -218,7 +253,7 @@ class _MessageComposeWidgetState extends ConsumerState<MessageComposeWidget> {
         ),
         const SizedBox(height: 12),
 
-        // ─── Attachments list ───
+        // ── Attachments list ────────────────────────────────────────────────
         if (_attachments.isNotEmpty) ...[
           Text(
             'Attachments (${_attachments.length})',
@@ -270,7 +305,6 @@ class _MessageComposeWidgetState extends ConsumerState<MessageComposeWidget> {
                       ],
                     ),
                   ),
-                  // ─── Upload success indicator ───
                   const Icon(
                     Icons.cloud_done_rounded,
                     color: AppColors.success,
@@ -292,7 +326,7 @@ class _MessageComposeWidgetState extends ConsumerState<MessageComposeWidget> {
           const SizedBox(height: 8),
         ],
 
-        // ─── Upload error ───
+        // ── Upload error ────────────────────────────────────────────────────
         if (_uploadError != null)
           Container(
             padding: const EdgeInsets.all(10),
@@ -330,7 +364,7 @@ class _MessageComposeWidgetState extends ConsumerState<MessageComposeWidget> {
             ),
           ),
 
-        // ─── Attach buttons ───
+        // ── Attach buttons ──────────────────────────────────────────────────
         Row(
           children: [
             _AttachBtn(
@@ -356,13 +390,13 @@ class _MessageComposeWidgetState extends ConsumerState<MessageComposeWidget> {
                 child: CircularProgressIndicator(strokeWidth: 2),
               ),
               const SizedBox(width: 8),
-              Text('Uploading to cloud...', style: AppTypography.caption),
+              Text('Uploading...', style: AppTypography.caption),
             ],
           ],
         ),
         const SizedBox(height: 20),
 
-        // ─── Send button ───
+        // ── Send button ─────────────────────────────────────────────────────
         SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
@@ -398,35 +432,10 @@ class _MessageComposeWidgetState extends ConsumerState<MessageComposeWidget> {
                     )
                     : const Icon(Icons.send_rounded),
             label: Text(widget.isLoading ? 'Sending...' : 'Send Message'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.accent,
-              foregroundColor: AppColors.primary,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
           ),
         ),
       ],
     );
-  }
-
-  String _typeLabel(MessageType type) {
-    switch (type) {
-      case MessageType.announcement:
-        return 'Announcement';
-      case MessageType.form:
-        return 'Form';
-      case MessageType.note:
-        return 'Note';
-      case MessageType.course:
-        return 'Course';
-      case MessageType.report:
-        return 'Report';
-      case MessageType.general:
-        return 'General';
-    }
   }
 }
 
@@ -452,37 +461,26 @@ class _AttachBtn extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: enabled ? onTap : null,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color:
-              enabled
-                  ? color.withValues(alpha: 0.08)
-                  : color.withValues(alpha: 0.03),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color:
-                enabled
-                    ? color.withValues(alpha: 0.3)
-                    : color.withValues(alpha: 0.1),
+      child: Opacity(
+        opacity: enabled ? 1.0 : 0.4,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: color.withValues(alpha: 0.3)),
           ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 16,
-              color: enabled ? color : color.withValues(alpha: 0.3),
-            ),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: AppTypography.labelSmall.copyWith(
-                color: enabled ? color : color.withValues(alpha: 0.3),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: color, size: 16),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: AppTypography.labelSmall.copyWith(color: color),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

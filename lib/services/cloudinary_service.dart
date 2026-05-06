@@ -1,8 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
-import 'dart:convert';
 import '../models/models.dart';
 
 final cloudinaryServiceProvider = Provider<CloudinaryService>((ref) {
@@ -12,17 +12,21 @@ final cloudinaryServiceProvider = Provider<CloudinaryService>((ref) {
 class CloudinaryService {
   static const String _cloudName = 'dysb3nw2i';
   static const String _uploadPreset = 'smartschool';
+
+  // ── ALWAYS use /auto/upload ───────────────────────────────────────────────
+  // The old code used /raw/upload for non-image files. That endpoint is
+  // blocked by the preset's allowlist. /auto/upload works for ALL types
+  // (image, pdf, docx, txt, xlsx) because Cloudinary detects the type.
   static const String _uploadUrl =
       'https://api.cloudinary.com/v1_1/$_cloudName/auto/upload';
 
-  // ── MIME type map ─────────────────────────────────────────────────────────
-  // http.MultipartFile.fromBytes defaults to application/octet-stream when no
-  // contentType is given. Cloudinary's /auto/upload endpoint rejects that for
-  // non-image files on some presets. Providing the explicit MIME type fixes it.
-  static MediaType _mimeFor(String fileName) {
+  // ── Explicit MIME types ───────────────────────────────────────────────────
+  // file_picker returns bytes with no MIME info — without an explicit
+  // contentType Cloudinary may reject the upload. image_picker always
+  // sets image/jpeg or image/png automatically, which is why images worked.
+  static MediaType _mime(String fileName) {
     final ext = fileName.toLowerCase().split('.').last;
     switch (ext) {
-      // Images
       case 'jpg':
       case 'jpeg':
         return MediaType('image', 'jpeg');
@@ -32,7 +36,6 @@ class CloudinaryService {
         return MediaType('image', 'gif');
       case 'webp':
         return MediaType('image', 'webp');
-      // Documents
       case 'pdf':
         return MediaType('application', 'pdf');
       case 'doc':
@@ -48,13 +51,6 @@ class CloudinaryService {
         return MediaType(
           'application',
           'vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        );
-      case 'ppt':
-        return MediaType('application', 'vnd.ms-powerpoint');
-      case 'pptx':
-        return MediaType(
-          'application',
-          'vnd.openxmlformats-officedocument.presentationml.presentation',
         );
       case 'txt':
         return MediaType('text', 'plain');
@@ -78,18 +74,13 @@ class CloudinaryService {
       request.fields['use_filename'] = 'true';
       request.fields['unique_filename'] = 'true';
 
-      // ── Explicit MIME type on the file part ──────────────────────────────
-      // Without this, file_picker bytes arrive as application/octet-stream
-      // which Cloudinary may reject. image_picker bytes carry image/jpeg etc.
-      // automatically which is why images always worked.
-      final mimeType = _mimeFor(fileName);
-
+      // Attach the file with the correct MIME type
       request.files.add(
         http.MultipartFile.fromBytes(
           'file',
           bytes,
           filename: fileName,
-          contentType: mimeType, // ← the key fix
+          contentType: _mime(fileName),
         ),
       );
 
@@ -98,8 +89,8 @@ class CloudinaryService {
 
       if (streamed.statusCode != 200) {
         debugPrint(
-          'Cloudinary upload failed '
-          '(HTTP ${streamed.statusCode}): $responseBody',
+          '[Cloudinary] upload failed '
+          '(${streamed.statusCode}): $responseBody',
         );
         return null;
       }
@@ -108,13 +99,13 @@ class CloudinaryService {
       var secureUrl = json['secure_url']?.toString() ?? '';
 
       if (secureUrl.isEmpty) {
-        debugPrint('Cloudinary: secure_url missing in response');
+        debugPrint('[Cloudinary] secure_url missing in response');
         return null;
       }
 
-      // Ensure the URL retains the original file extension
+      // Ensure the original extension is present in the URL
       secureUrl = _ensureExtension(secureUrl, fileName);
-      debugPrint('Cloudinary upload OK → $secureUrl');
+      debugPrint('[Cloudinary] uploaded → $secureUrl');
 
       return AttachmentModel(
         url: secureUrl,
@@ -123,7 +114,7 @@ class CloudinaryService {
         sizeBytes: bytes.length,
       );
     } catch (e) {
-      debugPrint('Cloudinary upload exception: $e');
+      debugPrint('[Cloudinary] exception: $e');
       return null;
     }
   }
