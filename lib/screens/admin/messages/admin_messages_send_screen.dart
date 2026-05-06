@@ -21,17 +21,6 @@ class _AdminmessageendScreenState extends ConsumerState<AdminmessageendScreen> {
   List<String> _selectedStudentIds = [];
   List<String> _selectedTeacherIds = [];
 
-  // ─────────────────────────────────────────────────────────────────────────
-  //  SEND
-  //  attachments come from MessageComposeWidget — each AttachmentModel.url
-  //  already holds the Cloudinary secure_url (uploaded before onSend fires).
-  //  attMaps serialises url + name + type + sizeBytes into Firestore-safe maps.
-  //
-  //  FIXES:
-  //  • sendToAll now receives senderId, senderName, senderRole, attachments
-  //  • sendToClass now receives the same + className
-  //  • Every branch passes attMaps so no attachment is silently dropped
-  // ─────────────────────────────────────────────────────────────────────────
   Future<void> _send(
     String title,
     String message,
@@ -44,11 +33,14 @@ class _AdminmessageendScreenState extends ConsumerState<AdminmessageendScreen> {
     setState(() => _isLoading = true);
 
     final service = ref.read(notificationServiceProvider);
-    // Serialise once — each map contains url, name, type, sizeBytes
+
+    // ── Serialise attachments ONCE here — every branch must use this list ──
+    // AttachmentModel.url already contains the Cloudinary secure_url because
+    // MessageComposeWidget uploads to Cloudinary before calling onSend().
     final attMaps = attachments.map((a) => a.toMap()).toList();
 
     try {
-      // Helper — sends to a single userId
+      // ── Helper: send to a single userId ──────────────────────────────────
       Future<void> sendOne(String userId, {String recipientLabel = ''}) =>
           service.sendToUser(
             userId,
@@ -58,7 +50,7 @@ class _AdminmessageendScreenState extends ConsumerState<AdminmessageendScreen> {
             senderId: currentUser.id,
             senderName: currentUser.name,
             senderRole: 'admin',
-            attachments: attMaps, // ← was missing in some branches
+            attachments: attMaps, // ← Cloudinary URLs included
             recipientLabel: recipientLabel,
           );
 
@@ -69,22 +61,20 @@ class _AdminmessageendScreenState extends ConsumerState<AdminmessageendScreen> {
             title,
             message,
             type: messageType.name,
-            senderId: currentUser.id, // ← was missing
-            senderName: currentUser.name, // ← was missing
-            senderRole: 'admin', // ← was missing
-            attachments: attMaps, // ← was missing
+            senderId: currentUser.id,
+            senderName: currentUser.name,
+            senderRole: 'admin',
+            attachments: attMaps, // ← FIX: was missing
           );
           break;
 
         // ── Class(es) ───────────────────────────────────────────────────────
         case 'class':
           for (final classId in _selectedClassIds) {
-            // Resolve display name for recipientLabel
             final classDoc = await ref
                 .read(firestoreServiceProvider)
                 .getClass(classId);
-            final className =
-                classDoc?.getFullName() ?? classDoc?.displayName ?? classId;
+            final className = classDoc?.displayName ?? classId;
 
             await service.sendToClass(
               classId,
@@ -94,7 +84,7 @@ class _AdminmessageendScreenState extends ConsumerState<AdminmessageendScreen> {
               senderId: currentUser.id,
               senderName: currentUser.name,
               senderRole: 'admin',
-              attachments: attMaps, // ← was missing
+              attachments: attMaps, // ← FIX: was missing
               className: className,
             );
           }
@@ -128,8 +118,7 @@ class _AdminmessageendScreenState extends ConsumerState<AdminmessageendScreen> {
             final classDoc = await ref
                 .read(firestoreServiceProvider)
                 .getClass(classId);
-            final className =
-                classDoc?.getFullName() ?? classDoc?.displayName ?? classId;
+            final className = classDoc?.displayName ?? classId;
             await service.sendToClass(
               classId,
               title,
@@ -138,7 +127,7 @@ class _AdminmessageendScreenState extends ConsumerState<AdminmessageendScreen> {
               senderId: currentUser.id,
               senderName: currentUser.name,
               senderRole: 'admin',
-              attachments: attMaps,
+              attachments: attMaps, // ← FIX: was missing
               className: className,
             );
           }
@@ -175,8 +164,6 @@ class _AdminmessageendScreenState extends ConsumerState<AdminmessageendScreen> {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  //  BUILD
-  // ─────────────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -206,14 +193,12 @@ class _AdminmessageendScreenState extends ConsumerState<AdminmessageendScreen> {
             const SizedBox(height: 8),
             _buildTargetSelector(isDark),
             const SizedBox(height: 16),
-
             if (_targetType == 'class' || _targetType == 'mixed')
               _buildClassSelector(isDark),
             if (_targetType == 'student' || _targetType == 'mixed')
               _buildStudentSelector(isDark),
             if (_targetType == 'teacher' || _targetType == 'mixed')
               _buildTeacherSelector(isDark),
-
             const SizedBox(height: 8),
             MessageComposeWidget(
               allowedTypes: ['announcement', 'form', 'note', 'general'],
@@ -304,7 +289,7 @@ class _AdminmessageendScreenState extends ConsumerState<AdminmessageendScreen> {
             title: 'Select Class(es)',
             hint: 'Search classes...',
             items: list,
-            labelOf: (c) => c.getFullName(), // defined in class_model output
+            labelOf: (c) => c.displayName,
             idOf: (c) => c.id,
             selectedIds: _selectedClassIds,
             onToggle:

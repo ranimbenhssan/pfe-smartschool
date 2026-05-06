@@ -1,8 +1,8 @@
 import 'dart:io';
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
 import 'package:open_file/open_file.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -66,7 +66,7 @@ class NotificationDetailscreen extends ConsumerWidget {
     }
   }
 
-  String _formatDateTime(DateTime dt) {
+  String _fmt(DateTime dt) {
     const m = [
       'Jan',
       'Feb',
@@ -81,9 +81,8 @@ class NotificationDetailscreen extends ConsumerWidget {
       'Nov',
       'Dec',
     ];
-    final h = dt.hour.toString().padLeft(2, '0');
-    final min = dt.minute.toString().padLeft(2, '0');
-    return '${dt.day} ${m[dt.month - 1]} ${dt.year} at $h:$min';
+    return '${dt.day} ${m[dt.month - 1]} ${dt.year} '
+        'at ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
   }
 
   @override
@@ -161,10 +160,7 @@ class NotificationDetailscreen extends ConsumerWidget {
                   color: Colors.grey,
                 ),
                 const SizedBox(width: 4),
-                Text(
-                  _formatDateTime(message.createdAt),
-                  style: AppTypography.caption,
-                ),
+                Text(_fmt(message.createdAt), style: AppTypography.caption),
               ],
             ),
             if (message.recipientLabel.isNotEmpty) ...[
@@ -208,7 +204,7 @@ class NotificationDetailscreen extends ConsumerWidget {
               ),
               const SizedBox(height: 10),
               ...message.attachments.map(
-                (att) => _AttachmentWidget(att: att, isDark: isDark),
+                (att) => _AttachmentTile(attachment: att, isDark: isDark),
               ),
               const SizedBox(height: 16),
             ],
@@ -252,120 +248,126 @@ class NotificationDetailscreen extends ConsumerWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  ATTACHMENT WIDGET
+//  ATTACHMENT TILE
 //
-//  Images   → inline Image.network preview + tap to open in browser
-//  PDF/Docs → Download with dio to temp dir (preserving extension),
-//             then open with open_file (native OS handler).
-//             Loading spinner shown while downloading.
+//  Images   → inline Image.network (200 px) — tap opens full URL in browser
+//  PDF/Docs → "Open" button:
+//               1. Download bytes with http.get (no extra package beyond http)
+//               2. Write to temp dir WITH the original extension preserved
+//               3. OpenFile.open() hands the local path to the native OS
+//                  (Android PDF viewer, iOS QuickLook, etc.)
+//               Loading spinner + progress text while fetching.
 // ─────────────────────────────────────────────────────────────────────────────
-class _AttachmentWidget extends StatefulWidget {
-  final AttachmentModel att;
+class _AttachmentTile extends StatefulWidget {
+  final AttachmentModel attachment;
   final bool isDark;
-  const _AttachmentWidget({required this.att, required this.isDark});
+  const _AttachmentTile({required this.attachment, required this.isDark});
 
   @override
-  State<_AttachmentWidget> createState() => _AttachmentWidgetState();
+  State<_AttachmentTile> createState() => _AttachmentTileState();
 }
 
-class _AttachmentWidgetState extends State<_AttachmentWidget> {
-  bool _isOpening = false;
-  double? _downloadProgress; // 0.0–1.0, null when idle
+class _AttachmentTileState extends State<_AttachmentTile> {
+  bool _loading = false;
+  String _status = ''; // e.g. "Downloading…" / "Opening…"
 
-  // ── Derive MIME-friendly extension from the stored file name ──────────────
-  String get _extension {
-    final name = widget.att.name;
-    final dot = name.lastIndexOf('.');
-    if (dot != -1) return name.substring(dot).toLowerCase(); // ".pdf"
-    // Fallback: try the URL
-    final urlDot = widget.att.url.lastIndexOf('.');
+  AttachmentModel get att => widget.attachment;
+  bool get isDark => widget.isDark;
+
+  // ── Derive extension from the stored file name ────────────────────────────
+  String get _ext {
+    final dot = att.name.lastIndexOf('.');
+    if (dot != -1) return att.name.substring(dot).toLowerCase(); // ".pdf"
+    // Fallback: extract from URL path before any query string
+    final path = Uri.parse(att.url).path;
+    final urlDot = path.lastIndexOf('.');
     if (urlDot != -1) {
-      final ext = widget.att.url.substring(urlDot).split('?').first;
+      final ext = path.substring(urlDot).toLowerCase();
       if (ext.length <= 5) return ext;
     }
     return '';
   }
 
-  // ── Download file with dio then open with open_file ───────────────────────
-  Future<void> _openFile(BuildContext context) async {
-    if (widget.att.url.isEmpty) {
-      _snack(context, 'File URL not available');
+  // ── Cloudinary URL with fl_attachment flag forces a content-disposition
+  //    header that tells the browser/OS to treat this as a download ──────────
+  String get _downloadUrl {
+    if (att.url.isEmpty) return '';
+    // Insert /fl_attachment/ into Cloudinary URL if not already present
+    // e.g. https://res.cloudinary.com/xxx/raw/upload/v123/file.pdf
+    //   → https://res.cloudinary.com/xxx/raw/upload/fl_attachment/v123/file.pdf
+    if (att.url.contains('/upload/') && !att.url.contains('fl_attachment')) {
+      return att.url.replaceFirst('/upload/', '/upload/fl_attachment/');
+    }
+    return att.url;
+  }
+
+  Future<void> _open() async {
+    if (att.url.isEmpty) {
+      _show('File URL not available');
       return;
     }
 
     setState(() {
-      _isOpening = true;
-      _downloadProgress = 0;
+      _loading = true;
+      _status = 'Connecting…';
     });
 
     try {
       final tempDir = await getTemporaryDirectory();
-      // Build a safe local filename with the correct extension
-      final safeName = widget.att.name.replaceAll(RegExp(r'[^\w.\-]'), '_');
+      // Safe filename — keep original name with extension
+      final safeName = att.name.replaceAll(RegExp(r'[^\w.\-]'), '_');
       final savePath = '${tempDir.path}/$safeName';
 
-      // Download with dio (supports progress + range headers)
-      await Dio().download(
-        widget.att.url,
-        savePath,
-        onReceiveProgress: (received, total) {
-          if (total > 0 && mounted) {
-            setState(() => _downloadProgress = received / total);
-          }
-        },
-        options: Options(
-          // Some CDNs need this to avoid redirect loops
-          followRedirects: true,
-          maxRedirects: 5,
-          responseType: ResponseType.bytes,
-        ),
-      );
+      // ── Check if already cached ──────────────────────────────────────────
+      final cached = File(savePath);
+      if (!await cached.exists()) {
+        setState(() => _status = 'Downloading…');
 
+        final response = await http.get(Uri.parse(_downloadUrl));
+        if (response.statusCode != 200) {
+          throw Exception('HTTP ${response.statusCode}');
+        }
+        await cached.writeAsBytes(response.bodyBytes);
+      }
+
+      setState(() => _status = 'Opening…');
       if (!mounted) return;
-      setState(() {
-        _isOpening = false;
-        _downloadProgress = null;
-      });
 
-      // Open with native OS handler (PDF viewer, Word, etc.)
       final result = await OpenFile.open(savePath);
       if (result.type != ResultType.done && mounted) {
-        _snack(context, 'Could not open file: ${result.message}');
+        // OpenFile could not handle it — fall back to browser
+        _show('Cannot open locally, trying browser…');
+        final uri = Uri.parse(_downloadUrl);
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        }
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted) _show('Error: $e');
+    } finally {
+      if (mounted)
         setState(() {
-          _isOpening = false;
-          _downloadProgress = null;
+          _loading = false;
+          _status = '';
         });
-        _snack(context, 'Download failed: $e');
-      }
     }
   }
 
-  // ── Fallback: open image/URL in browser ───────────────────────────────────
-  Future<void> _openInBrowser(BuildContext context) async {
-    final uri = Uri.parse(widget.att.url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
-      _snack(context, 'Could not open URL');
-    }
-  }
-
-  void _snack(BuildContext ctx, String msg) {
-    ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(msg)));
+  void _show(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   @override
   Widget build(BuildContext context) {
-    final att = widget.att;
-    final isDark = widget.isDark;
-
-    // ── IMAGE: show inline preview ─────────────────────────────────────────
+    // ── IMAGE ─────────────────────────────────────────────────────────────
     if (att.type == AttachmentType.image && att.url.isNotEmpty) {
       return GestureDetector(
-        onTap: () => _openInBrowser(context),
+        onTap: () async {
+          final uri = Uri.parse(att.url);
+          if (await canLaunchUrl(uri)) {
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
+          }
+        },
         child: Container(
           margin: const EdgeInsets.only(bottom: 10),
           decoration: BoxDecoration(
@@ -381,7 +383,7 @@ class _AttachmentWidgetState extends State<_AttachmentWidget> {
                   width: double.infinity,
                   height: 200,
                   fit: BoxFit.cover,
-                  loadingBuilder: (ctx, child, prog) {
+                  loadingBuilder: (_, child, prog) {
                     if (prog == null) return child;
                     return Container(
                       height: 200,
@@ -449,7 +451,7 @@ class _AttachmentWidgetState extends State<_AttachmentWidget> {
       );
     }
 
-    // ── PDF / DOCUMENT ─────────────────────────────────────────────────────
+    // ── PDF / DOCUMENT ────────────────────────────────────────────────────
     final color =
         att.type == AttachmentType.pdf ? AppColors.error : AppColors.accent;
     final icon =
@@ -470,7 +472,7 @@ class _AttachmentWidgetState extends State<_AttachmentWidget> {
           Icon(icon, color: color, size: 26),
           const SizedBox(width: 12),
 
-          // ── File info ───────────────────────────────────────────────────────
+          // ── Info column ────────────────────────────────────────────────────
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -489,38 +491,50 @@ class _AttachmentWidgetState extends State<_AttachmentWidget> {
                         : '${(att.sizeBytes / (1024 * 1024)).toStringAsFixed(1)} MB',
                     style: AppTypography.caption,
                   ),
-                // Download progress bar
-                if (_downloadProgress != null) ...[
-                  const SizedBox(height: 6),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(2),
-                    child: LinearProgressIndicator(
-                      value: _downloadProgress,
-                      backgroundColor: color.withValues(alpha: 0.15),
-                      valueColor: AlwaysStoppedAnimation<Color>(color),
-                      minHeight: 4,
+                // Extension badge
+                if (_ext.isNotEmpty)
+                  Container(
+                    margin: const EdgeInsets.only(top: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      _ext.toUpperCase().replaceAll('.', ''),
+                      style: AppTypography.caption.copyWith(
+                        color: color,
+                        fontSize: 9,
+                      ),
                     ),
                   ),
-                  Text(
-                    '${((_downloadProgress ?? 0) * 100).toInt()}% downloading…',
-                    style: AppTypography.caption.copyWith(color: color),
+                // Loading status text
+                if (_loading && _status.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      _status,
+                      style: AppTypography.caption.copyWith(color: color),
+                    ),
                   ),
-                ],
               ],
             ),
           ),
           const SizedBox(width: 8),
 
-          // ── Open / loading button ───────────────────────────────────────────
-          _isOpening
+          // ── Open button / spinner ──────────────────────────────────────────
+          _loading
               ? SizedBox(
                 width: 24,
                 height: 24,
                 child: CircularProgressIndicator(strokeWidth: 2, color: color),
               )
               : TextButton.icon(
-                onPressed: att.url.isNotEmpty ? () => _openFile(context) : null,
-                icon: const Icon(Icons.open_in_new_rounded, size: 16),
+                onPressed: att.url.isNotEmpty ? _open : null,
+                icon: const Icon(Icons.open_in_new_rounded, size: 15),
                 label: const Text('Open'),
                 style: TextButton.styleFrom(
                   foregroundColor: color,
