@@ -316,7 +316,10 @@ class _AttachmentTileState extends State<_AttachmentTile> {
       if (!await cached.exists()) {
         setState(() => _status = 'Downloading…');
 
-        final response = await http.get(Uri.parse(_downloadUrl));
+        final response = await http.get(
+          Uri.parse(_downloadUrl),
+          headers: {'Accept': '*/*'}, // ensure CDN serves raw bytes
+        );
         if (response.statusCode != 200) {
           throw Exception('HTTP ${response.statusCode}');
         }

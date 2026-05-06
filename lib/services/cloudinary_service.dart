@@ -13,12 +13,13 @@ class CloudinaryService {
   static const String _cloudName = 'dysb3nw2i';
   static const String _uploadPreset = 'smartschool';
 
-  // ── ALWAYS use /auto/upload ───────────────────────────────────────────────
-  // The old code used /raw/upload for non-image files. That endpoint is
-  // blocked by the preset's allowlist. /auto/upload works for ALL types
-  // (image, pdf, docx, txt, xlsx) because Cloudinary detects the type.
+  // ── ALWAYS use /image/upload ──────────────────────────────────────────────
+  // The upload preset delivers raw resources as "authenticated" (private),
+  // causing HTTP 401 when receivers try to download. Image resources are
+  // always delivered publicly. Uploading PDFs/docs via /image/upload stores
+  // them with public access — Cloudinary serves the raw bytes unchanged.
   static const String _uploadUrl =
-      'https://api.cloudinary.com/v1_1/$_cloudName/auto/upload';
+      'https://api.cloudinary.com/v1_1/$_cloudName/image/upload';
 
   // ── Explicit MIME types ───────────────────────────────────────────────────
   // file_picker returns bytes with no MIME info — without an explicit
