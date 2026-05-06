@@ -16,6 +16,7 @@ class AdminmessageendScreen extends ConsumerStatefulWidget {
 
 class _AdminmessageendScreenState extends ConsumerState<AdminmessageendScreen> {
   bool _isLoading = false;
+  bool _hasSent = false; // guard against double-tap sending duplicates
   String _targetType = 'whole_school';
   List<String> _selectedClassIds = [];
   List<String> _selectedStudentIds = [];
@@ -30,8 +31,12 @@ class _AdminmessageendScreenState extends ConsumerState<AdminmessageendScreen> {
   ) async {
     final currentUser = await ref.read(currentUserProvider.future);
     if (currentUser == null) return;
+    if (_hasSent) return; // prevent double-tap duplicates
 
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _hasSent = true;
+    });
 
     final service = ref.read(notificationServiceProvider);
     final attMaps = attachments.map((a) => a.toMap()).toList();
@@ -141,6 +146,7 @@ class _AdminmessageendScreenState extends ConsumerState<AdminmessageendScreen> {
           _selectedClassIds = [];
           _selectedStudentIds = [];
           _selectedTeacherIds = [];
+          _hasSent = false; // allow sending another message
         });
       }
     } catch (e) {
