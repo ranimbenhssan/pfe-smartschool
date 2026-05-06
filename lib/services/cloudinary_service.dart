@@ -15,93 +15,122 @@ class CloudinaryService {
   // ─────────────────────────────────────────────────────────────────────────
   //  UPLOAD FILE
   //
-  //  Key fixes:
-  //  1. Two separate upload URLs — /image/upload for images, /raw/upload for docs.
-  //  2. For raw (non-image) uploads:
-  //     - use_filename=true  → Cloudinary keeps the original filename INCLUDING
-  //       extension (e.g. report.pdf) in the public_id.
-  //     - unique_filename=true → avoids collision without mangling the extension.
-  //     - Do NOT set a custom public_id (it strips the extension).
-  //  3. The returned secure_url for raw resources now ends with the real
-  //     extension (e.g. .pdf, .docx, .txt) so the OS can identify the MIME type.
+  //  The live code created TWO MultipartRequests but only sent the second
+  //  one — which was missing upload_preset and had no file attached for
+  //  the image path. For raw files the second request also lacked
+  //  use_filename, so Cloudinary rejected it (non-200) → "check internet".
+  //
+  //  Fix: one clean request per call.
+  //
+  //  Resource type rules:
+  //  • image → /image/upload  (Cloudinary resizes/optimises)
+  //  • pdf / document → /raw/upload  (stored as-is, extension preserved)
+  //
+  //  For raw uploads:
+  //  • use_filename=true   → keeps original filename incl. extension in
+  //                          public_id so the secure_url ends with .pdf etc.
+  //  • unique_filename=true → appends a short random suffix to avoid
+  //                          collision without mangling the extension.
+  //  • Do NOT set a custom public_id for raw — Cloudinary strips the ext.
+  //
+  //  NOTE: your Cloudinary upload preset ("smartschool") must have
+  //  "Signing Mode" set to "Unsigned" AND "Resource type" set to "Auto"
+  //  (not locked to "Image"). If you cannot change the preset, create a
+  //  second unsigned preset named "smartschool_raw" with resource type Auto
+  //  and set _rawUploadPreset below accordingly.
   // ─────────────────────────────────────────────────────────────────────────
+
+  // If your preset is locked to images only, create a second preset for raw.
+  // Set it to the same name if your preset already allows "auto" resource type.
+  static const String _rawUploadPreset = 'smartschool'; // change if needed
+
   Future<AttachmentModel?> uploadFile({
     required Uint8List bytes,
     required String fileName,
     required AttachmentType type,
   }) async {
-    try {
-      final isImage = type == AttachmentType.image;
-      final resourceType = isImage ? 'image' : 'raw';
-      final uploadUrl =
-          'https://api.cloudinary.com/v1_1/$_cloudName/$resourceType/upload';
+    final isImage = type == AttachmentType.image;
+    final resourceType = isImage ? 'image' : 'raw';
+    final uploadUrl =
+        'https://api.cloudinary.com/v1_1/$_cloudName/$resourceType/upload';
+    final preset = isImage ? _uploadPreset : _rawUploadPreset;
 
+    try {
       final request = http.MultipartRequest('POST', Uri.parse(uploadUrl));
-      request.fields['upload_preset'] = _uploadPreset;
+
+      // ── Fields ────────────────────────────────────────────────────────────
+      request.fields['upload_preset'] = preset;
       request.fields['folder'] = 'smartschool/messages';
 
       if (isImage) {
-        // For images Cloudinary handles the extension automatically.
+        // For images: set a timestamped public_id — Cloudinary keeps the ext
         request.fields['public_id'] =
-            '${DateTime.now().millisecondsSinceEpoch}_${fileName.replaceAll(' ', '_')}';
+            '${DateTime.now().millisecondsSinceEpoch}_'
+            '${fileName.replaceAll(' ', '_')}';
       } else {
-        // For raw files: let Cloudinary keep the original name+extension.
-        // Setting public_id would strip the extension — so we don't set it.
+        // For raw: let Cloudinary preserve the original filename + extension
         request.fields['use_filename'] = 'true';
         request.fields['unique_filename'] = 'true';
+        // Do NOT set public_id here — it would strip the extension
       }
 
+      // ── File bytes ────────────────────────────────────────────────────────
       request.files.add(
         http.MultipartFile.fromBytes('file', bytes, filename: fileName),
       );
 
-      final response = await request.send();
-      final responseBody = await response.stream.bytesToString();
+      // ── Send ──────────────────────────────────────────────────────────────
+      final streamed = await request.send();
+      final responseBody = await streamed.stream.bytesToString();
 
-      if (response.statusCode != 200) {
-        debugPrint('Cloudinary upload error: $responseBody');
+      if (streamed.statusCode != 200) {
+        // Print the full Cloudinary error so you can diagnose preset issues
+        debugPrint(
+          'Cloudinary [$resourceType] upload failed '
+          '(${streamed.statusCode}): $responseBody',
+        );
         return null;
       }
 
       final json = jsonDecode(responseBody) as Map<String, dynamic>;
-      final secureUrl = json['secure_url']?.toString() ?? '';
+      var secureUrl = json['secure_url']?.toString() ?? '';
 
-      if (secureUrl.isEmpty) return null;
+      if (secureUrl.isEmpty) {
+        debugPrint('Cloudinary: response OK but secure_url missing');
+        return null;
+      }
 
-      // For raw uploads: ensure the URL ends with the original extension.
-      // If Cloudinary already includes it (use_filename=true), this is a no-op.
-      final finalUrl = _ensureExtension(secureUrl, fileName);
+      // For raw uploads, ensure the URL ends with the original extension.
+      // use_filename=true usually handles this, but guard just in case.
+      if (!isImage) {
+        secureUrl = _ensureExtension(secureUrl, fileName);
+      }
 
       return AttachmentModel(
-        url: finalUrl,
+        url: secureUrl,
         name: fileName,
         type: type,
         sizeBytes: bytes.length,
       );
     } catch (e) {
-      debugPrint('Cloudinary upload error: $e');
+      debugPrint('Cloudinary upload exception: $e');
       return null;
     }
   }
 
-  // ─── Append original extension if the URL is missing it ──────────────────
-  // e.g. secureUrl ends with "/v1234/smartschool/messages/report"
-  //      fileName is "report.pdf"
-  //      → returns ".../report.pdf"
+  /// Appends the original file extension to the URL if it's missing.
   String _ensureExtension(String url, String fileName) {
     final dot = fileName.lastIndexOf('.');
-    if (dot == -1) return url; // no extension
-    final ext = fileName.substring(dot); // ".pdf"
-    if (url.toLowerCase().endsWith(ext.toLowerCase()))
-      return url; // already there
-    // Strip any Cloudinary format suffix (e.g. ?_a=...) before appending
-    final base = url.split('?').first;
+    if (dot == -1) return url;
+    final ext = fileName.substring(dot).toLowerCase(); // ".pdf"
+    final base = url.split('?').first; // strip query params
+    if (base.toLowerCase().endsWith(ext)) return url; // already correct
     return '$base$ext';
   }
 
   String formatFileSize(int bytes) {
     if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    if (bytes < 1048576) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return '${(bytes / 1048576).toStringAsFixed(1)} MB';
   }
 }
