@@ -413,8 +413,6 @@ class _MessageComposeWidgetState extends ConsumerState<MessageComposeWidget> {
                         );
                         return;
                       }
-                      // Disable immediately to prevent double-tap
-                      setState(() => _isUploading = true);
                       widget.onSend(
                         _titleController.text.trim(),
                         _messageController.text.trim(),
