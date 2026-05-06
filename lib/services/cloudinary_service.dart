@@ -71,8 +71,8 @@ class CloudinaryService {
 
       request.fields['upload_preset'] = _uploadPreset;
       request.fields['folder'] = 'smartschool/messages';
-      request.fields['use_filename'] = 'true';
-      request.fields['unique_filename'] = 'true';
+      request.fields['use_filename'] = 'auto';
+      request.fields['unique_filename'] = 'auto';
 
       // Attach the file with the correct MIME type
       request.files.add(
