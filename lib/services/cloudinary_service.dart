@@ -13,19 +13,31 @@ class CloudinaryService {
   static const String _cloudName = 'dysb3nw2i';
   static const String _uploadPreset = 'smartschool';
 
-  // ── ALWAYS use /image/upload ──────────────────────────────────────────────
-  // The upload preset delivers raw resources as "authenticated" (private),
-  // causing HTTP 401 when receivers try to download. Image resources are
-  // always delivered publicly. Uploading PDFs/docs via /image/upload stores
-  // them with public access — Cloudinary serves the raw bytes unchanged.
-  static const String _uploadUrl =
-      'https://api.cloudinary.com/v1_1/$_cloudName/image/upload';
+  // ─────────────────────────────────────────────────────────────────────────
+  //  UPLOAD FILE
+  //
+  //  Two separate endpoints:
+  //
+  //  Images → /image/upload
+  //    Cloudinary stores as image resource → public delivery by default.
+  //    secure_url: .../image/upload/v.../name.jpg → HTTP 200, no auth needed.
+  //
+  //  PDFs / Documents → /raw/upload
+  //    Requires the preset to have:
+  //      • Resource type: Auto (not Image-only)
+  //      • Delivery type: Upload (not Authenticated)
+  //    Without those dashboard settings, raw files get HTTP 401 on download.
+  //    See README: Cloudinary Dashboard → Settings → Upload → smartschool preset.
+  // ─────────────────────────────────────────────────────────────────────────
 
-  // ── Explicit MIME types ───────────────────────────────────────────────────
-  // file_picker returns bytes with no MIME info — without an explicit
-  // contentType Cloudinary may reject the upload. image_picker always
-  // sets image/jpeg or image/png automatically, which is why images worked.
-  static MediaType _mime(String fileName) {
+  static const String _imageUploadUrl =
+      'https://api.cloudinary.com/v1_1/$_cloudName/image/upload';
+  static const String _rawUploadUrl =
+      'https://api.cloudinary.com/v1_1/$_cloudName/raw/upload';
+
+  static bool _isImage(AttachmentType type) => type == AttachmentType.image;
+
+  static MediaType _mimeFor(String fileName) {
     final ext = fileName.toLowerCase().split('.').last;
     switch (ext) {
       case 'jpg':
@@ -67,29 +79,34 @@ class CloudinaryService {
     required String fileName,
     required AttachmentType type,
   }) async {
-    try {
-      final request = http.MultipartRequest('POST', Uri.parse(_uploadUrl));
+    final isImage = _isImage(type);
+    final endpoint = isImage ? _imageUploadUrl : _rawUploadUrl;
 
+    try {
+      final request = http.MultipartRequest('POST', Uri.parse(endpoint));
+
+      // ── Allowed unsigned upload fields ────────────────────────────────────
       request.fields['upload_preset'] = _uploadPreset;
       request.fields['folder'] = 'smartschool/messages';
 
-      // ── public_id with extension embedded ────────────────────────────────
-      // use_filename / unique_filename are blocked by unsigned presets.
-      // Instead, set public_id = timestamp_originalname INCLUDING the
-      // extension so Cloudinary keeps it in the secure_url.
+      // Embed original filename (with extension) in public_id so the
+      // secure_url preserves the extension for correct MIME detection on download.
       final safeName = fileName
           .replaceAll(' ', '_')
           .replaceAll(RegExp(r'[^\w.\-]'), '');
       request.fields['public_id'] =
           '${DateTime.now().millisecondsSinceEpoch}_$safeName';
 
-      // Attach the file with the correct MIME type
+      // ── File with explicit MIME type ──────────────────────────────────────
+      // file_picker returns bytes with Content-Type: application/octet-stream
+      // by default. Providing the explicit MIME lets Cloudinary validate and
+      // process the file correctly.
       request.files.add(
         http.MultipartFile.fromBytes(
           'file',
           bytes,
           filename: fileName,
-          contentType: _mime(fileName),
+          contentType: _mimeFor(fileName),
         ),
       );
 
@@ -98,8 +115,8 @@ class CloudinaryService {
 
       if (streamed.statusCode != 200) {
         debugPrint(
-          '[Cloudinary] upload failed '
-          '(${streamed.statusCode}): $responseBody',
+          '[Cloudinary] $endpoint upload failed '
+          '(HTTP ${streamed.statusCode}): $responseBody',
         );
         return null;
       }
@@ -108,11 +125,11 @@ class CloudinaryService {
       var secureUrl = json['secure_url']?.toString() ?? '';
 
       if (secureUrl.isEmpty) {
-        debugPrint('[Cloudinary] secure_url missing in response');
+        debugPrint('[Cloudinary] secure_url missing: $responseBody');
         return null;
       }
 
-      // Ensure the original extension is present in the URL
+      // Ensure the extension is preserved in the URL
       secureUrl = _ensureExtension(secureUrl, fileName);
       debugPrint('[Cloudinary] uploaded → $secureUrl');
 
