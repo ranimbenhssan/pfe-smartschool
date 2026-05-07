@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -10,7 +11,6 @@ import '../../../models/models.dart';
 
 class AdminTimetableFormScreen extends ConsumerStatefulWidget {
   final String? entryId;
-
   const AdminTimetableFormScreen({super.key, this.entryId});
 
   @override
@@ -21,7 +21,8 @@ class AdminTimetableFormScreen extends ConsumerStatefulWidget {
 class _AdminTimetableFormScreenState
     extends ConsumerState<AdminTimetableFormScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _subjectController = TextEditingController();
+  final _subjectCtrl = TextEditingController();
+
   String? _selectedClassId;
   String? _selectedClassName;
   String? _selectedTeacherId;
@@ -31,32 +32,63 @@ class _AdminTimetableFormScreenState
   String _selectedDay = 'Monday';
   TimeOfDay _startTime = const TimeOfDay(hour: 8, minute: 0);
   TimeOfDay _endTime = const TimeOfDay(hour: 9, minute: 0);
+  String _weekType = ''; // '' = both, 'A' = Week A, 'B' = Week B
   bool _isLoading = false;
   bool _isEditing = false;
 
-  final List<String> _days = [
-    'Monday',
-    'Tuesday',
-    'Wednesday',
-    'Thursday',
-    'Friday',
-  ];
+  final _days = const ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 
   @override
   void initState() {
     super.initState();
     _isEditing = widget.entryId != null;
+    if (_isEditing) _loadEntry();
+  }
+
+  Future<void> _loadEntry() async {
+    if (widget.entryId == null) return;
+    final doc =
+        await FirebaseFirestore.instance
+            .collection('timetable')
+            .doc(widget.entryId)
+            .get();
+    if (!doc.exists || !mounted) return;
+    final t = TimetableModel.fromFirestore(doc);
+    setState(() {
+      _subjectCtrl.text = t.subject;
+      _selectedClassId = t.classId;
+      _selectedClassName = t.className;
+      _selectedTeacherId = t.teacherId;
+      _selectedTeacherName = t.teacherName;
+      _selectedRoomId = t.roomId;
+      _selectedRoomName = t.roomName;
+      _selectedDay = t.dayOfWeek;
+      _weekType = t.weekType; // ← load existing weekType
+      final parts = t.startTime.split(':');
+      if (parts.length == 2) {
+        _startTime = TimeOfDay(
+          hour: int.tryParse(parts[0]) ?? 8,
+          minute: int.tryParse(parts[1]) ?? 0,
+        );
+      }
+      final eParts = t.endTime.split(':');
+      if (eParts.length == 2) {
+        _endTime = TimeOfDay(
+          hour: int.tryParse(eParts[0]) ?? 9,
+          minute: int.tryParse(eParts[1]) ?? 0,
+        );
+      }
+    });
   }
 
   @override
   void dispose() {
-    _subjectController.dispose();
+    _subjectCtrl.dispose();
     super.dispose();
   }
 
-  String _timeToString(TimeOfDay time) {
-    return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
-  }
+  String _fmt(TimeOfDay t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
@@ -66,9 +98,7 @@ class _AdminTimetableFormScreenState
       ).showSnackBar(const SnackBar(content: Text('Please select a class')));
       return;
     }
-
     setState(() => _isLoading = true);
-
     try {
       final entry = TimetableModel(
         id: widget.entryId ?? const Uuid().v4(),
@@ -78,10 +108,11 @@ class _AdminTimetableFormScreenState
         teacherName: _selectedTeacherName ?? '',
         roomId: _selectedRoomId ?? '',
         roomName: _selectedRoomName ?? '',
-        subject: _subjectController.text.trim(),
+        subject: _subjectCtrl.text.trim(),
         dayOfWeek: _selectedDay,
-        startTime: _timeToString(_startTime),
-        endTime: _timeToString(_endTime),
+        startTime: _fmt(_startTime),
+        endTime: _fmt(_endTime),
+        weekType: _weekType, // ← saved here
         createdAt: DateTime.now(),
       );
 
@@ -112,7 +143,6 @@ class _AdminTimetableFormScreenState
         ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
-
     if (mounted) setState(() => _isLoading = false);
   }
 
@@ -140,11 +170,11 @@ class _AdminTimetableFormScreenState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ─── Subject ───
+              // ── Subject ────────────────────────────────────────────
               AppTextField(
                 label: 'Subject',
                 hint: 'e.g. Mathematics',
-                controller: _subjectController,
+                controller: _subjectCtrl,
                 prefixIcon: const Icon(Icons.book_rounded, size: 18),
                 validator:
                     (v) =>
@@ -152,92 +182,97 @@ class _AdminTimetableFormScreenState
               ),
               const SizedBox(height: 16),
 
-              // ─── Class ───
-              _buildLabel(isDark, 'Class'),
+              // ── Class ──────────────────────────────────────────────
+              _label(isDark, 'Class'),
               const SizedBox(height: 6),
               classes.when(
                 loading: () => const LoadingWidget(),
                 error: (e, _) => Text('Error: $e'),
                 data:
-                    (list) => _buildDropdown(
+                    (list) => _dropdown(
                       isDark: isDark,
                       hint: 'Select class',
                       value: _selectedClassId,
                       items:
-                          list.map((c) {
-                            return DropdownMenuItem(
-                              value: c.id,
-                              child: Text(c.getFullName()),
-                              onTap: () => _selectedClassName = c.getFullName(),
-                            );
-                          }).toList(),
-                      onChanged:
-                          (val) => setState(() => _selectedClassId = val),
+                          list
+                              .map(
+                                (c) => DropdownMenuItem(
+                                  value: c.id,
+                                  onTap:
+                                      () => _selectedClassName = c.displayName,
+                                  child: Text(c.displayName),
+                                ),
+                              )
+                              .toList(),
+                      onChanged: (v) => setState(() => _selectedClassId = v),
                     ),
               ),
               const SizedBox(height: 16),
 
-              // ─── Teacher ───
-              _buildLabel(isDark, 'Teacher (Optional)'),
+              // ── Teacher ────────────────────────────────────────────
+              _label(isDark, 'Teacher (Optional)'),
               const SizedBox(height: 6),
               teachers.when(
                 loading: () => const LoadingWidget(),
                 error: (e, _) => Text('Error: $e'),
                 data:
-                    (list) => _buildDropdown(
+                    (list) => _dropdown(
                       isDark: isDark,
                       hint: 'Select teacher',
                       value: _selectedTeacherId,
-                      items:
-                          list.map((t) {
-                            return DropdownMenuItem(
-                              value: t.id,
-                              child: Text(t.name),
-                              onTap: () => _selectedTeacherName = t.name,
-                            );
-                          }).toList(),
-                      onChanged:
-                          (val) => setState(() => _selectedTeacherId = val),
+                      items: [
+                        const DropdownMenuItem(value: '', child: Text('None')),
+                        ...list.map(
+                          (t) => DropdownMenuItem(
+                            value: t.id,
+                            onTap: () => _selectedTeacherName = t.name,
+                            child: Text(t.name),
+                          ),
+                        ),
+                      ],
+                      onChanged: (v) => setState(() => _selectedTeacherId = v),
                     ),
               ),
               const SizedBox(height: 16),
 
-              // ─── Room ───
-              _buildLabel(isDark, 'Room (Optional)'),
+              // ── Room ───────────────────────────────────────────────
+              _label(isDark, 'Room (Optional)'),
               const SizedBox(height: 6),
               rooms.when(
                 loading: () => const LoadingWidget(),
-                error: (e, _) => Text('Error: $e'),
+                error: (e, _) => const SizedBox.shrink(),
                 data:
-                    (list) => _buildDropdown(
+                    (list) => _dropdown(
                       isDark: isDark,
                       hint: 'Select room',
                       value: _selectedRoomId,
-                      items:
-                          list.map((r) {
-                            return DropdownMenuItem(
-                              value: r.id,
-                              child: Text(r.name),
-                              onTap: () => _selectedRoomName = r.name,
-                            );
-                          }).toList(),
-                      onChanged: (val) => setState(() => _selectedRoomId = val),
+                      items: [
+                        const DropdownMenuItem(value: '', child: Text('None')),
+                        ...list.map(
+                          (r) => DropdownMenuItem(
+                            value: r.id,
+                            onTap: () => _selectedRoomName = r.name,
+                            child: Text(r.name),
+                          ),
+                        ),
+                      ],
+                      onChanged: (v) => setState(() => _selectedRoomId = v),
                     ),
               ),
               const SizedBox(height: 16),
 
-              // ─── Day ───
-              _buildLabel(isDark, 'Day of Week'),
+              // ── Day of week ────────────────────────────────────────
+              _label(isDark, 'Day'),
               const SizedBox(height: 8),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
+              SizedBox(
+                height: 44,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
                   children:
-                      _days.asMap().entries.map((entry) {
-                        final dayName = entry.value;
-                        final isSelected = _selectedDay == dayName;
+                      _days.map((day) {
+                        final sel = _selectedDay == day;
                         return GestureDetector(
-                          onTap: () => setState(() => _selectedDay = dayName),
+                          onTap: () => setState(() => _selectedDay = day),
                           child: Container(
                             margin: const EdgeInsets.only(right: 8),
                             padding: const EdgeInsets.symmetric(
@@ -246,7 +281,7 @@ class _AdminTimetableFormScreenState
                             ),
                             decoration: BoxDecoration(
                               color:
-                                  isSelected
+                                  sel
                                       ? AppColors.accent
                                       : isDark
                                       ? AppColors.darkCard
@@ -254,7 +289,7 @@ class _AdminTimetableFormScreenState
                               borderRadius: BorderRadius.circular(10),
                               border: Border.all(
                                 color:
-                                    isSelected
+                                    sel
                                         ? AppColors.accent
                                         : isDark
                                         ? AppColors.darkBorder
@@ -262,11 +297,11 @@ class _AdminTimetableFormScreenState
                               ),
                             ),
                             child: Text(
-                              dayName.substring(0, 3),
+                              day.substring(0, 3),
                               style: AppTypography.labelMedium.copyWith(
                                 color:
-                                    isSelected
-                                        ? AppColors.primary
+                                    sel
+                                        ? Colors.white
                                         : isDark
                                         ? AppColors.darkText
                                         : AppColors.lightText,
@@ -279,55 +314,101 @@ class _AdminTimetableFormScreenState
               ),
               const SizedBox(height: 16),
 
-              // ─── Time ───
-              _buildLabel(isDark, 'Time'),
+              // ── Time ───────────────────────────────────────────────
+              _label(isDark, 'Time'),
               const SizedBox(height: 8),
               Row(
                 children: [
                   Expanded(
-                    child: _TimeButton(
+                    child: _TimeBtn(
                       isDark: isDark,
                       label: 'Start',
                       time: _startTime,
                       onTap: () async {
-                        final time = await showTimePicker(
+                        final t = await showTimePicker(
                           context: context,
                           initialTime: _startTime,
                         );
-                        if (time != null) {
-                          setState(() => _startTime = time);
-                        }
+                        if (t != null) setState(() => _startTime = t);
                       },
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: _TimeButton(
+                    child: _TimeBtn(
                       isDark: isDark,
                       label: 'End',
                       time: _endTime,
                       onTap: () async {
-                        final time = await showTimePicker(
+                        final t = await showTimePicker(
                           context: context,
                           initialTime: _endTime,
                         );
-                        if (time != null) {
-                          setState(() => _endTime = time);
-                        }
+                        if (t != null) setState(() => _endTime = t);
                       },
                     ),
                   ),
                 ],
               ),
+              const SizedBox(height: 16),
+
+              // ── Week type ──────────────────────────────────────────
+              _label(isDark, 'Week Type'),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  for (final opt in [
+                    ('Both A & B', ''),
+                    ('Week A only', 'A'),
+                    ('Week B only', 'B'),
+                  ])
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => setState(() => _weekType = opt.$2),
+                        child: Container(
+                          margin: const EdgeInsets.only(right: 6),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          decoration: BoxDecoration(
+                            color:
+                                _weekType == opt.$2
+                                    ? AppColors.accent.withValues(alpha: 0.15)
+                                    : isDark
+                                    ? AppColors.darkCard
+                                    : AppColors.lightCard,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color:
+                                  _weekType == opt.$2
+                                      ? AppColors.accent
+                                      : isDark
+                                      ? AppColors.darkBorder
+                                      : AppColors.lightBorder,
+                            ),
+                          ),
+                          child: Text(
+                            opt.$1,
+                            textAlign: TextAlign.center,
+                            style: AppTypography.caption.copyWith(
+                              color:
+                                  _weekType == opt.$2 ? AppColors.accent : null,
+                              fontWeight:
+                                  _weekType == opt.$2 ? FontWeight.bold : null,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
               const SizedBox(height: 32),
 
-              // ─── Save ───
+              // ── Save ───────────────────────────────────────────────
               AppButton(
                 label: _isEditing ? 'Update Entry' : 'Add Entry',
-                onPressed: _save,
+                onPressed: _isLoading ? () {} : _save,
                 isLoading: _isLoading,
                 width: double.infinity,
-                icon: _isEditing ? Icons.save_rounded : Icons.add_rounded,
+                icon: Icons.check_rounded,
               ),
             ],
           ),
@@ -336,53 +417,49 @@ class _AdminTimetableFormScreenState
     );
   }
 
-  Widget _buildLabel(bool isDark, String label) {
-    return Text(
-      label,
-      style: AppTypography.labelMedium.copyWith(
-        color:
-            isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-      ),
-    );
-  }
+  Widget _label(bool isDark, String text) => Text(
+    text,
+    style: AppTypography.labelMedium.copyWith(
+      color:
+          isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+    ),
+  );
 
-  Widget _buildDropdown({
+  Widget _dropdown<T>({
     required bool isDark,
     required String hint,
-    required String? value,
-    required List<DropdownMenuItem<String>> items,
-    required void Function(String?) onChanged,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.darkSurface : AppColors.lightBackground,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
-        ),
+    required T? value,
+    required List<DropdownMenuItem<T>> items,
+    required ValueChanged<T?> onChanged,
+  }) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 16),
+    decoration: BoxDecoration(
+      color: isDark ? AppColors.darkSurface : AppColors.lightBackground,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(
+        color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
       ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          isExpanded: true,
-          hint: Text(hint),
-          value: value,
-          dropdownColor: isDark ? AppColors.darkCard : AppColors.lightCard,
-          items: items,
-          onChanged: onChanged,
-        ),
+    ),
+    child: DropdownButtonHideUnderline(
+      child: DropdownButton<T>(
+        isExpanded: true,
+        hint: Text(hint),
+        value: value,
+        dropdownColor:
+            isDark ? AppColors.darkSurface : AppColors.lightBackground,
+        items: items,
+        onChanged: onChanged,
       ),
-    );
-  }
+    ),
+  );
 }
 
-class _TimeButton extends StatelessWidget {
+class _TimeBtn extends StatelessWidget {
   final bool isDark;
   final String label;
   final TimeOfDay time;
   final VoidCallback onTap;
-
-  const _TimeButton({
+  const _TimeBtn({
     required this.isDark,
     required this.label,
     required this.time,
@@ -391,6 +468,8 @@ class _TimeButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final display =
+        '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -406,20 +485,15 @@ class _TimeButton extends StatelessWidget {
           children: [
             const Icon(
               Icons.access_time_rounded,
+              size: 16,
               color: AppColors.accent,
-              size: 18,
             ),
             const SizedBox(width: 8),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(label, style: AppTypography.caption),
-                Text(
-                  time.format(context),
-                  style: AppTypography.labelLarge.copyWith(
-                    color: isDark ? AppColors.darkText : AppColors.lightText,
-                  ),
-                ),
+                Text(display, style: AppTypography.labelMedium),
               ],
             ),
           ],

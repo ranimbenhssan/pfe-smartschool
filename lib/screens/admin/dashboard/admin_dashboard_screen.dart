@@ -662,6 +662,12 @@ class _MoreMenu extends StatelessWidget {
         color: AppColors.info,
         route: AppRoutes.adminRooms,
       ),
+      _MoreItem(
+        label: 'Semester Management',
+        icon: Icons.calendar_month_rounded,
+        color: AppColors.info,
+        route: AppRoutes.adminSemesters,
+      ),
     ];
 
     return ListView.builder(

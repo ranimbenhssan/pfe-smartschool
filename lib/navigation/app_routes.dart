@@ -41,6 +41,7 @@ class AppRoutes {
   static const String adminSettingsRfid = '/admin/settings/rfid';
   static const String adminSettingsSensors = '/admin/settings/sensors';
   static const String adminSettingsAi = '/admin/settings/ai';
+  static const String adminSemesters = '/admin/semesters';
 
   // ─── Teacher ───
   static const String teacherDashboard = '/teacher/dashboard';

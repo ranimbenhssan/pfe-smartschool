@@ -6,7 +6,7 @@ export 'rfid_provider.dart';
 export 'sensor_provider.dart';
 export 'ai_flag_provider.dart';
 export 'notification_provider.dart';
-export 'timetable_provider.dart';
 export 'dashboard_provider.dart';
 export '../services/auth_service.dart';
 export '../services/firestore_service.dart';
+export 'semester_provider.dart';

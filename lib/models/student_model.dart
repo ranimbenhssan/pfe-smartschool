@@ -33,8 +33,8 @@ class StudentModel {
   });
 
   // ── Display getters ──────────────────────────────────────────────────────
-  String get fullDisplay => '$name — $level $className';
-  String get classDisplay => '$level $className';
+  String get fullDisplay => '$name — $className';
+  String get classDisplay => className;
 
   /// Alias for totalPresence — resolves the compile error:
   /// "The getter 'presenceCount' isn't defined for the type 'StudentModel'"

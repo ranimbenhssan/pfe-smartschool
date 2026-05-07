@@ -63,13 +63,6 @@ class StudentCard extends StatelessWidget {
                         label: student.classDisplay,
                         color: AppColors.studentColor,
                       ),
-                      if (student.level.isNotEmpty) ...[
-                        const SizedBox(width: 6),
-                        _Chip(
-                          label: 'Level ${student.level}',
-                          color: AppColors.info,
-                        ),
-                      ],
                     ],
                   ),
                 ],

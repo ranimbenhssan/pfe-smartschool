@@ -15,3 +15,4 @@ export 'selector_widgets.dart';
 export 'admin_timetable_grid.dart';
 export 'attendance_detail_card.dart';
 export 'class_badge.dart';
+export 'week_type_badge.dart';

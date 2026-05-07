@@ -17,15 +17,8 @@ class AdminTimetableScreen extends ConsumerStatefulWidget {
 }
 
 class _AdminTimetableScreenState extends ConsumerState<AdminTimetableScreen> {
-  final _searchController = TextEditingController();
   String? _selectedClassId;
   String? _selectedClassName;
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -40,175 +33,103 @@ class _AdminTimetableScreenState extends ConsumerState<AdminTimetableScreen> {
         backgroundColor:
             isDark ? AppColors.darkSurface : AppColors.lightSurface,
         actions: [
+          // Add entry button — only visible when a class is selected
           if (_selectedClassId != null)
             IconButton(
               icon: const Icon(Icons.add_rounded),
-              onPressed: () => context.push(AppRoutes.adminTimetableForm),
+              tooltip: 'Add entry',
+              onPressed:
+                  () => context.push(
+                    AppRoutes.adminTimetableForm,
+                    extra: {'classId': _selectedClassId},
+                  ),
             ),
         ],
       ),
       body: Column(
         children: [
-          // ─── Search bar ───
+          // ── Class selector ─────────────────────────────────────────────
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: classes.when(
               loading: () => const LoadingWidget(),
               error: (e, _) => Text('Error: $e'),
               data:
-                  (list) => Autocomplete<ClassModel>(
-                    displayStringForOption: (c) => c.displayName,
-                    optionsBuilder: (textValue) {
-                      if (textValue.text.isEmpty) return list;
-                      return list.where(
-                        (c) =>
-                            c.displayName.toLowerCase().contains(
-                              textValue.text.toLowerCase(),
-                            ) ||
-                            c.name.toLowerCase().contains(
-                              textValue.text.toLowerCase(),
-                            ),
-                      );
-                    },
-                    onSelected: (cls) {
-                      setState(() {
-                        _selectedClassId = cls.id;
-                        _selectedClassName = cls.displayName;
-                      });
-                    },
-                    fieldViewBuilder: (
-                      context,
-                      controller,
-                      focusNode,
-                      onSubmit,
-                    ) {
-                      return TextField(
-                        controller: controller,
-                        focusNode: focusNode,
-                        decoration: InputDecoration(
-                          hintText: 'Search class...',
-                          prefixIcon: const Icon(
-                            Icons.search_rounded,
-                            size: 20,
-                          ),
-                          suffixIcon:
-                              _selectedClassId != null
-                                  ? IconButton(
-                                    icon: const Icon(
-                                      Icons.clear_rounded,
-                                      size: 18,
-                                    ),
-                                    onPressed: () {
-                                      controller.clear();
-                                      setState(() {
-                                        _selectedClassId = null;
-                                        _selectedClassName = null;
-                                      });
-                                    },
-                                  )
-                                  : null,
-                          filled: true,
-                          fillColor:
-                              isDark ? AppColors.darkCard : AppColors.lightCard,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
-                          ),
-                        ),
-                      );
-                    },
-                    optionsViewBuilder: (context, onSelected, options) {
-                      return Align(
-                        alignment: Alignment.topLeft,
-                        child: Material(
-                          elevation: 4,
-                          borderRadius: BorderRadius.circular(12),
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(
-                              maxHeight: 200,
-                              maxWidth: 400,
-                            ),
-                            child: ListView.builder(
-                              shrinkWrap: true,
-                              itemCount: options.length,
-                              itemBuilder: (context, index) {
-                                final cls = options.elementAt(index);
-                                return ListTile(
-                                  leading: const Icon(
-                                    Icons.class_rounded,
-                                    size: 18,
-                                  ),
-                                  title: Text(cls.displayName),
-                                  onTap: () => onSelected(cls),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                      );
-                    },
+                  (list) => DropdownButtonFormField<String>(
+                    decoration: InputDecoration(
+                      labelText: 'Select Class',
+                      prefixIcon: const Icon(Icons.class_rounded, size: 20),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      filled: true,
+                      fillColor:
+                          isDark ? AppColors.darkCard : AppColors.lightCard,
+                    ),
+                    value: _selectedClassId,
+                    hint: const Text('Choose a class to view or edit'),
+                    items:
+                        list
+                            .map(
+                              (c) => DropdownMenuItem(
+                                value: c.id,
+                                onTap: () => _selectedClassName = c.displayName,
+                                child: Text(c.displayName),
+                              ),
+                            )
+                            .toList(),
+                    onChanged: (val) => setState(() => _selectedClassId = val),
                   ),
             ),
           ),
 
-          // ─── Content ───
+          const SizedBox(height: 8),
+
+          // ── Timetable grid / empty state ───────────────────────────────
           Expanded(
             child:
                 _selectedClassId == null
-                    ? _buildEmptySelection(isDark)
-                    : _buildClassTimetable(isDark),
-          ),
-        ],
-      ),
-      floatingActionButton:
-          _selectedClassId != null
-              ? FloatingActionButton.extended(
-                onPressed: () => context.push(AppRoutes.adminTimetableForm),
-                backgroundColor: AppColors.accent,
-                icon: const Icon(Icons.add_rounded, color: AppColors.primary),
-                label: const Text(
-                  'Add Entry',
-                  style: TextStyle(color: AppColors.primary),
-                ),
-              )
-              : null,
-    );
-  }
-
-  Widget _buildEmptySelection(bool isDark) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.search_rounded,
-            size: 64,
-            color: isDark ? AppColors.darkTextHint : AppColors.lightTextHint,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Search for a class',
-            style: AppTypography.headingMedium.copyWith(
-              color: isDark ? AppColors.darkText : AppColors.lightText,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Select a class to view or edit its timetable',
-            style: AppTypography.bodySmall.copyWith(
-              color:
-                  isDark
-                      ? AppColors.darkTextSecondary
-                      : AppColors.lightTextSecondary,
-            ),
+                    ? const Center(
+                      child: EmptyState(
+                        title: 'Select a Class',
+                        message:
+                            'Choose a class above to view and edit its timetable.\n'
+                            'To import timetables from Excel, use Bulk Import.',
+                        icon: Icons.calendar_today_rounded,
+                      ),
+                    )
+                    : _TimetableEditor(
+                      classId: _selectedClassId!,
+                      className: _selectedClassName ?? '',
+                      isDark: isDark,
+                    ),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildClassTimetable(bool isDark) {
-    final timetable = ref.watch(timetableByClassProvider(_selectedClassId!));
+// ─────────────────────────────────────────
+//  TIMETABLE EDITOR
+//  Lists all entries for the selected class.
+//  Tap an entry → edit form.
+//  Long-press or swipe → delete.
+// ─────────────────────────────────────────
+class _TimetableEditor extends ConsumerWidget {
+  final String classId;
+  final String className;
+  final bool isDark;
+
+  const _TimetableEditor({
+    required this.classId,
+    required this.className,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final timetable = ref.watch(fullTimetableProvider);
 
     return timetable.when(
       loading: () => const LoadingWidget(),
@@ -218,103 +139,291 @@ class _AdminTimetableScreenState extends ConsumerState<AdminTimetableScreen> {
             message: e.toString(),
             icon: Icons.error_outline_rounded,
           ),
-      data: (entries) {
+      data: (allEntries) {
+        final entries =
+            allEntries.where((e) => e.classId == classId).toList()
+              ..sort((a, b) {
+                // Sort by day then start time
+                const days = [
+                  'Monday',
+                  'Tuesday',
+                  'Wednesday',
+                  'Thursday',
+                  'Friday',
+                ];
+                final dCmp = days
+                    .indexOf(a.dayOfWeek)
+                    .compareTo(days.indexOf(b.dayOfWeek));
+                if (dCmp != 0) return dCmp;
+                return a.startTime.compareTo(b.startTime);
+              });
+
         if (entries.isEmpty) {
           return EmptyState(
-            title: 'No Timetable',
+            title: 'No Entries',
             message:
-                'No entries for $_selectedClassName yet.\nTap + to add entries.',
-            icon: Icons.calendar_today_rounded,
+                'No timetable entries for $className.\n'
+                'Import from Bulk Import or tap + to add manually.',
+            icon: Icons.event_note_rounded,
           );
         }
 
-        return Column(
-          children: [
-            // ─── Class info header ───
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: AppColors.accent.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: AppColors.accent.withValues(alpha: 0.3),
-                ),
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.class_rounded,
-                    color: AppColors.accent,
-                    size: 20,
+        // Group by Week type for display
+        final weekA = entries.where((e) => e.weekType == 'A').toList();
+        final weekB = entries.where((e) => e.weekType == 'B').toList();
+        final both = entries.where((e) => e.weekType == '').toList();
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Class header
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.accent.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: AppColors.accent.withValues(alpha: 0.3),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      _selectedClassName ?? '',
-                      style: AppTypography.labelLarge.copyWith(
-                        color: AppColors.accent,
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.class_rounded,
+                      color: AppColors.accent,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        className,
+                        style: AppTypography.labelLarge.copyWith(
+                          color: AppColors.accent,
+                        ),
                       ),
                     ),
-                  ),
-                  Text(
-                    '${entries.length} entries',
-                    style: AppTypography.caption,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-
-            // ─── Timetable grid ───
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: AdminTimetableGrid(
-                  entries: entries,
-                  onDelete: (entry) => _deleteEntry(entry, isDark),
-                  onEdit:
-                      (entry) => context.push(
-                        AppRoutes.adminTimetableForm,
-                        extra: entry.id,
-                      ),
+                    Text(
+                      '${entries.length} entries',
+                      style: AppTypography.caption,
+                    ),
+                  ],
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: 16),
+
+              // Week A
+              if (weekA.isNotEmpty) ...[
+                _WeekHeader('Week A', AppColors.teacherColor),
+                const SizedBox(height: 6),
+                ...weekA.map(
+                  (e) => _EntryTile(
+                    entry: e,
+                    isDark: isDark,
+                    onEdit:
+                        () => context.push(
+                          AppRoutes.adminTimetableForm,
+                          extra: e.id,
+                        ),
+                    onDelete: () => _delete(context, ref, e),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+
+              // Week B
+              if (weekB.isNotEmpty) ...[
+                _WeekHeader('Week B', AppColors.studentColor),
+                const SizedBox(height: 6),
+                ...weekB.map(
+                  (e) => _EntryTile(
+                    entry: e,
+                    isDark: isDark,
+                    onEdit:
+                        () => context.push(
+                          AppRoutes.adminTimetableForm,
+                          extra: e.id,
+                        ),
+                    onDelete: () => _delete(context, ref, e),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+
+              // Both weeks
+              if (both.isNotEmpty) ...[
+                _WeekHeader('Both Weeks (A & B)', AppColors.info),
+                const SizedBox(height: 6),
+                ...both.map(
+                  (e) => _EntryTile(
+                    entry: e,
+                    isDark: isDark,
+                    onEdit:
+                        () => context.push(
+                          AppRoutes.adminTimetableForm,
+                          extra: e.id,
+                        ),
+                    onDelete: () => _delete(context, ref, e),
+                  ),
+                ),
+              ],
+            ],
+          ),
         );
       },
     );
   }
 
-  Future<void> _deleteEntry(TimetableModel entry, bool isDark) async {
+  Future<void> _delete(
+    BuildContext context,
+    WidgetRef ref,
+    TimetableModel entry,
+  ) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder:
           (ctx) => AlertDialog(
             title: const Text('Delete Entry'),
-            content: Text('Delete "${entry.subject}" on ${entry.dayOfWeek}?'),
+            content: Text(
+              'Delete "${entry.subject}" on ${entry.dayOfWeek} '
+              '(${entry.startTime}–${entry.endTime})?',
+            ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
                 child: const Text('Cancel'),
               ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.error,
-                ),
+              TextButton(
                 onPressed: () => Navigator.pop(ctx, true),
                 child: const Text(
                   'Delete',
-                  style: TextStyle(color: Colors.white),
+                  style: TextStyle(color: Colors.red),
                 ),
               ),
             ],
           ),
     );
-
-    if (confirm == true && mounted) {
+    if (confirm == true) {
       await ref.read(firestoreServiceProvider).deleteTimetableEntry(entry.id);
     }
+  }
+}
+
+// ─────────────────────────────────────────
+//  WEEK HEADER
+// ─────────────────────────────────────────
+class _WeekHeader extends StatelessWidget {
+  final String label;
+  final Color color;
+  const _WeekHeader(this.label, this.color);
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: color.withValues(alpha: 0.3)),
+          ),
+          child: Text(
+            label,
+            style: AppTypography.labelSmall.copyWith(color: color),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────
+//  ENTRY TILE  (edit / delete)
+// ─────────────────────────────────────────
+class _EntryTile extends StatelessWidget {
+  final TimetableModel entry;
+  final bool isDark;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  const _EntryTile({
+    required this.entry,
+    required this.isDark,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkCard : AppColors.lightCard,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+        ),
+      ),
+      child: ListTile(
+        dense: true,
+        leading: Container(
+          width: 42,
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+          decoration: BoxDecoration(
+            color: AppColors.accent.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                entry.dayOfWeek.substring(0, 3),
+                style: AppTypography.caption.copyWith(
+                  color: AppColors.accent,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Text(
+                entry.startTime,
+                style: AppTypography.caption.copyWith(fontSize: 9),
+              ),
+            ],
+          ),
+        ),
+        title: Text(
+          entry.subject,
+          style: AppTypography.labelMedium.copyWith(
+            color: isDark ? AppColors.darkText : AppColors.lightText,
+          ),
+        ),
+        subtitle: Text(
+          [
+            '${entry.startTime}–${entry.endTime}',
+            if (entry.teacherName.isNotEmpty) entry.teacherName,
+            if (entry.roomName.isNotEmpty) entry.roomName,
+          ].join(' · '),
+          style: AppTypography.caption,
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.edit_rounded, size: 16),
+              color: AppColors.accent,
+              onPressed: onEdit,
+              tooltip: 'Edit',
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete_outline_rounded, size: 16),
+              color: AppColors.error,
+              onPressed: onDelete,
+              tooltip: 'Delete',
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

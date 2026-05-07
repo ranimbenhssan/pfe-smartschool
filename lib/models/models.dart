@@ -9,3 +9,4 @@ export 'ai_flag_model.dart';
 export 'notification_model.dart';
 export 'timetable_model.dart';
 export 'room_model.dart';
+export 'semester_model.dart';
