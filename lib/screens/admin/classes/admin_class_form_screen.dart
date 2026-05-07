@@ -17,10 +17,11 @@ class AdminClassFormScreen extends ConsumerStatefulWidget {
 }
 
 class _AdminClassFormScreenState extends ConsumerState<AdminClassFormScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  final _gradeController = TextEditingController();
-  final _levelController = TextEditingController();
+  final _formKey       = GlobalKey<FormState>();
+  final _levelCtrl     = TextEditingController();
+  final _nameCtrl      = TextEditingController();
+  final _gradeCtrl     = TextEditingController();
+  final _groupCtrl     = TextEditingController(); // optional TP group
   bool _isLoading = false;
   bool _isEditing = false;
 
@@ -29,10 +30,6 @@ class _AdminClassFormScreenState extends ConsumerState<AdminClassFormScreen> {
     super.initState();
     _isEditing = widget.classId != null;
     if (_isEditing) _loadClass();
-    // ─── Trigger preview rebuild on every keystroke ───
-    _levelController.addListener(() => setState(() {}));
-    _nameController.addListener(() => setState(() {}));
-    _gradeController.addListener(() => setState(() {}));
   }
 
   Future<void> _loadClass() async {
@@ -41,37 +38,27 @@ class _AdminClassFormScreenState extends ConsumerState<AdminClassFormScreen> {
         .getClass(widget.classId!);
     if (cls != null && mounted) {
       setState(() {
-        _nameController.text = cls.name;
-        _gradeController.text = cls.grade;
-        _levelController.text = cls.level;
+        _levelCtrl.text = cls.level;
+        _nameCtrl.text  = cls.name;
+        _gradeCtrl.text = cls.grade;
+        _groupCtrl.text = cls.group;
       });
     }
   }
 
   @override
   void dispose() {
-    _nameController.dispose();
-    _gradeController.dispose();
-    _levelController.dispose();
+    _levelCtrl.dispose();
+    _nameCtrl.dispose();
+    _gradeCtrl.dispose();
+    _groupCtrl.dispose();
     super.dispose();
   }
 
-  /// Build a temporary ClassModel from the current form values
-  /// just to use getFullName() for the preview.
-  String get _previewName {
-    final tmp = ClassModel(
-      id: '',
-      name: _nameController.text.trim(),
-      grade: _gradeController.text.trim(),
-      level: _levelController.text.trim(),
-      teacherIds: [],
-      teacherNames: [],
-      roomId: '',
-      roomName: '',
-      studentCount: 0,
-      createdAt: DateTime.now(),
-    );
-    return tmp.getFullName();
+  String _buildDisplayName() {
+    final base  = '${_levelCtrl.text.trim()} ${_nameCtrl.text.trim()} ${_gradeCtrl.text.trim()}'.trim();
+    final group = _groupCtrl.text.trim();
+    return group.isEmpty ? base : '$base $group';
   }
 
   Future<void> _save() async {
@@ -79,63 +66,45 @@ class _AdminClassFormScreenState extends ConsumerState<AdminClassFormScreen> {
     setState(() => _isLoading = true);
 
     try {
+      final data = {
+        'level':       _levelCtrl.text.trim(),
+        'name':        _nameCtrl.text.trim(),
+        'grade':       _gradeCtrl.text.trim(),
+        'group':       _groupCtrl.text.trim(),
+        'displayName': _buildDisplayName(),
+      };
+
       if (_isEditing) {
-        // ─── FIX: also update the denormalized displayName field ───
-        final updatedName = _nameController.text.trim();
-        final updatedGrade = _gradeController.text.trim();
-        final updatedLevel = _levelController.text.trim();
-        final tmp = ClassModel(
-          id: widget.classId!,
-          name: updatedName,
-          grade: updatedGrade,
-          level: updatedLevel,
-          teacherIds: [],
-          teacherNames: [],
-          roomId: '',
-          roomName: '',
-          studentCount: 0,
-          createdAt: DateTime.now(),
-        );
-        await ref.read(firestoreServiceProvider).updateClass(widget.classId!, {
-          'name': updatedName,
-          'grade': updatedGrade,
-          'level': updatedLevel,
-          'displayName': tmp.getFullName(), // ← denormalized combined name
-        });
+        await ref.read(firestoreServiceProvider).updateClass(widget.classId!, data);
       } else {
         final classModel = ClassModel(
-          id: const Uuid().v4(),
-          name: _nameController.text.trim(),
-          grade: _gradeController.text.trim(),
-          level: _levelController.text.trim(),
-          teacherIds: [],
+          id:           const Uuid().v4(),
+          name:         _nameCtrl.text.trim(),
+          grade:        _gradeCtrl.text.trim(),
+          level:        _levelCtrl.text.trim(),
+          group:        _groupCtrl.text.trim(),
+          teacherIds:   [],
           teacherNames: [],
-          roomId: '',
-          roomName: '',
+          roomId:       '',
+          roomName:     '',
           studentCount: 0,
-          createdAt: DateTime.now(),
+          createdAt:    DateTime.now(),
         );
-        // toFirestore() already includes displayName: getFullName()
         await ref.read(firestoreServiceProvider).addClass(classModel);
       }
 
       if (mounted) {
         context.pop();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              _isEditing
-                  ? 'Class updated successfully'
-                  : 'Class added successfully',
-            ),
-          ),
+          SnackBar(content: Text(_isEditing
+              ? 'Class updated successfully'
+              : 'Class added successfully')),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
     if (mounted) setState(() => _isLoading = false);
@@ -144,10 +113,9 @@ class _AdminClassFormScreenState extends ConsumerState<AdminClassFormScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final hasPreview =
-        _levelController.text.isNotEmpty ||
-        _nameController.text.isNotEmpty ||
-        _gradeController.text.isNotEmpty;
+
+    // Live preview of display name
+    final preview = _buildDisplayName();
 
     return Scaffold(
       backgroundColor:
@@ -164,88 +132,99 @@ class _AdminClassFormScreenState extends ConsumerState<AdminClassFormScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ─── Level ───
+              // ── Preview ──────────────────────────────────────────────
+              AnimatedBuilder(
+                animation: Listenable.merge(
+                    [_levelCtrl, _nameCtrl, _gradeCtrl, _groupCtrl]),
+                builder: (_, __) {
+                  final preview = _buildDisplayName();
+                  if (preview.trim().isEmpty) return const SizedBox.shrink();
+                  return Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: AppColors.accent.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                          color: AppColors.accent.withValues(alpha: 0.3)),
+                    ),
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                      Text('Preview',
+                          style: AppTypography.caption
+                              .copyWith(color: AppColors.accent)),
+                      Text(preview,
+                          style: AppTypography.labelLarge
+                              .copyWith(color: AppColors.accent)),
+                    ]),
+                  );
+                },
+              ),
+
+              // ── Level ─────────────────────────────────────────────────
               AppTextField(
                 label: 'Level *',
                 hint: 'e.g. 3, BTS2, L3',
-                controller: _levelController,
+                controller: _levelCtrl,
                 prefixIcon: const Icon(Icons.layers_rounded, size: 18),
-                validator:
-                    (v) => v == null || v.isEmpty ? 'Level is required' : null,
+                validator: (v) =>
+                    v == null || v.isEmpty ? 'Level is required' : null,
+                onChanged: (_) => setState(() {}),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
 
-              // ─── Class Name ───
+              // ── Class Name ────────────────────────────────────────────
               AppTextField(
                 label: 'Class Name *',
-                hint: 'e.g. IOT, Réseau',
-                controller: _nameController,
+                hint: 'e.g. IOT, DNI, Réseau',
+                controller: _nameCtrl,
                 prefixIcon: const Icon(Icons.class_rounded, size: 18),
-                validator:
-                    (v) =>
-                        v == null || v.isEmpty
-                            ? 'Class name is required'
-                            : null,
+                validator: (v) =>
+                    v == null || v.isEmpty ? 'Class name is required' : null,
+                onChanged: (_) => setState(() {}),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
 
-              // ─── Grade ───
+              // ── Grade ─────────────────────────────────────────────────
               AppTextField(
                 label: 'Grade *',
-                hint: 'e.g. 1, 2, A',
-                controller: _gradeController,
+                hint: 'e.g. 1, 2 (group number within the class)',
+                controller: _gradeCtrl,
                 prefixIcon: const Icon(Icons.grade_rounded, size: 18),
-                validator:
-                    (v) => v == null || v.isEmpty ? 'Grade is required' : null,
+                validator: (v) =>
+                    v == null || v.isEmpty ? 'Grade is required' : null,
+                onChanged: (_) => setState(() {}),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 14),
 
-              // ─── Live preview using getFullName() ───
-              if (hasPreview)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: AppColors.accent.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: AppColors.accent.withValues(alpha: 0.3),
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Preview',
-                        style: AppTypography.caption.copyWith(
-                          color: AppColors.accent,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        // ─── FIX: uses getFullName() logic ───
-                        _previewName.isNotEmpty ? _previewName : '—',
-                        style: AppTypography.headingMedium.copyWith(
-                          color: AppColors.accent,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'This is how the class will appear across the app.',
-                        style: AppTypography.caption,
-                      ),
-                    ],
-                  ),
+              // ── Group (optional) ──────────────────────────────────────
+              AppTextField(
+                label: 'TP Group (optional)',
+                hint: 'e.g. TP 1, TP 2 — leave empty if no group',
+                controller: _groupCtrl,
+                prefixIcon: const Icon(Icons.group_work_rounded, size: 18),
+                onChanged: (_) => setState(() {}),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: 4, left: 4),
+                child: Text(
+                  'If filled, the class will be displayed as e.g. "3 IOT 1 TP 2"',
+                  style: AppTypography.caption,
                 ),
+              ),
+              const SizedBox(height: 28),
 
-              const SizedBox(height: 32),
-
+              // ── Save ──────────────────────────────────────────────────
               AppButton(
                 label: _isEditing ? 'Update Class' : 'Add Class',
-                onPressed: _save,
+                onPressed: _isLoading ? () {} : _save,
                 isLoading: _isLoading,
                 width: double.infinity,
-                icon: _isEditing ? Icons.save_rounded : Icons.add_rounded,
+                icon: _isEditing
+                    ? Icons.save_rounded
+                    : Icons.add_rounded,
               ),
             ],
           ),

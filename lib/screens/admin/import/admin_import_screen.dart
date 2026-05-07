@@ -145,8 +145,8 @@ class _AdminImportScreenState extends ConsumerState<AdminImportScreen> {
               items: const [
                 _FormatItem(
                   sheetName: 'Classes',
-                  columns: 'Name | Grade | Level',
-                  example: 'DNI | 1 | 1',
+                  columns: 'Name | Grade | Level | Group (optional)',
+                  example: 'DNI | 1 | 1 | TP 2',
                 ),
                 _FormatItem(
                   sheetName: 'Teachers',

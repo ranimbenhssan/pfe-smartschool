@@ -87,7 +87,7 @@ class AdminClassesScreen extends ConsumerWidget {
             title: const Text('Delete Class'),
             // ─── FIX: use getFullName() in dialog ───
             content: Text(
-              'Delete "${cls.getFullName()}"? This cannot be undone.',
+              'Delete "${cls.getFullName}"? This cannot be undone.',
             ),
             actions: [
               TextButton(
@@ -169,7 +169,7 @@ class _ClassCard extends StatelessWidget {
                 children: [
                   // ─── PRIMARY LABEL: getFullName() → "3 IOT 1" ───
                   Text(
-                    cls.getFullName(),
+                    cls.getFullName,
                     style: AppTypography.labelLarge.copyWith(
                       color: isDark ? AppColors.darkText : AppColors.lightText,
                     ),

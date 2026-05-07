@@ -87,7 +87,7 @@ class AdminClassDetailScreen extends ConsumerWidget {
                               children: [
                                 // ─── FIX: use getFullName() not c.name ───
                                 Text(
-                                  c.getFullName(),
+                                  c.getFullName,
                                   style: AppTypography.headingLarge.copyWith(
                                     color: Colors.white,
                                   ),

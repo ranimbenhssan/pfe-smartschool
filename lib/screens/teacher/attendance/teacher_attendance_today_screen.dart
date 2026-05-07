@@ -240,7 +240,7 @@ class _ClassSection extends ConsumerWidget {
 
     // Resolve display name — getFullName() → "3 IOT 1"
     final className = classAsync.when(
-      data: (c) => c?.getFullName() ?? classId,
+      data: (c) => c?.getFullName ?? classId,
       loading: () => classId,
       error: (_, __) => classId,
     );

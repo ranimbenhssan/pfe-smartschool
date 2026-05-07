@@ -233,6 +233,12 @@ class ExcelImportService {
             _cell(row, headers, 'name') ?? _cell(row, headers, 'class') ?? '';
         final grade = _cell(row, headers, 'grade') ?? '';
         final level = _cell(row, headers, 'level') ?? '';
+        // Group is optional — e.g. "TP 1", "TP 2"
+        final group =
+            _cell(row, headers, 'group') ??
+            _cell(row, headers, 'tp') ??
+            _cell(row, headers, 'groupe') ??
+            '';
 
         if (name.isEmpty) {
           errors.add('Row ${i + 1} (Classes): Missing class name');
@@ -242,31 +248,39 @@ class ExcelImportService {
         final existing =
             await _db
                 .collection('classes')
-                .where('name', isEqualTo: name)
-                .where('grade', isEqualTo: grade)
-                .where('level', isEqualTo: level)
+                .where(
+                  'displayName',
+                  isEqualTo: _buildDisplayName(level, name, grade, group),
+                )
                 .limit(1)
                 .get();
 
         if (existing.docs.isNotEmpty) {
-          errors.add('Class "$level $name $grade" already exists — skipped');
-          continue;
-        }
+          errors.add(
+            'Class "${_buildDisplayName(level, name, grade, group)}" already exists — skipped',
+          );
 
-        final id = _db.collection('classes').doc().id;
-        await _db.collection('classes').doc(id).set({
-          'name': name,
-          'grade': grade,
-          'level': level,
-          'displayName': '$level $name $grade'.trim(),
-          'teacherIds': [],
-          'teacherNames': [],
-          'roomId': '',
-          'roomName': '',
-          'studentCount': 0,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-        count++;
+          if (existing.docs.isNotEmpty) {
+            errors.add('Class "$level $name $grade" already exists — skipped');
+            continue;
+          }
+
+          final id = _db.collection('classes').doc().id;
+          await _db.collection('classes').doc(id).set({
+            'name': name,
+            'grade': grade,
+            'level': level,
+            'displayName': _buildDisplayName(level, name, grade, group),
+            'group': group,
+            'teacherIds': [],
+            'teacherNames': [],
+            'roomId': '',
+            'roomName': '',
+            'studentCount': 0,
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+          count++;
+        }
       } catch (e) {
         errors.add('Row ${i + 1} (Classes): $e');
       }
@@ -562,4 +576,14 @@ class ExcelImportService {
   bool _isRowEmpty(List<Data?> row) => row.every(
     (c) => c == null || c.value == null || c.value.toString().trim().isEmpty,
   );
+  String _buildDisplayName(
+    String level,
+    String name,
+    String grade,
+    String group,
+  ) {
+    final base = '$level $name $grade'.trim();
+    final g = group.trim();
+    return g.isEmpty ? base : '$base $g';
+  }
 }

@@ -297,7 +297,7 @@ class _AdminStudentFormScreenState
                                 return DropdownMenuItem<String>(
                                   value: c.id,
                                   child: Text(
-                                    c.getFullName(),
+                                    c.getFullName,
                                     style: AppTypography.bodyMedium.copyWith(
                                       color:
                                           isDark
@@ -305,7 +305,7 @@ class _AdminStudentFormScreenState
                                               : AppColors.lightText,
                                     ),
                                   ),
-                                  onTap: () => _selectedClassName = c.getFullName(),
+                                  onTap: () => _selectedClassName = c.getFullName,
                                 );
                               }).toList(),
                           onChanged:

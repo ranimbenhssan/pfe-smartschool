@@ -198,7 +198,7 @@ class _DashboardBody extends ConsumerWidget {
                     ? ref.watch(classProvider(student.classId))
                     : null;
             final fullClassName = classAsync?.when(
-              data: (c) => c?.getFullName() ?? student?.className ?? '',
+              data: (c) => c?.getFullName ?? student?.className ?? '',
               loading: () => student?.className ?? '',
               error: (_, __) => student?.className ?? '',
             );
@@ -542,7 +542,7 @@ class _StudentTimetableSeances extends ConsumerWidget {
                                 final label = classAsync.when(
                                   data:
                                       (c) =>
-                                          c?.getFullName() ?? student.className,
+                                          c?.getFullName ?? student.className,
                                   loading: () => student.className,
                                   error: (_, __) => student.className,
                                 );

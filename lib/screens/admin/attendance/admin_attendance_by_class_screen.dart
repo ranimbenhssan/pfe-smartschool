@@ -70,9 +70,9 @@ class AdminAttendanceByClassScreen extends ConsumerWidget {
                                 .map(
                                   (c) => DropdownMenuItem(
                                     value: c.id,
-                                    // FIX: getFullName() → "3 IOT 1"
+                                    // FIX: getFullName → "3 IOT 1"
                                     child: Text(
-                                      c.getFullName(),
+                                      c.getFullName,
                                       style: AppTypography.bodyMedium.copyWith(
                                         color:
                                             isDark
