@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -26,6 +27,19 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final pendingCount =
+        ref
+            .watch(
+              StreamProvider(
+                (ref) => FirebaseFirestore.instance
+                    .collection('password_reset_requests')
+                    .where('status', isEqualTo: 'pending')
+                    .snapshots()
+                    .map((s) => s.docs.length),
+              ),
+            )
+            .value ??
+        0;
 
     return Scaffold(
       backgroundColor:
@@ -33,7 +47,11 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
       appBar: _buildAppBar(isDark),
       body: IndexedStack(
         index: _selectedIndex,
-        children: const [_DashboardBody(), _StudentsTab(), _MoreMenu()],
+        children: [
+          const _DashboardBody(),
+          const _StudentsTab(),
+          _MoreMenu(pendingCount: pendingCount),
+        ],
       ),
       bottomNavigationBar: _buildBottomNav(isDark),
     );
@@ -601,7 +619,9 @@ class _StudentsTab extends ConsumerWidget {
 //  MORE MENU
 // ─────────────────────────────────────────
 class _MoreMenu extends StatelessWidget {
-  const _MoreMenu();
+  final int pendingCount;
+
+  const _MoreMenu({required this.pendingCount});
 
   @override
   Widget build(BuildContext context) {
@@ -702,7 +722,13 @@ class _MoreMenu extends StatelessWidget {
                     color: item.color.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Icon(item.icon, color: item.color, size: 20),
+                  child:
+                      item.label == 'Password Requests' && pendingCount > 0
+                          ? Badge(
+                            label: Text(pendingCount.toString()),
+                            child: Icon(item.icon, color: item.color, size: 20),
+                          )
+                          : Icon(item.icon, color: item.color, size: 20),
                 ),
                 const SizedBox(width: 14),
                 Expanded(

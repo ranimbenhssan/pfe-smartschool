@@ -90,14 +90,39 @@ class AuthService {
     required String password,
   }) async {
     try {
-      final credential = await _auth.signInWithEmailAndPassword(
-        email: email.trim(),
-        password: password,
-      );
-      if (credential.user == null) {
-        return AuthResult.error('Login failed. Please try again.');
+      UserCredential? credential;
+      try {
+        credential = await _auth.signInWithEmailAndPassword(
+          email: email.trim(),
+          password: password,
+        );
+      } on FirebaseAuthException catch (e) {
+        // If login fails, check if there's a temp_password set by admin
+        if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
+          final snap =
+              await _firestore
+                  .collection('users')
+                  .where('email', isEqualTo: email.trim())
+                  .limit(1)
+                  .get();
+          if (snap.docs.isNotEmpty) {
+            final tempPass =
+                snap.docs.first.data()['temp_password']?.toString();
+            if (tempPass != null && tempPass == password) {
+              // temp_password matches — the REST API update hasn't applied yet
+              // or failed; this is the fallback path
+              return AuthResult.error(
+                'Your password was reset but the update is still processing. '
+                'Please try again in a moment or contact the admin.',
+              );
+            }
+          }
+        }
+        return AuthResult.error(_mapFirebaseError(e.code));
       }
-      return AuthResult.success();
+      if (credential?.user == null) return AuthResult.error('Login failed.');
+      return AuthResult.success(userId: credential!.user!.uid);
+      ;
     } on FirebaseAuthException catch (e) {
       return AuthResult.error(_mapFirebaseError(e.code));
     } catch (e) {

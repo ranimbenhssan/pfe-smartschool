@@ -43,6 +43,7 @@ class AppRoutes {
   static const String adminSettingsAi = '/admin/settings/ai';
   static const String adminSemesters = '/admin/semesters';
   static const String adminPasswordRequests = '/admin/password-requests';
+  
 
   // ─── Teacher ───
   static const String teacherDashboard = '/teacher/dashboard';
