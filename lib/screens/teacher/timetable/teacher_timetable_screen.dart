@@ -211,40 +211,49 @@ class _TimetableContent extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Collect entries from ALL assigned classes
-    final allEntries = <TimetableModel>[];
-    for (final classId in teacher.assignedClassIds as List<String>) {
-      final async = ref.watch(timetableByClassProvider(classId));
-      async.whenData((list) => allEntries.addAll(list));
-    }
+    // Query directly by teacherId — only this teacher's entries, no filtering needed
+    final timetableAsync = ref.watch(
+      timetableByTeacherProvider(teacher.userId as String),
+    );
 
-    // Filter to displayed week type
-    final entries =
-        weekType.isEmpty
-            ? allEntries
-            : allEntries
-                .where((e) => e.weekType.isEmpty || e.weekType == weekType)
-                .toList();
-
-    if (entries.isEmpty) {
-      return EmptyState(
-        title: 'No Timetable',
-        message:
+    return timetableAsync.when(
+      loading: () => const LoadingWidget(),
+      error:
+          (e, _) => EmptyState(
+            title: 'Error',
+            message: e.toString(),
+            icon: Icons.error_outline_rounded,
+          ),
+      data: (allEntries) {
+        // Filter to displayed week type
+        final entries =
             weekType.isEmpty
-                ? 'No schedule found.'
-                : 'No schedule for $weekType.',
-        icon: Icons.calendar_today_rounded,
-      );
-    }
+                ? allEntries
+                : allEntries
+                    .where((e) => e.weekType.isEmpty || e.weekType == weekType)
+                    .toList();
 
-    return isDayView
-        ? _DayListView(entries: entries, dayName: dayName, isDark: isDark)
-        : _WeekGridView(
-          entries: entries,
-          weekStart: weekStart,
-          isDark: isDark,
-          onDayTap: onDayTap,
-        );
+        if (entries.isEmpty) {
+          return EmptyState(
+            title: 'No Timetable',
+            message:
+                weekType.isEmpty
+                    ? 'No schedule found.'
+                    : 'No schedule for $weekType.',
+            icon: Icons.calendar_today_rounded,
+          );
+        }
+
+        return isDayView
+            ? _DayListView(entries: entries, dayName: dayName, isDark: isDark)
+            : _WeekGridView(
+              entries: entries,
+              weekStart: weekStart,
+              isDark: isDark,
+              onDayTap: onDayTap,
+            );
+      },
+    );
   }
 }
 
