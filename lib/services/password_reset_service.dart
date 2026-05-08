@@ -79,59 +79,75 @@ class PasswordResetService {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  //  STEP 2 (Admin): Generate + apply new password via Firebase REST API
+  //  STEP 2 (Admin): Generate + apply new password
   //
-  //  Uses the Firebase Auth Admin REST endpoint:
-  //  POST https://identitytoolkit.googleapis.com/v1/accounts:update?key=API_KEY
+  //  Uses Firebase Auth REST API two-step flow (no Admin SDK needed):
+  //  Step A: sendOobCode  → gets an oobCode for the user's email
+  //  Step B: resetPassword → applies the new password using that oobCode
   //
-  //  This endpoint allows updating ANY user's password using their localId
-  //  (uid) — no need for the user's current password or idToken.
-  //  It requires the project's Web API key only.
+  //  Both endpoints only need the Web API key — no idToken or Admin SDK.
   // ─────────────────────────────────────────────────────────────────────────
   Future<String?> applyNewPassword({
     required String userId,
     required String newPassword,
   }) async {
     try {
-      // ── Call Firebase Auth REST API to update password ──────────────────
-      final response = await http.post(
+      final db = FirebaseFirestore.instance;
+
+      // Get the user's email from Firestore
+      final userDoc = await db.collection('users').doc(userId).get();
+      final email = userDoc.data()?['email']?.toString() ?? '';
+      if (email.isEmpty) return 'User email not found.';
+
+      // ── Step A: Request OOB code for password reset ──────────────────────
+      final oobResponse = await http.post(
         Uri.parse(
-          'https://identitytoolkit.googleapis.com/v1/accounts:update?key=$_apiKey',
+          'https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode'
+          '?key=$_apiKey',
         ),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'localId': userId,
-          'password': newPassword,
-          'returnSecureToken': false,
-        }),
+        body: jsonEncode({'requestType': 'PASSWORD_RESET', 'email': email}),
       );
 
-      final body = jsonDecode(response.body) as Map<String, dynamic>;
-
-      if (response.statusCode != 200) {
-        final errMsg = body['error']?['message']?.toString() ?? 'Unknown error';
-        debugPrint('[PasswordReset] REST API error: $errMsg');
-
-        // ADMIN_ONLY_OPERATION means the API key doesn't have permission.
-        // In that case fall back to storing the password for manual login flow.
-        if (errMsg == 'ADMIN_ONLY_OPERATION') {
-          return _fallbackStoreOnly(userId, newPassword);
-        }
-        return 'Failed to update password: $errMsg';
+      final oobBody = jsonDecode(oobResponse.body) as Map<String, dynamic>;
+      if (oobResponse.statusCode != 200) {
+        final msg = oobBody['error']?['message']?.toString() ?? 'Unknown';
+        return 'Could not generate reset code: $msg';
       }
 
-      // ── Mark request resolved ────────────────────────────────────────────
-      await _db.collection('password_reset_requests').doc(userId).update({
+      final oobCode = oobBody['oobCode']?.toString() ?? '';
+      if (oobCode.isEmpty) return 'No OOB code returned.';
+
+      // ── Step B: Apply new password using OOB code ────────────────────────
+      final resetResponse = await http.post(
+        Uri.parse(
+          'https://identitytoolkit.googleapis.com/v1/accounts:resetPassword'
+          '?key=$_apiKey',
+        ),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'oobCode': oobCode, 'newPassword': newPassword}),
+      );
+
+      final resetBody = jsonDecode(resetResponse.body) as Map<String, dynamic>;
+      if (resetResponse.statusCode != 200) {
+        final msg = resetBody['error']?['message']?.toString() ?? 'Unknown';
+        return 'Could not reset password: $msg';
+      }
+
+      // ── Mark request resolved + set first_login ──────────────────────────
+      await db.collection('password_reset_requests').doc(userId).update({
         'status': 'resolved',
         'newPassword': newPassword,
         'resolvedAt': FieldValue.serverTimestamp(),
       });
 
-      // ── Set first_login = true so user is forced to change password ───────
-      await _db.collection('users').doc(userId).update({'first_login': true});
+      await db.collection('users').doc(userId).update({
+        'first_login': true,
+        'temp_password': FieldValue.delete(), // clean up any previous fallback
+      });
 
-      // ── Notify the user ───────────────────────────────────────────────────
-      await _db.collection('notifications').add({
+      // ── Notify the user in-app ────────────────────────────────────────────
+      await db.collection('notifications').add({
         'userId': userId,
         'senderId': 'admin',
         'senderName': 'Admin',
@@ -140,7 +156,7 @@ class PasswordResetService {
         'message':
             'Your password has been reset by the admin.\n\n'
             'New temporary password: $newPassword\n\n'
-            'Please log in with this password and change it immediately.',
+            'Log in with this password — you will be asked to change it.',
         'messageType': 'password_reset',
         'isRead': false,
         'attachments': [],
@@ -152,42 +168,9 @@ class PasswordResetService {
 
       return null; // success
     } catch (e) {
+      debugPrint('[PasswordReset] applyNewPassword error: $e');
       return 'Error: $e';
     }
-  }
-
-  // ─── Fallback: store password in Firestore for manual login ───────────────
-  // If REST API fails (ADMIN_ONLY_OPERATION), store temp_password in Firestore.
-  // The login screen checks for it and signs the user in via secondary app.
-  Future<String?> _fallbackStoreOnly(String userId, String newPassword) async {
-    await _db.collection('password_reset_requests').doc(userId).update({
-      'status': 'resolved',
-      'newPassword': newPassword,
-      'resolvedAt': FieldValue.serverTimestamp(),
-    });
-    await _db.collection('users').doc(userId).update({
-      'first_login': true,
-      'temp_password': newPassword,
-    });
-    await _db.collection('notifications').add({
-      'userId': userId,
-      'senderId': 'admin',
-      'senderName': 'Admin',
-      'senderRole': 'admin',
-      'title': 'Your New Password',
-      'message':
-          'Your password has been reset.\n\n'
-          'New temporary password: $newPassword\n\n'
-          'Log in with this password — you will be asked to change it.',
-      'messageType': 'password_reset',
-      'isRead': false,
-      'attachments': [],
-      'recipientLabel': '',
-      'replyToId': '',
-      'replyToTitle': '',
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-    return null;
   }
 
   // ─── Generate a secure random password ───────────────────────────────────
