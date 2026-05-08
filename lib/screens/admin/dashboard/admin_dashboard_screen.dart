@@ -627,6 +627,12 @@ class _MoreMenu extends StatelessWidget {
         route: AppRoutes.adminRfid,
       ),
       _MoreItem(
+        label: 'Password Requests',
+        icon: Icons.lock_reset_rounded,
+        color: AppColors.warning,
+        route: AppRoutes.adminPasswordRequests,
+      ),
+      _MoreItem(
         label: 'Attendance Reports',
         icon: Icons.bar_chart_rounded,
         color: AppColors.warning,

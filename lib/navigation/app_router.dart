@@ -34,6 +34,7 @@ import '../screens/admin/messages/admin_messages_send_screen.dart';
 import '../screens/admin/timetable/admin_timetable_screen.dart';
 import '../screens/admin/timetable/admin_timetable_form_screen.dart';
 import '../screens/admin/semester/admin_semester_screen.dart';
+import '../screens/admin/settings/admin_password_requests_screen.dart';
 import 'package:pfe_smartschool/screens/admin/settings/admin_settings_screen.dart';
 import '../screens/teacher/dashboard/teacher_dashboard_screen.dart';
 import '../screens/teacher/attendance/teacher_attendance_screen.dart';
@@ -153,6 +154,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.adminStudents,
         name: 'admin-students',
         builder: (context, state) => const AdminStudentsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.adminPasswordRequests,
+        builder: (context, state) => const AdminPasswordRequestsScreen(),
       ),
       GoRoute(
         path: AppRoutes.adminStudentAdd,
