@@ -7,9 +7,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../firebase_options.dart';
 
-final excelImportServiceProvider = Provider<ExcelImportService>((ref) {
-  return ExcelImportService();
-});
+final excelImportServiceProvider = Provider<ExcelImportService>(
+  (ref) => ExcelImportService(),
+);
 
 class ImportResult {
   final int studentsCreated;
@@ -44,14 +44,11 @@ class ImportedCredential {
 }
 
 class ExcelImportService {
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
-  static const String _domain = 'smartschool.com';
+  final _db = FirebaseFirestore.instance;
+  static const _domain = 'smartschool.com';
 
   // ─────────────────────────────────────────────────────────────────────────
-  //  EMAIL GENERATION
-  //  "Ranim Ben Hassan" → "ranim.ben.hassan@smartschool.com"
-  //  Handles accented chars, removes special chars, dots instead of spaces.
-  //  Appends _N suffix if email already taken in the batch.
+  //  EMAIL — "Ranim Ben Hassan" → "ranim.ben.hassan@smartschool.com"
   // ─────────────────────────────────────────────────────────────────────────
   String _generateEmail(String fullName, Set<String> usedEmails) {
     final base = fullName
@@ -66,41 +63,27 @@ class ExcelImportService {
         .replaceAll(RegExp(r'[^a-z0-9 ]'), '')
         .trim()
         .replaceAll(RegExp(r'\s+'), '.');
-
     String email = '$base@$_domain';
-    int suffix = 1;
-    while (usedEmails.contains(email)) {
-      email = '${base}_$suffix@$_domain';
-      suffix++;
-    }
+    int n = 1;
+    while (usedEmails.contains(email)) email = '${base}_${n++}@$_domain';
     usedEmails.add(email);
     return email;
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  //  PASSWORD GENERATION — 10 chars, mixed
-  // ─────────────────────────────────────────────────────────────────────────
   String _generatePassword({int length = 10}) {
-    const chars =
+    const c =
         'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#\$';
     final rng = Random.secure();
-    return List.generate(
-      length,
-      (_) => chars[rng.nextInt(chars.length)],
-    ).join();
+    return List.generate(length, (_) => c[rng.nextInt(c.length)]).join();
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  //  EXPORT CREDENTIALS TO EXCEL BYTES
-  //  Call this after importFromBytes to get the credentials file.
-  //  Columns: Role | Full Name | Email | Password | Class
+  //  EXPORT CREDENTIALS
   // ─────────────────────────────────────────────────────────────────────────
   Uint8List exportCredentials(List<ImportedCredential> credentials) {
     final excel = Excel.createExcel();
     final sheet = excel['Credentials'];
     excel.setDefaultSheet('Credentials');
-
-    // Header
     final headers = ['Role', 'Full Name', 'Email', 'Password', 'Class'];
     for (int c = 0; c < headers.length; c++) {
       final cell = sheet.cell(
@@ -109,8 +92,6 @@ class ExcelImportService {
       cell.value = TextCellValue(headers[c]);
       cell.cellStyle = CellStyle(bold: true);
     }
-
-    // Data
     for (int r = 0; r < credentials.length; r++) {
       final cr = credentials[r];
       final row = [cr.role, cr.name, cr.email, cr.password, cr.className];
@@ -120,13 +101,11 @@ class ExcelImportService {
             .value = TextCellValue(row[c]);
       }
     }
-
     sheet.setColumnWidth(0, 12);
     sheet.setColumnWidth(1, 26);
     sheet.setColumnWidth(2, 36);
     sheet.setColumnWidth(3, 15);
-    sheet.setColumnWidth(4, 20);
-
+    sheet.setColumnWidth(4, 22);
     return Uint8List.fromList(excel.encode()!);
   }
 
@@ -134,16 +113,13 @@ class ExcelImportService {
   //  MAIN IMPORT
   // ─────────────────────────────────────────────────────────────────────────
   Future<ImportResult> importFromBytes(Uint8List bytes) async {
-    int studentsCreated = 0;
-    int teachersCreated = 0;
-    int classesCreated = 0;
+    int studentsCreated = 0, teachersCreated = 0, classesCreated = 0;
     final errors = <String>[];
     final credentials = <ImportedCredential>[];
     final usedEmails = <String>{};
 
     try {
       final excel = Excel.decodeBytes(bytes);
-
       FirebaseApp secondaryApp;
       try {
         secondaryApp = Firebase.app('import_secondary');
@@ -159,7 +135,6 @@ class ExcelImportService {
         final sheet = excel.tables[sheetName]!;
         final rows = sheet.rows;
         if (rows.isEmpty) continue;
-
         final lower = sheetName.toLowerCase().trim();
 
         if (lower.contains('class')) {
@@ -182,7 +157,6 @@ class ExcelImportService {
           );
         }
       }
-
       await secondaryAuth.signOut();
     } catch (e) {
       errors.add('Fatal error: $e');
@@ -199,7 +173,16 @@ class ExcelImportService {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  //  IMPORT CLASSES — Name | Grade | Level (header optional, positional ok)
+  //  IMPORT CLASSES
+  //
+  //  Supported formats:
+  //  A) With header row:    Name | Grade | Level | Group (optional)
+  //  B) No header row:      DNI  | 1     | 3     | TP 2  (positional)
+  //
+  //  Group column is OPTIONAL — if empty/absent the class is "3 DNI 1"
+  //  If present (e.g. "TP 2") the class is "3 DNI 1 TP 2"
+  //
+  //  Duplicate check: full displayName (level + name + grade [+ group])
   // ─────────────────────────────────────────────────────────────────────────
   Future<int> _importClasses(
     List<List<Data?>> rows,
@@ -208,12 +191,21 @@ class ExcelImportService {
     int count = 0;
     if (rows.isEmpty) return 0;
 
+    // Detect header row
     final firstVals =
         rows[0]
             .map((c) => c?.value?.toString().toLowerCase().trim() ?? '')
             .toList();
-    final known = {'name', 'grade', 'level', 'class', 'nom'};
-    final isHeader = firstVals.any((v) => known.contains(v));
+    const knownHeaders = {
+      'name',
+      'grade',
+      'level',
+      'class',
+      'nom',
+      'groupe',
+      'group',
+    };
+    final isHeader = firstVals.any((v) => knownHeaders.contains(v));
 
     final Map<String, int> headers;
     final int start;
@@ -221,66 +213,60 @@ class ExcelImportService {
       headers = _getHeaders(rows[0]);
       start = 1;
     } else {
-      headers = {'name': 0, 'grade': 1, 'level': 2};
+      // Positional: col0=Name, col1=Grade, col2=Level, col3=Group(optional)
+      headers = {'name': 0, 'grade': 1, 'level': 2, 'group': 3};
       start = 0;
     }
 
     for (int i = start; i < rows.length; i++) {
       final row = rows[i];
       if (_isRowEmpty(row)) continue;
+
       try {
         final name =
             _cell(row, headers, 'name') ?? _cell(row, headers, 'class') ?? '';
         final grade = _cell(row, headers, 'grade') ?? '';
         final level = _cell(row, headers, 'level') ?? '';
-        // Group is optional — e.g. "TP 1", "TP 2"
+        // Group is optional — "TP 1", "TP 2" etc.
         final group =
-            _cell(row, headers, 'group') ??
-            _cell(row, headers, 'tp') ??
-            _cell(row, headers, 'groupe') ??
-            '';
+            _cell(row, headers, 'group') ?? _cell(row, headers, 'groupe') ?? '';
 
         if (name.isEmpty) {
           errors.add('Row ${i + 1} (Classes): Missing class name');
           continue;
         }
 
+        // Build the full display name
+        final displayName = _buildDisplayName(level, name, grade, group);
+
+        // Duplicate check on full displayName
         final existing =
             await _db
                 .collection('classes')
-                .where(
-                  'displayName',
-                  isEqualTo: _buildDisplayName(level, name, grade, group),
-                )
+                .where('displayName', isEqualTo: displayName)
                 .limit(1)
                 .get();
 
         if (existing.docs.isNotEmpty) {
-          errors.add(
-            'Class "${_buildDisplayName(level, name, grade, group)}" already exists — skipped',
-          );
-
-          if (existing.docs.isNotEmpty) {
-            errors.add('Class "$level $name $grade" already exists — skipped');
-            continue;
-          }
-
-          final id = _db.collection('classes').doc().id;
-          await _db.collection('classes').doc(id).set({
-            'name': name,
-            'grade': grade,
-            'level': level,
-            'displayName': _buildDisplayName(level, name, grade, group),
-            'group': group,
-            'teacherIds': [],
-            'teacherNames': [],
-            'roomId': '',
-            'roomName': '',
-            'studentCount': 0,
-            'createdAt': FieldValue.serverTimestamp(),
-          });
-          count++;
+          errors.add('Class "$displayName" already exists — skipped');
+          continue;
         }
+
+        final classId = _db.collection('classes').doc().id;
+        await _db.collection('classes').doc(classId).set({
+          'name': name,
+          'grade': grade,
+          'level': level,
+          'group': group,
+          'displayName': displayName,
+          'teacherIds': [],
+          'teacherNames': [],
+          'roomId': '',
+          'roomName': '',
+          'studentCount': 0,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+        count++;
       } catch (e) {
         errors.add('Row ${i + 1} (Classes): $e');
       }
@@ -290,7 +276,7 @@ class ExcelImportService {
 
   // ─────────────────────────────────────────────────────────────────────────
   //  IMPORT TEACHERS — Name | RfidTag (optional)
-  //  Email auto-generated from name. Subject/classes assigned by admin later.
+  //  Email and password are AUTO-GENERATED.
   // ─────────────────────────────────────────────────────────────────────────
   Future<int> _importTeachers(
     List<List<Data?>> rows,
@@ -306,8 +292,9 @@ class ExcelImportService {
         rows[0]
             .map((c) => c?.value?.toString().toLowerCase().trim() ?? '')
             .toList();
-    final known = {'name', 'nom', 'rfid', 'rfidtag'};
-    final isHeader = firstVals.any((v) => known.contains(v));
+    final isHeader = firstVals.any(
+      (v) => {'name', 'nom', 'rfid', 'rfidtag'}.contains(v),
+    );
 
     final Map<String, int> headers;
     final int start;
@@ -346,7 +333,6 @@ class ExcelImportService {
           errors.add('Teacher "$name" ($email): Auth error — $e');
           continue;
         }
-
         final uid = cred.user!.uid;
 
         await _db.collection('users').doc(uid).set({
@@ -356,7 +342,6 @@ class ExcelImportService {
           'first_login': true,
           'createdAt': FieldValue.serverTimestamp(),
         });
-
         await _db.collection('teachers').doc(uid).set({
           'userId': uid,
           'name': name,
@@ -388,8 +373,15 @@ class ExcelImportService {
 
   // ─────────────────────────────────────────────────────────────────────────
   //  IMPORT STUDENTS — Name | Class | RfidTag (optional)
-  //  Email auto-generated from name.
-  //  Class matched by displayName ("1 DNI 2") or name field.
+  //
+  //  The Class column contains the FULL class name as displayed:
+  //    • Without group: "3 DNI 1"
+  //    • With group:    "3 IOT 1 TP 2"
+  //
+  //  Class resolution order:
+  //  1. Exact match on displayName field (e.g. "3 IOT 1 TP 2")
+  //  2. Exact match on name field (e.g. "IOT")
+  //  3. Split into parts → query level + name + grade separately
   // ─────────────────────────────────────────────────────────────────────────
   Future<int> _importStudents(
     List<List<Data?>> rows,
@@ -405,8 +397,9 @@ class ExcelImportService {
         rows[0]
             .map((c) => c?.value?.toString().toLowerCase().trim() ?? '')
             .toList();
-    final known = {'name', 'nom', 'class', 'classe', 'rfid', 'rfidtag'};
-    final isHeader = firstVals.any((v) => known.contains(v));
+    final isHeader = firstVals.any(
+      (v) => {'name', 'nom', 'class', 'classe', 'rfid', 'rfidtag'}.contains(v),
+    );
 
     final Map<String, int> headers;
     final int start;
@@ -447,70 +440,24 @@ class ExcelImportService {
           errors.add('Student "$name" ($email): Auth error — $e');
           continue;
         }
-
         final uid = cred.user!.uid;
 
-        // Resolve class — displayName first ("1 DNI 2"), then name field
+        // ── Resolve class by FULL displayName ──────────────────────────────
         String classId = '';
         String resolvedClassName = className;
         String level = '';
 
         if (className.isNotEmpty) {
-          // Attempt 1: exact displayName match e.g. "1 DNI 2"
-          var snap =
-              await _db
-                  .collection('classes')
-                  .where('displayName', isEqualTo: className)
-                  .limit(1)
-                  .get();
-
-          // Attempt 2: exact name match (class name only e.g. "DNI")
-          if (snap.docs.isEmpty) {
-            snap =
-                await _db
-                    .collection('classes')
-                    .where('name', isEqualTo: className)
-                    .limit(1)
-                    .get();
-          }
-
-          // Attempt 3: split "Level Name Grade" into parts and query individually
-          // Handles "1 DNI 2" → level="1", name="DNI", grade="2"
-          if (snap.docs.isEmpty) {
-            final parts = className.trim().split(RegExp(r'\s+'));
-            if (parts.length >= 3) {
-              final lvl = parts.first;
-              final gr = parts.last;
-              final nm = parts.sublist(1, parts.length - 1).join(' ');
-              snap =
-                  await _db
-                      .collection('classes')
-                      .where('level', isEqualTo: lvl)
-                      .where('name', isEqualTo: nm)
-                      .where('grade', isEqualTo: gr)
-                      .limit(1)
-                      .get();
-            } else if (parts.length == 2) {
-              // "DNI 1" → name="DNI", grade="1"
-              snap =
-                  await _db
-                      .collection('classes')
-                      .where('name', isEqualTo: parts[0])
-                      .where('grade', isEqualTo: parts[1])
-                      .limit(1)
-                      .get();
-            }
-          }
-
-          if (snap.docs.isNotEmpty) {
-            classId = snap.docs.first.id;
-            final d = snap.docs.first.data();
+          final snap = await _resolveClass(className);
+          if (snap != null) {
+            classId = snap.id;
+            final d = snap.data();
             resolvedClassName =
-                d['displayName']?.toString() ??
-                d['name']?.toString() ??
+                d?['displayName']?.toString() ??
+                d?['name']?.toString() ??
                 className;
-            level = d['level']?.toString() ?? '';
-            await snap.docs.first.reference.update({
+            level = d?['level']?.toString() ?? '';
+            await snap.reference.update({
               'studentCount': FieldValue.increment(1),
             });
           } else {
@@ -527,7 +474,6 @@ class ExcelImportService {
           'first_login': true,
           'createdAt': FieldValue.serverTimestamp(),
         });
-
         await _db.collection('students').doc(uid).set({
           'userId': uid,
           'name': name,
@@ -557,7 +503,87 @@ class ExcelImportService {
     return count;
   }
 
-  // ─── Helpers ──────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
+  //  CLASS RESOLUTION
+  //
+  //  Tries three strategies in order:
+  //  1. displayName == "3 IOT 1 TP 2"   (full match including group)
+  //  2. name == className                (plain name match)
+  //  3. Split by spaces → level + name + grade parts query
+  // ─────────────────────────────────────────────────────────────────────────
+  Future<DocumentSnapshot<Map<String, dynamic>>?> _resolveClass(
+    String className,
+  ) async {
+    // 1. Exact displayName
+    var snap =
+        await _db
+            .collection('classes')
+            .where('displayName', isEqualTo: className)
+            .limit(1)
+            .get();
+    if (snap.docs.isNotEmpty) return snap.docs.first;
+
+    // 2. Exact name
+    snap =
+        await _db
+            .collection('classes')
+            .where('name', isEqualTo: className)
+            .limit(1)
+            .get();
+    if (snap.docs.isNotEmpty) return snap.docs.first;
+
+    // 3. Split "level name grade [group]" — try level + name + grade
+    final parts = className.trim().split(RegExp(r'\s+'));
+    if (parts.length >= 3) {
+      // Try: parts[0]=level, parts[1]=name, parts[2]=grade
+      snap =
+          await _db
+              .collection('classes')
+              .where('level', isEqualTo: parts[0])
+              .where('name', isEqualTo: parts[1])
+              .where('grade', isEqualTo: parts[2])
+              .limit(1)
+              .get();
+      if (snap.docs.isNotEmpty) return snap.docs.first;
+
+      // Try: parts[0]=level, parts[1..n-1]=name, parts[n]=grade
+      if (parts.length >= 4) {
+        final lvl = parts.first;
+        final gr = parts.last;
+        final nm = parts.sublist(1, parts.length - 1).join(' ');
+        snap =
+            await _db
+                .collection('classes')
+                .where('level', isEqualTo: lvl)
+                .where('name', isEqualTo: nm)
+                .where('grade', isEqualTo: gr)
+                .limit(1)
+                .get();
+        if (snap.docs.isNotEmpty) return snap.docs.first;
+      }
+    }
+    return null;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  //  BUILD DISPLAY NAME
+  //  "3" + "IOT" + "1" + "TP 2" → "3 IOT 1 TP 2"
+  //  "3" + "DNI" + "2" + ""     → "3 DNI 2"
+  // ─────────────────────────────────────────────────────────────────────────
+  String _buildDisplayName(
+    String level,
+    String name,
+    String grade,
+    String group,
+  ) {
+    final base = '$level $name $grade'.trim();
+    final g = group.trim();
+    return g.isEmpty ? base : '$base $g';
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  //  HELPERS
+  // ─────────────────────────────────────────────────────────────────────────
   Map<String, int> _getHeaders(List<Data?> headerRow) {
     final map = <String, int>{};
     for (int i = 0; i < headerRow.length; i++) {
@@ -576,14 +602,4 @@ class ExcelImportService {
   bool _isRowEmpty(List<Data?> row) => row.every(
     (c) => c == null || c.value == null || c.value.toString().trim().isEmpty,
   );
-  String _buildDisplayName(
-    String level,
-    String name,
-    String grade,
-    String group,
-  ) {
-    final base = '$level $name $grade'.trim();
-    final g = group.trim();
-    return g.isEmpty ? base : '$base $g';
-  }
 }
