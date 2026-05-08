@@ -337,9 +337,10 @@ class ExcelImportService {
 
         await _db.collection('users').doc(uid).set({
           'name': name,
-          'email': email,
+          'email': email.trim(),
           'role': 'teacher',
           'first_login': true,
+          'temp_password': password, // ← ADD: stored for admin password reset
           'createdAt': FieldValue.serverTimestamp(),
         });
         await _db.collection('teachers').doc(uid).set({
@@ -469,9 +470,10 @@ class ExcelImportService {
 
         await _db.collection('users').doc(uid).set({
           'name': name,
-          'email': email,
+          'email': email.trim(),
           'role': 'student',
           'first_login': true,
+          'temp_password': password, // ← ADD: stored for admin password reset
           'createdAt': FieldValue.serverTimestamp(),
         });
         await _db.collection('students').doc(uid).set({
