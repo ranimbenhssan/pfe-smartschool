@@ -30,18 +30,19 @@ class TimetableImportService {
   // ─────────────────────────────────────────────────────────────────────────
   //  IMPORT FROM BYTES
   //
-  //  Sheet 1: "Week A"  |  Sheet 2: "Week B"
-  //  Row 1: Class name  (e.g. "3 IOT 1 TP 2")
-  //  Row 2: Headers — Day | Time Slot | Subject | Teacher | Room
-  //  Row 3+: Data
+  //  [startDate]     — semester start date (used to calculate A/B week)
+  //  [firstWeekType] — 'A' or 'B': which week type the start date belongs to
   //
   //  After import:
-  //  • Replaces all existing Week A / B entries for the class.
-  //  • Updates every teacher's assignedClassIds / assignedClassNames
-  //    to include this class (if not already there).
+  //  1. Replaces existing Week A / B entries for the class.
+  //  2. Updates teacher assignedClassIds.
+  //  3. Creates / updates the active semester in Firestore with the given
+  //     startDate and firstWeekType so all dashboards auto-calculate week type.
   // ─────────────────────────────────────────────────────────────────────────
   Future<TimetableImportResult> importFromBytes(
     Uint8List bytes, {
+    DateTime? startDate,
+    String firstWeekType = 'A',
     bool replaceExisting = true,
   }) async {
     int created = 0;
@@ -49,7 +50,6 @@ class TimetableImportService {
     String className = '';
     final warnings = <String>[];
 
-    // Track teachers referenced in this file so we can update their classes
     final Map<String, String> teacherIdToName = {};
     String resolvedClassId = '';
     String resolvedClassName = '';
@@ -71,7 +71,6 @@ class TimetableImportService {
         final classNameRaw = rows[0]
             .map((c) => c?.value?.toString().trim() ?? '')
             .firstWhere((v) => v.isNotEmpty, orElse: () => '');
-
         if (classNameRaw.isEmpty) {
           warnings.add('Sheet "$sheetName": Row 1 must contain the class name');
           continue;
@@ -82,7 +81,7 @@ class TimetableImportService {
         final classSnap = await _resolveClass(classNameRaw);
         if (classSnap == null) {
           warnings.add(
-            'Sheet "$sheetName": Class "$classNameRaw" not found in Firestore — skipped',
+            'Sheet "$sheetName": Class "$classNameRaw" not found — skipped',
           );
           continue;
         }
@@ -90,7 +89,7 @@ class TimetableImportService {
         resolvedClassName =
             classSnap.data()?['displayName']?.toString() ?? classNameRaw;
 
-        // ── Delete existing entries for this class + weekType ─────────────
+        // ── Delete existing entries ───────────────────────────────────────
         if (replaceExisting) {
           final existing =
               await _db
@@ -160,7 +159,6 @@ class TimetableImportService {
             continue;
           }
 
-          // ── Resolve teacher ───────────────────────────────────────────
           String teacherId = '';
           String teacherName = teacherRaw;
           if (teacherRaw.isNotEmpty) {
@@ -168,7 +166,7 @@ class TimetableImportService {
             if (tSnap != null) {
               teacherId = tSnap.id;
               teacherName = tSnap.data()?['name']?.toString() ?? teacherRaw;
-              teacherIdToName[teacherId] = teacherName; // track for later
+              teacherIdToName[teacherId] = teacherName;
             } else {
               warnings.add(
                 'Row ${i + 1}: Teacher "$teacherRaw" not found — saved by name only',
@@ -204,18 +202,26 @@ class TimetableImportService {
             batchCount = 0;
           }
         }
-
         if (batchCount > 0) await writeBatch.commit();
       }
 
       // ── Update teacher assignments ────────────────────────────────────────
-      // For every teacher found in the timetable, add the class to their
-      // assignedClassIds / assignedClassNames if not already there.
       if (resolvedClassId.isNotEmpty && teacherIdToName.isNotEmpty) {
         await _updateTeacherAssignments(
           teacherIdToName: teacherIdToName,
           classId: resolvedClassId,
           className: resolvedClassName,
+          warnings: warnings,
+        );
+      }
+
+      // ── Create / update active semester with startDate ────────────────────
+      // This is the core of the auto-rotation: every dashboard reads
+      // activeSemesterProvider → weekTypeFor(today) to determine A or B.
+      if (startDate != null) {
+        await _upsertActiveSemester(
+          startDate: startDate,
+          firstWeekType: firstWeekType,
           warnings: warnings,
         );
       }
@@ -230,12 +236,79 @@ class TimetableImportService {
       className: className,
       warnings: warnings,
     );
+    
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  //  UPSERT ACTIVE SEMESTER
+  //
+  //  If an active semester already exists → update its startDate and
+  //  firstWeekType (admin may just be updating after seeing the wrong week).
+  //  If no active semester exists → create one.
+  //  End date is set to the standard semester end (May 30 or Dec 30).
+  // ─────────────────────────────────────────────────────────────────────────
+  Future<void> _upsertActiveSemester({
+    required DateTime startDate,
+    required String firstWeekType,
+    required List<String> warnings,
+  }) async {
+    try {
+      // Standard end dates
+      final endDate =
+          startDate.month <= 6
+              ? DateTime(startDate.year, 5, 30) // Semester 2: → May 30
+              : DateTime(startDate.year, 12, 30); // Semester 1: → Dec 30
+
+      final semName =
+          startDate.month <= 6
+              ? 'Semester 2 ${startDate.year - 1}-${startDate.year}'
+              : 'Semester 1 ${startDate.year}-${startDate.year + 1}';
+
+      // Check if an active semester exists
+      final existing =
+          await _db
+              .collection('semesters')
+              .where('isActive', isEqualTo: true)
+              .limit(1)
+              .get();
+
+      if (existing.docs.isNotEmpty) {
+        // Update existing
+        await existing.docs.first.reference.update({
+          'startDate': Timestamp.fromDate(startDate),
+          'firstWeekType': firstWeekType,
+          'endDate': Timestamp.fromDate(endDate),
+          'name': semName,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+        debugPrint(
+          '[TimetableImport] Updated active semester: $semName '
+          '(starts $startDate, Week $firstWeekType first)',
+        );
+      } else {
+        // Create new active semester
+        final id = _db.collection('semesters').doc().id;
+        await _db.collection('semesters').doc(id).set({
+          'name': semName,
+          'startDate': Timestamp.fromDate(startDate),
+          'endDate': Timestamp.fromDate(endDate),
+          'firstWeekType': firstWeekType,
+          'isActive': true,
+          'fixedHolidays':
+              SemesterModel.defaultFixedHolidays.map((h) => h.toMap()).toList(),
+          'schoolClosures': [],
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+        debugPrint('[TimetableImport] Created active semester: $semName');
+      }
+    } catch (e) {
+      warnings.add('Could not update semester config: $e');
+      debugPrint('[TimetableImport] semester upsert error: $e');
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
   //  UPDATE TEACHER ASSIGNMENTS
-  //  Adds the class to each teacher's assignedClassIds/assignedClassNames
-  //  using FieldValue.arrayUnion (idempotent — safe to call multiple times).
   // ─────────────────────────────────────────────────────────────────────────
   Future<void> _updateTeacherAssignments({
     required Map<String, String> teacherIdToName,
@@ -244,18 +317,13 @@ class TimetableImportService {
     required List<String> warnings,
   }) async {
     for (final entry in teacherIdToName.entries) {
-      final teacherId = entry.key;
-      final teacherName = entry.value;
       try {
-        await _db.collection('teachers').doc(teacherId).update({
+        await _db.collection('teachers').doc(entry.key).update({
           'assignedClassIds': FieldValue.arrayUnion([classId]),
           'assignedClassNames': FieldValue.arrayUnion([className]),
         });
-        debugPrint(
-          '[TimetableImport] Updated teacher $teacherName → $className',
-        );
       } catch (e) {
-        warnings.add('Could not update teacher "$teacherName" assignments: $e');
+        warnings.add('Could not update teacher "${entry.value}": $e');
       }
     }
   }
@@ -263,7 +331,6 @@ class TimetableImportService {
   // ─────────────────────────────────────────────────────────────────────────
   //  HELPERS
   // ─────────────────────────────────────────────────────────────────────────
-
   Map<String, int> _parseHeaders(List<Data?> row) {
     final map = <String, int>{};
     for (int i = 0; i < row.length; i++) {
@@ -297,31 +364,30 @@ class TimetableImportService {
     const map = {
       'mon': 'Monday',
       'monday': 'Monday',
-      'tue': 'Tuesday',
-      'tuesday': 'Tuesday',
-      'wed': 'Wednesday',
-      'wednesday': 'Wednesday',
-      'thu': 'Thursday',
-      'thursday': 'Thursday',
-      'fri': 'Friday',
-      'friday': 'Friday',
       'lun': 'Monday',
       'lundi': 'Monday',
+      'tue': 'Tuesday',
+      'tuesday': 'Tuesday',
       'mar': 'Tuesday',
       'mardi': 'Tuesday',
+      'wed': 'Wednesday',
+      'wednesday': 'Wednesday',
       'mer': 'Wednesday',
       'mercredi': 'Wednesday',
+      'thu': 'Thursday',
+      'thursday': 'Thursday',
       'jeu': 'Thursday',
       'jeudi': 'Thursday',
+      'fri': 'Friday',
+      'friday': 'Friday',
       'ven': 'Friday',
       'vendredi': 'Friday',
     };
     final lower = raw.toLowerCase().trim();
     if (map.containsKey(lower)) return map[lower]!;
     for (final k in map.keys) {
-      if (lower.startsWith(k.substring(0, k.length.clamp(0, 3)))) {
+      if (lower.startsWith(k.substring(0, k.length.clamp(0, 3))))
         return map[k]!;
-      }
     }
     return '';
   }
@@ -337,10 +403,10 @@ class TimetableImportService {
   }
 
   String? _normTime(String t) {
-    final parts = t.split(':');
-    if (parts.length != 2) return null;
-    final h = int.tryParse(parts[0]);
-    final m = int.tryParse(parts[1]);
+    final p = t.split(':');
+    if (p.length != 2) return null;
+    final h = int.tryParse(p[0]);
+    final m = int.tryParse(p[1]);
     if (h == null || m == null) return null;
     return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
   }
@@ -348,7 +414,6 @@ class TimetableImportService {
   Future<DocumentSnapshot<Map<String, dynamic>>?> _resolveClass(
     String name,
   ) async {
-    // 1. exact displayName
     var snap =
         await _db
             .collection('classes')
@@ -356,8 +421,6 @@ class TimetableImportService {
             .limit(1)
             .get();
     if (snap.docs.isNotEmpty) return snap.docs.first;
-
-    // 2. exact name field
     snap =
         await _db
             .collection('classes')
@@ -365,19 +428,14 @@ class TimetableImportService {
             .limit(1)
             .get();
     if (snap.docs.isNotEmpty) return snap.docs.first;
-
-    // 3. split "level name grade [group]"
     final parts = name.trim().split(RegExp(r'\s+'));
     if (parts.length >= 3) {
-      final lvl = parts.first;
-      final gr = parts[1]; // might be grade
-      final nm = parts.sublist(2).join(' ');
       snap =
           await _db
               .collection('classes')
-              .where('level', isEqualTo: lvl)
-              .where('name', isEqualTo: nm)
-              .where('grade', isEqualTo: gr)
+              .where('level', isEqualTo: parts[0])
+              .where('name', isEqualTo: parts[1])
+              .where('grade', isEqualTo: parts[2])
               .limit(1)
               .get();
       if (snap.docs.isNotEmpty) return snap.docs.first;
@@ -395,14 +453,11 @@ class TimetableImportService {
             .limit(1)
             .get();
     if (snap.docs.isNotEmpty) return snap.docs.first;
-
-    // partial match
     final all = await _db.collection('teachers').get();
     for (final doc in all.docs) {
       final n = doc.data()['name']?.toString().toLowerCase() ?? '';
-      if (n.contains(name.toLowerCase()) || name.toLowerCase().contains(n)) {
+      if (n.contains(name.toLowerCase()) || name.toLowerCase().contains(n))
         return doc;
-      }
     }
     return null;
   }

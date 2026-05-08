@@ -85,12 +85,13 @@ final isTodaySchoolDayProvider = Provider<bool>((ref) {
 //  These replace the identical providers that were in timetable_provider.dart.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Class timetable filtered to the current week type.
-/// Returns empty list on school closures / holidays.
+/// Class timetable — ALL entries regardless of day/holiday.
+/// Week-type filter applied only when an active semester exists.
+/// The dashboard séances widget handles "no classes today" display.
 final timetableByClassProvider =
     StreamProvider.family<List<TimetableModel>, String>((ref, classId) {
-      if (!ref.watch(isTodaySchoolDayProvider)) return Stream.value([]);
-      final weekType = ref.watch(currentWeekTypeProvider);
+      if (classId.isEmpty) return Stream.value([]);
+      final weekType = ref.watch(currentWeekTypeProvider); // '' if no semester
 
       return FirebaseFirestore.instance
           .collection('timetable')
@@ -100,15 +101,15 @@ final timetableByClassProvider =
             (snap) =>
                 snap.docs
                     .map(TimetableModel.fromFirestore)
-                    .where((t) => t.matchesWeek(weekType))
+                    .where((t) => weekType.isEmpty || t.matchesWeek(weekType))
                     .toList(),
           );
     });
 
-/// Teacher timetable filtered to the current week type.
+/// Teacher timetable — ALL entries, week-type filtered when semester active.
 final timetableByTeacherProvider =
     StreamProvider.family<List<TimetableModel>, String>((ref, teacherId) {
-      if (!ref.watch(isTodaySchoolDayProvider)) return Stream.value([]);
+      if (teacherId.isEmpty) return Stream.value([]);
       final weekType = ref.watch(currentWeekTypeProvider);
 
       return FirebaseFirestore.instance
@@ -119,7 +120,7 @@ final timetableByTeacherProvider =
             (snap) =>
                 snap.docs
                     .map(TimetableModel.fromFirestore)
-                    .where((t) => t.matchesWeek(weekType))
+                    .where((t) => weekType.isEmpty || t.matchesWeek(weekType))
                     .toList(),
           );
     });

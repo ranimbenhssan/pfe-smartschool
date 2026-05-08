@@ -7,8 +7,10 @@ import 'package:open_file/open_file.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../../theme/theme.dart';
 import '../../../widgets/widgets.dart';
+import '../../../providers/providers.dart';
 import '../../../services/excel_import_service.dart';
 import '../../../services/timetable_excel_import_service.dart';
+import 'package:intl/intl.dart';
 
 class AdminImportScreen extends ConsumerStatefulWidget {
   const AdminImportScreen({super.key});
@@ -83,6 +85,15 @@ class _AdminImportScreenState extends ConsumerState<AdminImportScreen> {
   //  TIMETABLE IMPORT
   // ─────────────────────────────────────────────────────────────────────────
   Future<void> _pickAndImportTimetable() async {
+    // Step 1: ask for start date before picking the file
+    final startDate = await showDialog<DateTime>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const _StartDateDialog(),
+    );
+    if (startDate == null) return; // user cancelled
+
+    // Step 2: pick the Excel file
     final picked = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['xlsx', 'xls'],
@@ -102,7 +113,7 @@ class _AdminImportScreenState extends ConsumerState<AdminImportScreen> {
     });
     final result = await ref
         .read(timetableImportServiceProvider)
-        .importFromBytes(bytes);
+        .importFromBytes(bytes, startDate: startDate, firstWeekType: 'A');
     setState(() {
       _isImportingTimetable = false;
       _timetableResult = result;
@@ -691,6 +702,115 @@ class _WarningsBox extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ─── Start Date Dialog ────────────────────────────────────────────────────────
+class _StartDateDialog extends ConsumerStatefulWidget {
+  const _StartDateDialog();
+  @override
+  ConsumerState<_StartDateDialog> createState() => _StartDateDialogState();
+}
+
+class _StartDateDialogState extends ConsumerState<_StartDateDialog> {
+  DateTime _date = DateTime.now();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final sem = ref.read(activeSemesterProvider).value;
+      if (sem != null && mounted) setState(() => _date = sem.startDate);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Semester Start Date'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Select the first day of the semester.\n'
+            'Week 1 = Week A, Week 2 = Week B, alternating automatically.',
+            style: AppTypography.bodySmall,
+          ),
+          const SizedBox(height: 16),
+          GestureDetector(
+            onTap: () async {
+              final p = await showDatePicker(
+                context: context,
+                initialDate: _date,
+                firstDate: DateTime(2024),
+                lastDate: DateTime(2030),
+              );
+              if (p != null) setState(() => _date = p);
+            },
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.teacherColor.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: AppColors.teacherColor.withValues(alpha: 0.35),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.calendar_today_rounded,
+                    color: AppColors.teacherColor,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Start Date',
+                        style: AppTypography.caption.copyWith(
+                          color: AppColors.teacherColor,
+                        ),
+                      ),
+                      Text(
+                        '${_date.day.toString().padLeft(2, '0')}/'
+                        '${_date.month.toString().padLeft(2, '0')}/'
+                        '${_date.year}',
+                        style: AppTypography.labelLarge.copyWith(
+                          color: AppColors.teacherColor,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Spacer(),
+                  Icon(
+                    Icons.edit_rounded,
+                    size: 16,
+                    color: AppColors.teacherColor.withValues(alpha: 0.5),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton.icon(
+          onPressed: () => Navigator.pop(context, _date),
+          icon: const Icon(Icons.upload_file_rounded, size: 16),
+          label: const Text('Choose File'),
+          style: FilledButton.styleFrom(
+            backgroundColor: AppColors.teacherColor,
+          ),
+        ),
+      ],
     );
   }
 }
