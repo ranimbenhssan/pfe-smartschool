@@ -478,8 +478,17 @@ class _TimetableSeancesSection extends ConsumerWidget {
           ),
       data: (allEntries) {
         // Filter to the display day
+        final weekType = ref.watch(currentWeekTypeProvider);
         final dayEntries =
-            allEntries.where((e) => e.dayOfWeek == displayDay).toList();
+            allEntries
+                .where((e) => e.dayOfWeek == displayDay)
+                .where(
+                  (e) =>
+                      weekType.isEmpty ||
+                      e.weekType.isEmpty ||
+                      e.weekType == weekType,
+                )
+                .toList();
 
         final seances = _groupIntoSeances(dayEntries);
 

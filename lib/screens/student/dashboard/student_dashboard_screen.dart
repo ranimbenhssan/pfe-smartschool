@@ -509,8 +509,17 @@ class _StudentTimetableSeances extends ConsumerWidget {
           loading: () => const LoadingWidget(),
           error: (_, __) => const SizedBox.shrink(),
           data: (allEntries) {
+            final weekType = ref.watch(currentWeekTypeProvider);
             final dayEntries =
-                allEntries.where((e) => e.dayOfWeek == displayDay).toList();
+                allEntries
+                    .where((e) => e.dayOfWeek == displayDay)
+                    .where(
+                      (e) =>
+                          weekType.isEmpty ||
+                          e.weekType.isEmpty ||
+                          e.weekType == weekType,
+                    )
+                    .toList();
 
             final seances = _groupIntoSeances(dayEntries);
 

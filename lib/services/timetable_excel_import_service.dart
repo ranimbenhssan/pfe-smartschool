@@ -56,10 +56,30 @@ class TimetableImportService {
 
     try {
       final excel = Excel.decodeBytes(bytes);
+      final sheetNames = excel.tables.keys.toList();
 
-      for (final sheetName in excel.tables.keys) {
+      for (int sheetIndex = 0; sheetIndex < sheetNames.length; sheetIndex++) {
+        final sheetName = sheetNames[sheetIndex];
         final lower = sheetName.toLowerCase().trim();
-        final weekType = lower.contains('b') ? 'B' : 'A';
+
+        // Detect week type from sheet name; fall back to sheet order
+        // (first sheet = Week A, second sheet = Week B) so any naming works.
+        final String weekType;
+        if (lower.endsWith(' a') ||
+            lower == 'a' ||
+            lower.contains('week a') ||
+            lower.contains('semaine a')) {
+          weekType = 'A';
+        } else if (lower.endsWith(' b') ||
+            lower == 'b' ||
+            lower.contains('week b') ||
+            lower.contains('semaine b')) {
+          weekType = 'B';
+        } else {
+          // Fallback: first sheet = A, second = B
+          weekType = sheetIndex == 0 ? 'A' : 'B';
+        }
+
         final sheet = excel.tables[sheetName]!;
         final rows = sheet.rows;
         if (rows.length < 3) {
@@ -236,7 +256,6 @@ class TimetableImportService {
       className: className,
       warnings: warnings,
     );
-    
   }
 
   // ─────────────────────────────────────────────────────────────────────────

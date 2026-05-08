@@ -5,6 +5,45 @@ import '../../../widgets/widgets.dart';
 import '../../../providers/providers.dart';
 import '../../../models/models.dart';
 
+List<_MergedEntry> mergeTeacherEntries(List<TimetableModel> entries) {
+  final map = <String, _MergedEntry>{};
+
+  for (final e in entries) {
+    final key =
+        '${e.teacherId}|${e.subject}|${e.dayOfWeek}|${e.startTime}|${e.endTime}';
+    if (map.containsKey(key)) {
+      map[key]!.addClassName(e.className);
+    } else {
+      map[key] = _MergedEntry.fromEntry(e);
+    }
+  }
+
+  final result =
+      map.values.toList()..sort((a, b) => a.startTime.compareTo(b.startTime));
+  return result;
+}
+
+class _MergedEntry {
+  final TimetableModel source; // first entry (for all fields)
+  final List<String> classNames; // all TP group names
+
+  _MergedEntry.fromEntry(this.source) : classNames = [source.className];
+
+  void addClassName(String name) {
+    if (!classNames.contains(name)) classNames.add(name);
+  }
+
+  String get subject => source.subject;
+  String get dayOfWeek => source.dayOfWeek;
+  String get startTime => source.startTime;
+  String get endTime => source.endTime;
+  String get roomName => source.roomName;
+  String get teacherName => source.teacherName;
+
+  /// "3 IOT 1 TP 1 + 3 IOT 1 TP 2"  or just  "3 IOT 1"
+  String get classLabel => classNames.join(' + ');
+}
+
 class TeacherTimetableScreen extends ConsumerStatefulWidget {
   const TeacherTimetableScreen({super.key});
 
@@ -173,13 +212,13 @@ class _TeacherDayViewState extends State<_TeacherDayView> {
 
   @override
   Widget build(BuildContext context) {
-    final dayEntries =
+    final rawDay =
         widget.entries
             .where(
               (e) => e.dayOfWeek.toLowerCase() == _selectedDay.toLowerCase(),
             )
-            .toList()
-          ..sort((a, b) => a.startTime.compareTo(b.startTime));
+            .toList();
+    final dayEntries = mergeTeacherEntries(rawDay);
 
     return Column(
       children: [
@@ -263,11 +302,13 @@ class _TeacherDayViewState extends State<_TeacherDayView> {
                   : ListView.builder(
                     padding: const EdgeInsets.all(16),
                     itemCount: dayEntries.length,
-                    itemBuilder:
-                        (context, index) => _TeacherEntryCard(
-                          entry: dayEntries[index],
-                          isDark: widget.isDark,
-                        ),
+                    itemBuilder: (context, index) {
+                      final m = dayEntries[index];
+                      return _TeacherMergedCard(
+                        merged: m,
+                        isDark: widget.isDark,
+                      );
+                    },
                   ),
         ),
       ],
@@ -435,11 +476,11 @@ class _TeacherWeekGrid extends StatelessWidget {
 // ─────────────────────────────────────────
 //  ENTRY CARD
 // ─────────────────────────────────────────
-class _TeacherEntryCard extends StatelessWidget {
-  final TimetableModel entry;
+class _TeacherMergedCard extends StatelessWidget {
+  final _MergedEntry merged;
   final bool isDark;
 
-  const _TeacherEntryCard({required this.entry, required this.isDark});
+  const _TeacherMergedCard({required this.merged, required this.isDark});
 
   @override
   Widget build(BuildContext context) {
@@ -448,78 +489,94 @@ class _TeacherEntryCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color: isDark ? AppColors.darkCard : AppColors.lightCard,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: AppColors.teacherColor.withValues(alpha: 0.3),
         ),
       ),
       child: Row(
         children: [
-          // ─── Time badge ───
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: AppColors.teacherColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Column(
-              children: [
-                Text(
-                  entry.startTime,
-                  style: AppTypography.labelMedium.copyWith(
-                    color: AppColors.teacherColor,
-                    fontWeight: FontWeight.bold,
-                  ),
+          // Time column
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                merged.startTime,
+                style: AppTypography.labelSmall.copyWith(
+                  color: AppColors.teacherColor,
                 ),
-                Text(
-                  entry.endTime,
-                  style: AppTypography.caption.copyWith(
-                    color: AppColors.teacherColor,
-                  ),
+              ),
+              Text(
+                merged.endTime,
+                style: AppTypography.caption.copyWith(
+                  color: AppColors.teacherColor,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
-
-          // ─── Subject + class + room ───
+          const SizedBox(width: 14),
+          // Subject + class label
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  entry.subject,
+                  merged.subject,
                   style: AppTypography.labelLarge.copyWith(
                     color: isDark ? AppColors.darkText : AppColors.lightText,
                   ),
                 ),
-                if (entry.className.isNotEmpty)
-                  Text(
-                    entry.className,
-                    style: AppTypography.bodySmall.copyWith(
-                      color:
-                          isDark
-                              ? AppColors.darkTextSecondary
-                              : AppColors.lightTextSecondary,
+                // TP groups — highlighted when multiple
+                Container(
+                  margin: const EdgeInsets.only(top: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.teacherColor.withValues(
+                      alpha: merged.classNames.length > 1 ? 0.15 : 0.08,
+                    ),
+                    borderRadius: BorderRadius.circular(6),
+                    border:
+                        merged.classNames.length > 1
+                            ? Border.all(
+                              color: AppColors.teacherColor.withValues(
+                                alpha: 0.35,
+                              ),
+                            )
+                            : null,
+                  ),
+                  child: Text(
+                    merged.classLabel,
+                    style: AppTypography.caption.copyWith(
+                      color: AppColors.teacherColor,
+                      fontWeight:
+                          merged.classNames.length > 1
+                              ? FontWeight.bold
+                              : FontWeight.normal,
                     ),
                   ),
-                if (entry.roomName.isNotEmpty)
+                ),
+                if (merged.roomName.isNotEmpty) ...[
+                  const SizedBox(height: 3),
                   Row(
                     children: [
                       const Icon(
                         Icons.meeting_room_rounded,
-                        size: 12,
-                        color: AppColors.teacherColor,
+                        size: 11,
+                        color: AppColors.accent,
                       ),
-                      const SizedBox(width: 4),
+                      const SizedBox(width: 3),
                       Text(
-                        entry.roomName,
+                        merged.roomName,
                         style: AppTypography.caption.copyWith(
-                          color: AppColors.teacherColor,
+                          color: AppColors.accent,
                         ),
                       ),
                     ],
                   ),
+                ],
               ],
             ),
           ),

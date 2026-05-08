@@ -85,44 +85,30 @@ final isTodaySchoolDayProvider = Provider<bool>((ref) {
 //  These replace the identical providers that were in timetable_provider.dart.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Class timetable — ALL entries regardless of day/holiday.
-/// Week-type filter applied only when an active semester exists.
-/// The dashboard séances widget handles "no classes today" display.
+/// Class timetable — ALL entries for the class, no week-type filtering.
+/// Screens and widgets apply their own week-type filter based on the date
+/// they care about (today for dashboard séances, selected date for timetable screen).
 final timetableByClassProvider =
     StreamProvider.family<List<TimetableModel>, String>((ref, classId) {
       if (classId.isEmpty) return Stream.value([]);
-      final weekType = ref.watch(currentWeekTypeProvider); // '' if no semester
 
       return FirebaseFirestore.instance
           .collection('timetable')
           .where('classId', isEqualTo: classId)
           .snapshots()
-          .map(
-            (snap) =>
-                snap.docs
-                    .map(TimetableModel.fromFirestore)
-                    .where((t) => weekType.isEmpty || t.matchesWeek(weekType))
-                    .toList(),
-          );
+          .map((snap) => snap.docs.map(TimetableModel.fromFirestore).toList());
     });
 
-/// Teacher timetable — ALL entries, week-type filtered when semester active.
+/// Teacher timetable — ALL entries, no week-type filtering.
 final timetableByTeacherProvider =
     StreamProvider.family<List<TimetableModel>, String>((ref, teacherId) {
       if (teacherId.isEmpty) return Stream.value([]);
-      final weekType = ref.watch(currentWeekTypeProvider);
 
       return FirebaseFirestore.instance
           .collection('timetable')
           .where('teacherId', isEqualTo: teacherId)
           .snapshots()
-          .map(
-            (snap) =>
-                snap.docs
-                    .map(TimetableModel.fromFirestore)
-                    .where((t) => weekType.isEmpty || t.matchesWeek(weekType))
-                    .toList(),
-          );
+          .map((snap) => snap.docs.map(TimetableModel.fromFirestore).toList());
     });
 
 /// Full timetable for admin (all entries, all weeks, no filtering).
