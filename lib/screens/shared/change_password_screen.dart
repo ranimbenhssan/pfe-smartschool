@@ -78,7 +78,10 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
 
       // ─── Set first_login to false in Firestore ───
       await FirebaseFirestore.instance.collection('users').doc(user.uid).update(
-        {'first_login': false},
+        {
+          'first_login': false,
+          'temp_password': newPass, // keep in sync with Firebase Auth
+        },
       );
 
       if (mounted) {

@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -96,9 +97,7 @@ class _AdminTeacherFormScreenState
         if (!result.isSuccess) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(result.error ?? 'Error creating user'),
-              ),
+              SnackBar(content: Text(result.error ?? 'Error creating user')),
             );
           }
           setState(() => _isLoading = false);
@@ -119,6 +118,12 @@ class _AdminTeacherFormScreenState
         );
 
         await ref.read(firestoreServiceProvider).addTeacher(teacher);
+        if (result.userId != null) {
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(result.userId!)
+              .update({'temp_password': _passwordController.text.trim()});
+        }
       }
 
       if (mounted) {

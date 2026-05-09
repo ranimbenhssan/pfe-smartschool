@@ -18,7 +18,7 @@ class TeacherAiAlertsScreen extends ConsumerWidget {
       backgroundColor:
           isDark ? AppColors.darkBackground : AppColors.lightBackground,
       appBar: AppBar(
-        title: const Text('AI Alerts'),
+        title: const Text('Absence Flags'),
         backgroundColor:
             isDark ? AppColors.darkSurface : AppColors.lightSurface,
       ),
@@ -45,7 +45,7 @@ class TeacherAiAlertsScreen extends ConsumerWidget {
                 (list) =>
                     list.isEmpty
                         ? const EmptyState(
-                          title: 'No Active Alerts',
+                          title: 'No Active Flags',
                           message: 'All students are doing well!',
                           icon: Icons.check_circle_outline_rounded,
                         )

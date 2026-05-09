@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../theme/theme.dart';
 import '../../../widgets/widgets.dart';
 import '../../../navigation/app_routes.dart';
@@ -83,7 +84,7 @@ class AdminSettingsScreen extends ConsumerWidget {
                 _NavigationTile(
                   isDark: isDark,
                   icon: Icons.tune_rounded,
-                  label: 'AI Alert Thresholds',
+                  label: 'Absence Flag Thresholds',
                   color: AppColors.warning,
                   onTap: () => context.push(AppRoutes.adminSettingsAi),
                 ),
@@ -177,6 +178,62 @@ class AdminSettingsAiScreen extends ConsumerStatefulWidget {
 class _AdminSettingsAiScreenState extends ConsumerState<AdminSettingsAiScreen> {
   double _absenceThreshold = 3;
   double _lateThreshold = 4;
+  bool _isSaving = false;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadThresholds();
+  }
+
+  Future<void> _loadThresholds() async {
+    try {
+      final doc =
+          await FirebaseFirestore.instance
+              .collection('settings')
+              .doc('thresholds')
+              .get();
+      if (doc.exists && mounted) {
+        setState(() {
+          _absenceThreshold =
+              (doc.data()?['absenceThreshold'] as num?)?.toDouble() ?? 3;
+          _lateThreshold =
+              (doc.data()?['lateThreshold'] as num?)?.toDouble() ?? 4;
+        });
+      }
+    } catch (_) {}
+    if (mounted) setState(() => _isLoading = false);
+  }
+
+  Future<void> _saveThresholds() async {
+    setState(() => _isSaving = true);
+    try {
+      await FirebaseFirestore.instance
+          .collection('settings')
+          .doc('thresholds')
+          .set({
+            'absenceThreshold': _absenceThreshold.toInt(),
+            'lateThreshold': _lateThreshold.toInt(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Thresholds saved ✅'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error saving: $e')));
+      }
+    }
+    if (mounted) setState(() => _isSaving = false);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -186,80 +243,136 @@ class _AdminSettingsAiScreenState extends ConsumerState<AdminSettingsAiScreen> {
       backgroundColor:
           isDark ? AppColors.darkBackground : AppColors.lightBackground,
       appBar: AppBar(
-        title: const Text('AI Thresholds'),
+        title: const Text('Absence Flag Thresholds'),
         backgroundColor:
             isDark ? AppColors.darkSurface : AppColors.lightSurface,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Absence Alert Threshold',
-              style: AppTypography.labelLarge.copyWith(
-                color: isDark ? AppColors.darkText : AppColors.lightText,
+      body:
+          _isLoading
+              ? const LoadingWidget()
+              : Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: AppColors.info.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: AppColors.info.withValues(alpha: 0.25),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.info_outline_rounded,
+                            color: AppColors.info,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'When a student hits a threshold, they receive a notification '
+                              'and an Absence Flag is created. The admin is also notified.',
+                              style: AppTypography.caption,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.cancel_rounded,
+                          color: AppColors.error,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Absence Threshold',
+                          style: AppTypography.labelLarge.copyWith(
+                            color:
+                                isDark
+                                    ? AppColors.darkText
+                                    : AppColors.lightText,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Flag after ${_absenceThreshold.toInt()} absence'
+                      '${_absenceThreshold.toInt() == 1 ? '' : 's'} in 30 days',
+                      style: AppTypography.bodySmall.copyWith(
+                        color:
+                            isDark
+                                ? AppColors.darkTextSecondary
+                                : AppColors.lightTextSecondary,
+                      ),
+                    ),
+                    Slider(
+                      value: _absenceThreshold,
+                      min: 1,
+                      max: 15,
+                      divisions: 14,
+                      activeColor: AppColors.error,
+                      label: _absenceThreshold.toInt().toString(),
+                      onChanged: (v) => setState(() => _absenceThreshold = v),
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.watch_later_rounded,
+                          color: AppColors.warning,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Late Arrival Threshold',
+                          style: AppTypography.labelLarge.copyWith(
+                            color:
+                                isDark
+                                    ? AppColors.darkText
+                                    : AppColors.lightText,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Flag after ${_lateThreshold.toInt()} late arrival'
+                      '${_lateThreshold.toInt() == 1 ? '' : 's'} in 30 days',
+                      style: AppTypography.bodySmall.copyWith(
+                        color:
+                            isDark
+                                ? AppColors.darkTextSecondary
+                                : AppColors.lightTextSecondary,
+                      ),
+                    ),
+                    Slider(
+                      value: _lateThreshold,
+                      min: 1,
+                      max: 15,
+                      divisions: 14,
+                      activeColor: AppColors.warning,
+                      label: _lateThreshold.toInt().toString(),
+                      onChanged: (v) => setState(() => _lateThreshold = v),
+                    ),
+                    const SizedBox(height: 32),
+                    AppButton(
+                      label: _isSaving ? 'Saving...' : 'Save Thresholds',
+                      onPressed: _isSaving ? () {} : _saveThresholds,
+                      isLoading: _isSaving,
+                      width: double.infinity,
+                      icon: Icons.save_rounded,
+                    ),
+                  ],
+                ),
               ),
-            ),
-            Text(
-              'Flag student after ${_absenceThreshold.toInt()} absences in 30 days',
-              style: AppTypography.bodySmall.copyWith(
-                color:
-                    isDark
-                        ? AppColors.darkTextSecondary
-                        : AppColors.lightTextSecondary,
-              ),
-            ),
-            Slider(
-              value: _absenceThreshold,
-              min: 1,
-              max: 10,
-              divisions: 9,
-              activeColor: AppColors.error,
-              label: _absenceThreshold.toInt().toString(),
-              onChanged: (val) => setState(() => _absenceThreshold = val),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'Late Arrival Threshold',
-              style: AppTypography.labelLarge.copyWith(
-                color: isDark ? AppColors.darkText : AppColors.lightText,
-              ),
-            ),
-            Text(
-              'Flag student after ${_lateThreshold.toInt()} late arrivals in 30 days',
-              style: AppTypography.bodySmall.copyWith(
-                color:
-                    isDark
-                        ? AppColors.darkTextSecondary
-                        : AppColors.lightTextSecondary,
-              ),
-            ),
-            Slider(
-              value: _lateThreshold,
-              min: 1,
-              max: 10,
-              divisions: 9,
-              activeColor: AppColors.warning,
-              label: _lateThreshold.toInt().toString(),
-              onChanged: (val) => setState(() => _lateThreshold = val),
-            ),
-            const SizedBox(height: 32),
-            AppButton(
-              label: 'Save Thresholds',
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Thresholds saved successfully'),
-                  ),
-                );
-              },
-              width: double.infinity,
-              icon: Icons.save_rounded,
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

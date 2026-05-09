@@ -425,7 +425,7 @@ class _DashboardBody extends ConsumerWidget {
           onTap: () => context.push(AppRoutes.adminClasses),
         ),
         StatCard(
-          title: 'Active AI Flags',
+          title: 'Active Absence Flags',
           value: activeFlags.toString(),
           icon: Icons.warning_amber_rounded,
           color: AppColors.error,

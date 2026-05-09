@@ -19,7 +19,7 @@ class AdminAlertResolvedScreen extends ConsumerWidget {
       backgroundColor:
           isDark ? AppColors.darkBackground : AppColors.lightBackground,
       appBar: AppBar(
-        title: const Text('Resolved Alerts'),
+        title: const Text('Resolved Flags'),
         backgroundColor:
             isDark ? AppColors.darkSurface : AppColors.lightSurface,
       ),
@@ -35,8 +35,8 @@ class AdminAlertResolvedScreen extends ConsumerWidget {
             (list) =>
                 list.isEmpty
                     ? const EmptyState(
-                      title: 'No Resolved Alerts',
-                      message: 'No alerts have been resolved yet',
+                      title: 'No Resolved Flags',
+                      message: 'No flags have been resolved yet',
                       icon: Icons.history_rounded,
                     )
                     : ListView.builder(

@@ -313,7 +313,7 @@ class NotificationService {
     }
   }
 
-  // ─── Resolve AI flag ───
+  // ─── Resolve absence flag ───
   Future<bool> resolveAiFlag(String flagId, {String? note}) async {
     try {
       await _db.collection('ai_flags').doc(flagId).update({

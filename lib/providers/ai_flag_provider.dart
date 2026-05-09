@@ -2,25 +2,25 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/models.dart';
 import '../services/services.dart';
 
-// ─── Active AI Flags ───
+// ─── Active Absence Flags ───
 final activeAiFlagsProvider = StreamProvider<List<AiFlagModel>>((ref) {
   return ref.watch(firestoreServiceProvider).getActiveAiFlags();
 });
 
-// ─── AI Flags By Class ───
+// ─── Absence Flags By Class ───
 final aiFlagsByClassProvider = StreamProvider.family<List<AiFlagModel>, String>(
   (ref, classId) {
     return ref.watch(firestoreServiceProvider).getAiFlagsByClass(classId);
   },
 );
 
-// ─── AI Flags By Student ───
+// ─── Absence Flags By Student ───
 final aiFlagsByStudentProvider =
     StreamProvider.family<List<AiFlagModel>, String>((ref, studentId) {
       return ref.watch(firestoreServiceProvider).getAiFlagsByStudent(studentId);
     });
 
-// ─── Resolved AI Flags ───
+// ─── Resolved Absence Flags ───
 final resolvedAiFlagsProvider = StreamProvider<List<AiFlagModel>>((ref) {
   return ref.watch(firestoreServiceProvider).getResolvedAiFlags();
 });

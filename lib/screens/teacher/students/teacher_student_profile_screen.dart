@@ -123,7 +123,7 @@ class _TeacherStudentProfileScreenState
                       unselectedLabelColor: Colors.white60,
                       tabs: const [
                         Tab(text: 'Attendance'),
-                        Tab(text: 'AI Flags'),
+                        Tab(text: 'Absence Flags'),
                       ],
                     ),
                   ),
@@ -263,7 +263,7 @@ class _AiFlagsTab extends ConsumerWidget {
               list.isEmpty
                   ? const EmptyState(
                     title: 'No Flags',
-                    message: 'No AI alerts for this student',
+                    message: 'No absence flags for this student',
                     icon: Icons.check_circle_outline_rounded,
                   )
                   : ListView.builder(

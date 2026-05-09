@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,6 +8,12 @@ import '../../../widgets/widgets.dart';
 import '../../../providers/providers.dart';
 import '../../../navigation/app_routes.dart';
 import '../../../models/models.dart';
+import '../attendance/teacher_namecall_screen.dart';
+
+/// Launch namecall smart: auto-detect current seance for selected date.
+/// Shows a seance picker if the teacher has multiple simultaneous seances.
+
+/// Merge entries with same subject+day+startTime+endTime into one namecall entry.
 
 class TeacherDashboardScreen extends ConsumerStatefulWidget {
   const TeacherDashboardScreen({super.key});
@@ -98,6 +105,7 @@ class _TeacherDashboardScreenState
           icon: const Icon(Icons.message_rounded, size: 22),
           onPressed: () => context.push(AppRoutes.teachermessage),
         ),
+
         GestureDetector(
           onTap:
               () => showModalBottomSheet(
@@ -243,42 +251,12 @@ class _DashboardBody extends ConsumerWidget {
                       label: 'Namecall',
                       icon: Icons.how_to_reg_rounded,
                       color: AppColors.teacherColor,
-                      onTap: () async {
-                        // Show date picker; default = today
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: DateTime.now(),
-                          firstDate: DateTime(2024),
-                          lastDate: DateTime.now().add(const Duration(days: 1)),
-                          builder:
-                              (ctx, child) => Theme(
-                                data: Theme.of(ctx).copyWith(
-                                  colorScheme: Theme.of(
-                                    ctx,
-                                  ).colorScheme.copyWith(
-                                    primary: AppColors.teacherColor,
-                                  ),
-                                ),
-                                child: child!,
-                              ),
-                        );
-                        if (!context.mounted) return;
-                        // Navigate to namecall with selected or today's date.
-                        // classId/className left empty — namecall screen
-                        // resolves classes from timetable for the selected date.
-                        final dateStr =
-                            picked != null
-                                ? '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}'
-                                : '';
-                        context.push(
-                          AppRoutes.teacherNameCall,
-                          extra: {
-                            'classId': '',
-                            'className': '',
-                            'targetDate': dateStr,
-                          },
-                        );
-                      },
+                      onTap:
+                          () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const TeacherNamecallScreen(),
+                            ),
+                          ),
                     ),
                     const SizedBox(width: 10),
                     _QuickAction(
@@ -305,7 +283,7 @@ class _DashboardBody extends ConsumerWidget {
                 ),
                 const SizedBox(height: 24),
 
-                // ── AI Flags ─────────────────────────────────────────────
+                // ── Absence Flags ────────────────────────────────────────
                 _buildAiFlags(context, isDark, ref),
                 const SizedBox(height: 20),
               ],
@@ -345,7 +323,7 @@ class _DashboardBody extends ConsumerWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              'AI Alerts',
+              'Absence Flags',
               style: AppTypography.headingMedium.copyWith(
                 color: isDark ? AppColors.darkText : AppColors.lightText,
               ),
@@ -363,8 +341,8 @@ class _DashboardBody extends ConsumerWidget {
           data: (list) {
             if (list.isEmpty) {
               return const EmptyState(
-                title: 'No Alerts',
-                message: 'No active AI alerts',
+                title: 'No Flags',
+                message: 'No active absence flags',
                 icon: Icons.check_circle_outline_rounded,
               );
             }
@@ -582,17 +560,15 @@ class _TimetableSeancesSection extends ConsumerWidget {
                       seance: seance,
                       isActive: active,
                       isDark: isDark,
-                      onTap: () {
-                        // Navigate to Namecall for the first class in this session
-                        final firstEntry = seance.entries.first;
-                        context.push(
-                          AppRoutes.teacherNameCall,
-                          extra: {
-                            'classId': firstEntry.classId,
-                            'className': firstEntry.className,
-                          },
-                        );
-                      },
+                      onTap:
+                          () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder:
+                                  (_) => TeacherNamecallScreen(
+                                    preselectedSlot: seance.entries.first,
+                                  ),
+                            ),
+                          ),
                     );
                   },
                 ),
@@ -876,7 +852,7 @@ class _MoreMenu extends StatelessWidget {
         route: AppRoutes.teacherStudents,
       ),
       _MoreItem(
-        label: 'AI Alerts',
+        label: 'Absence Flags',
         icon: Icons.warning_amber_rounded,
         color: AppColors.error,
         route: AppRoutes.teacherAiAlerts,

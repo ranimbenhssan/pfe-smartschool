@@ -393,24 +393,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.teacherNameCall,
         name: 'teacher-namecall',
-        builder: (context, state) {
-          final extra = state.extra;
-          String classId = '';
-          String className = '';
-          String targetDate = '';
-          if (extra is Map<String, dynamic>) {
-            classId = extra['classId']?.toString() ?? '';
-            className = extra['className']?.toString() ?? '';
-            targetDate = extra['targetDate']?.toString() ?? '';
-          } else if (extra is String) {
-            classId = extra;
-          }
-          return TeacherNamecallScreen(
-            classId: classId,
-            className: className,
-            targetDate: targetDate,
-          );
-        },
+        builder: (context, state) => const TeacherNamecallScreen(),
       ),
 
       // Attendance hub: stats, by-date filter, etc. (no today-list tab)

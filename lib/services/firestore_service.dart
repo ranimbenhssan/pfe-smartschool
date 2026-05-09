@@ -509,10 +509,10 @@ class FirestoreService {
   }
 
   // ─────────────────────────────────────────
-  //  AI FLAGS
+  //  ABSENCE FLAGS
   // ─────────────────────────────────────────
 
-  // Get all active AI flags
+  // Get all active absence flags
   Stream<List<AiFlagModel>> getActiveAiFlags() {
     return _firestore
         .collection('ai_flags')
@@ -525,7 +525,7 @@ class FirestoreService {
         );
   }
 
-  // Get AI flags by class
+  // Get absence flags by class
   Stream<List<AiFlagModel>> getAiFlagsByClass(String classId) {
     return _firestore
         .collection('ai_flags')
@@ -539,7 +539,7 @@ class FirestoreService {
         );
   }
 
-  // Get AI flags by student
+  // Get absence flags by student
   Stream<List<AiFlagModel>> getAiFlagsByStudent(String studentId) {
     return _firestore
         .collection('ai_flags')
@@ -552,7 +552,7 @@ class FirestoreService {
         );
   }
 
-  // Get resolved AI flags
+  // Get resolved absence flags
   Stream<List<AiFlagModel>> getResolvedAiFlags() {
     return _firestore
         .collection('ai_flags')
@@ -565,7 +565,7 @@ class FirestoreService {
         );
   }
 
-  // Resolve AI flag
+  // Resolve absence flag
   Future<void> resolveAiFlag(String flagId) async {
     await _firestore.collection('ai_flags').doc(flagId).update({
       'resolved': true,
