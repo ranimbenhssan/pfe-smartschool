@@ -311,16 +311,14 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
   }) async {
     final db = FirebaseFirestore.instance;
     final thirtyDaysAgo = DateTime.now().subtract(const Duration(days: 30));
+    final startDate = _fmt(thirtyDaysAgo);
 
     // Count absences and lates in the last 30 days
     final snap =
         await db
             .collection('attendance')
             .where('studentId', isEqualTo: studentId)
-            .where(
-              'recordedAt',
-              isGreaterThanOrEqualTo: Timestamp.fromDate(thirtyDaysAgo),
-            )
+            .where('date', isGreaterThanOrEqualTo: startDate)
             .get();
 
     final records = snap.docs.map((d) => d.data()).toList();

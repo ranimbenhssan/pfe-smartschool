@@ -224,16 +224,14 @@ class AttendanceService {
     String classId,
   ) async {
     final thirtyDaysAgo = DateTime.now().subtract(const Duration(days: 30));
+    final startDate = _formatDate(thirtyDaysAgo);
 
     // Fetch student's recent attendance.
     final snap =
         await _db
             .collection('attendance')
             .where('studentId', isEqualTo: studentId)
-            .where(
-              'createdAt',
-              isGreaterThanOrEqualTo: Timestamp.fromDate(thirtyDaysAgo),
-            )
+            .where('date', isGreaterThanOrEqualTo: startDate)
             .get();
 
     final records = snap.docs.map((d) => d.data()).toList();
