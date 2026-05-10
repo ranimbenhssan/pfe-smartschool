@@ -203,9 +203,9 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
         'sessionName': '${slot.subject} (${slot.startTime}–${slot.endTime})',
         'roomId': slot.roomId,
         'roomName': slot.roomName,
-        'recordedAt': Timestamp.fromDate(now),
+        'recordedAt': FieldValue.serverTimestamp(),
         'note': '',
-        'createdAt': Timestamp.fromDate(now),
+        'createdAt': FieldValue.serverTimestamp(),
       };
 
       if (existing.docs.isNotEmpty) {
@@ -217,20 +217,20 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
           'sessionName': '${slot.subject} (${slot.startTime}–${slot.endTime})',
           'roomId': slot.roomId,
           'roomName': slot.roomName,
-          'recordedAt': Timestamp.fromDate(now),
+          'recordedAt': FieldValue.serverTimestamp(),
         });
       } else {
         await FirebaseFirestore.instance.collection('attendance').add(data);
       }
 
       // ── Check absence threshold and create flag if hit ───────────────────
-      // Only check when marking absent or late (not when correcting to present)
       if (status == AttendanceStatus.absent ||
           status == AttendanceStatus.late) {
         await _checkThresholdAndFlag(
           studentId: student.id,
           studentName: student.name,
           classId: student.classId,
+          currentStatus: status,
         );
       }
 
@@ -255,7 +255,7 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
         if (status == AttendanceStatus.absent) {
           await notifService.sendToUser(
             studentUserId,
-            '⚠️ Marked Absent',
+            '⚠️ Absence enregistrée',
             'You have been marked absent for $sessionInfo on $dateStr.\n'
                 'Teacher: $teacherName',
             type: 'attendance',
@@ -308,22 +308,53 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
     required String studentId,
     required String studentName,
     required String classId,
+    required AttendanceStatus currentStatus, // status just saved
   }) async {
     final db = FirebaseFirestore.instance;
-    final thirtyDaysAgo = DateTime.now().subtract(const Duration(days: 30));
-    final startDate = _fmt(thirtyDaysAgo);
 
-    // Count absences and lates in the last 30 days
+    // Build list of date strings for the last 30 days
+    // We use the 'date' field (plain string "YYYY-MM-DD") — no index needed,
+    // no server timestamp race condition.
+    final now = DateTime.now();
+    final dates = List.generate(
+      30,
+      (i) => _fmt(now.subtract(Duration(days: i))),
+    );
+
+    // Fetch ALL attendance records for this student in last 30 days
+    // Firestore 'in' supports up to 30 values — perfect
     final snap =
         await db
             .collection('attendance')
             .where('studentId', isEqualTo: studentId)
-            .where('date', isGreaterThanOrEqualTo: startDate)
+            .where('date', whereIn: dates)
             .get();
 
     final records = snap.docs.map((d) => d.data()).toList();
-    final absent = records.where((r) => r['status'] == 'absent').length;
-    final late = records.where((r) => r['status'] == 'late').length;
+
+    // Count — the record we just saved may not appear yet if it was a new
+    // insert, so we add 1 manually for the current status.
+    // For updates the record already exists in the query result.
+    int absent = records.where((r) => r['status'] == 'absent').length;
+    int late = records.where((r) => r['status'] == 'late').length;
+
+    // If this is a new record (not an update), the count above may not
+    // include it yet — bump the relevant counter
+    final existingForToday =
+        records
+            .where(
+              (r) =>
+                  r['date'] == _fmt(now) &&
+                  r['subject'] == (_selectedSlot?.subject ?? ''),
+            )
+            .length;
+    if (existingForToday == 0) {
+      // New record — manually include current status in count
+      if (currentStatus == AttendanceStatus.absent)
+        absent++;
+      else if (currentStatus == AttendanceStatus.late)
+        late++;
+    }
 
     // Read thresholds from Firestore
     int absenceThreshold = 3;
@@ -338,6 +369,11 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
             (settingsDoc.data()?['lateThreshold'] as num?)?.toInt() ?? 4;
       }
     } catch (_) {}
+
+    debugPrint(
+      '[Flag] $studentName — absent=$absent (threshold=$absenceThreshold)'
+      ' late=$late (threshold=$lateThreshold)',
+    );
 
     // Determine if threshold is hit
     String? flagType;
@@ -358,9 +394,12 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
       riskScore = (late / 30).clamp(0.0, 1.0);
     }
 
-    if (flagType == null) return; // threshold not hit
+    if (flagType == null) {
+      debugPrint('[Flag] No threshold hit for $studentName');
+      return;
+    }
 
-    // Avoid duplicate active flags for same student + type
+    // Avoid duplicate active flags
     final existing =
         await db
             .collection('ai_flags')
@@ -370,7 +409,10 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
             .limit(1)
             .get();
 
-    if (existing.docs.isNotEmpty) return; // already flagged
+    if (existing.docs.isNotEmpty) {
+      debugPrint('[Flag] Flag already active for $studentName ($flagType)');
+      return;
+    }
 
     // Create flag
     await db.collection('ai_flags').add({
@@ -385,7 +427,7 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
       'resolvedAt': null,
     });
 
-    debugPrint('[Namecall] Absence flag created: $flagType for $studentName');
+    debugPrint('[Flag] ✅ Created $flagType flag for $studentName');
 
     // Notify student
     final studentDoc = await db.collection('students').doc(studentId).get();
@@ -393,8 +435,8 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
     if (studentUserId.isNotEmpty) {
       final title =
           flagType == 'frequentAbsent'
-              ? '🚩 You have been flagged for frequent absences'
-              : '🚩 You have been flagged for a frequent of late arrivals';
+              ? '⚠️ Absence threshold reached'
+              : '⏰ Late arrival threshold reached';
       await db.collection('notifications').add({
         'userId': studentUserId,
         'senderId': 'system',
