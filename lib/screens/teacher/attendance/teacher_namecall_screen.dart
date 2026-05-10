@@ -231,6 +231,7 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
           studentName: student.name,
           classId: student.classId,
           currentStatus: status,
+          isNewRecord: existing.docs.isEmpty, // true = insert, false = update
         );
       }
 
@@ -300,63 +301,68 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  //  CHECK THRESHOLD — reads settings/thresholds, creates ai_flags doc
-  //  and notifies student + admin when threshold is hit.
-  //  Called every time a student is marked absent or late.
+  //  CHECK THRESHOLD
   // ─────────────────────────────────────────────────────────────────────────
   Future<void> _checkThresholdAndFlag({
     required String studentId,
     required String studentName,
     required String classId,
-    required AttendanceStatus currentStatus, // status just saved
+    required AttendanceStatus currentStatus,
+    required bool isNewRecord, // true = insert, false = update
   }) async {
     final db = FirebaseFirestore.instance;
 
-    // Build list of date strings for the last 30 days
-    // We use the 'date' field (plain string "YYYY-MM-DD") — no index needed,
-    // no server timestamp race condition.
-    final now = DateTime.now();
-    final dates = List.generate(
-      30,
-      (i) => _fmt(now.subtract(Duration(days: i))),
-    );
+    // ── Fetch ALL attendance for this student ──────────────────────────────
+    // We filter client-side for last 30 days.
+    // Avoids: whereIn limit (max 10), composite index requirement,
+    //         server timestamp race condition.
+    final cutoff = DateTime.now().subtract(const Duration(days: 30));
 
-    // Fetch ALL attendance records for this student in last 30 days
-    // Firestore 'in' supports up to 30 values — perfect
     final snap =
         await db
             .collection('attendance')
             .where('studentId', isEqualTo: studentId)
-            .where('date', whereIn: dates)
             .get();
 
-    final records = snap.docs.map((d) => d.data()).toList();
+    int absent = 0;
+    int late = 0;
 
-    // Count — the record we just saved may not appear yet if it was a new
-    // insert, so we add 1 manually for the current status.
-    // For updates the record already exists in the query result.
-    int absent = records.where((r) => r['status'] == 'absent').length;
-    int late = records.where((r) => r['status'] == 'late').length;
+    for (final doc in snap.docs) {
+      final d = doc.data();
+      final status = d['status']?.toString() ?? '';
 
-    // If this is a new record (not an update), the count above may not
-    // include it yet — bump the relevant counter
-    final existingForToday =
-        records
-            .where(
-              (r) =>
-                  r['date'] == _fmt(now) &&
-                  r['subject'] == (_selectedSlot?.subject ?? ''),
-            )
-            .length;
-    if (existingForToday == 0) {
-      // New record — manually include current status in count
+      // Parse date string "YYYY-MM-DD"
+      final dateStr = d['date']?.toString() ?? '';
+      DateTime? recDate;
+      try {
+        final parts = dateStr.split('-');
+        if (parts.length == 3) {
+          recDate = DateTime(
+            int.parse(parts[0]),
+            int.parse(parts[1]),
+            int.parse(parts[2]),
+          );
+        }
+      } catch (_) {}
+
+      if (recDate == null || recDate.isBefore(cutoff)) continue;
+
+      if (status == 'absent')
+        absent++;
+      else if (status == 'late')
+        late++;
+    }
+
+    // If this is a NEW insert (not update), the record isn't in Firestore yet
+    // when the query ran — add the current status manually
+    if (isNewRecord) {
       if (currentStatus == AttendanceStatus.absent)
         absent++;
       else if (currentStatus == AttendanceStatus.late)
         late++;
     }
 
-    // Read thresholds from Firestore
+    // ── Read thresholds ────────────────────────────────────────────────────
     int absenceThreshold = 3;
     int lateThreshold = 4;
     try {
@@ -371,11 +377,11 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
     } catch (_) {}
 
     debugPrint(
-      '[Flag] $studentName — absent=$absent (threshold=$absenceThreshold)'
-      ' late=$late (threshold=$lateThreshold)',
+      '[Flag] $studentName — absent=$absent (need $absenceThreshold)'
+      ' | late=$late (need $lateThreshold)',
     );
 
-    // Determine if threshold is hit
+    // ── Determine flag type ────────────────────────────────────────────────
     String? flagType;
     String details = '';
     double riskScore = 0;
@@ -395,11 +401,11 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
     }
 
     if (flagType == null) {
-      debugPrint('[Flag] No threshold hit for $studentName');
+      debugPrint('[Flag] Threshold not reached for $studentName');
       return;
     }
 
-    // Avoid duplicate active flags
+    // ── Avoid duplicate active flags ───────────────────────────────────────
     final existing =
         await db
             .collection('ai_flags')
@@ -410,11 +416,11 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
             .get();
 
     if (existing.docs.isNotEmpty) {
-      debugPrint('[Flag] Flag already active for $studentName ($flagType)');
+      debugPrint('[Flag] Already flagged: $studentName ($flagType)');
       return;
     }
 
-    // Create flag
+    // ── Create flag ────────────────────────────────────────────────────────
     await db.collection('ai_flags').add({
       'studentId': studentId,
       'studentName': studentName,
@@ -427,22 +433,21 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
       'resolvedAt': null,
     });
 
-    debugPrint('[Flag] ✅ Created $flagType flag for $studentName');
+    debugPrint('[Flag] ✅ $flagType created for $studentName');
 
-    // Notify student
+    // ── Notify student ─────────────────────────────────────────────────────
     final studentDoc = await db.collection('students').doc(studentId).get();
     final studentUserId = studentDoc.data()?['userId']?.toString() ?? '';
     if (studentUserId.isNotEmpty) {
-      final title =
-          flagType == 'frequentAbsent'
-              ? '⚠️ Absence threshold reached'
-              : '⏰ Late arrival threshold reached';
       await db.collection('notifications').add({
         'userId': studentUserId,
         'senderId': 'system',
         'senderName': 'SmartSchool',
         'senderRole': 'admin',
-        'title': title,
+        'title':
+            flagType == 'frequentAbsent'
+                ? '⚠️ Absence threshold reached'
+                : '⏰ Late arrival threshold reached',
         'message': details,
         'messageType': 'absence_flag',
         'isRead': false,
@@ -454,7 +459,7 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
       });
     }
 
-    // Notify admin
+    // ── Notify admin ───────────────────────────────────────────────────────
     final adminSnap =
         await db
             .collection('users')
