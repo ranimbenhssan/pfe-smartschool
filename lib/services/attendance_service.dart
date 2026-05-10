@@ -192,7 +192,7 @@ class AttendanceService {
         'entryTime': Timestamp.fromDate(now),
         'exitTime': null,
         'note': '',
-        'createdAt': FieldValue.serverTimestamp(),
+        'createdAt': Timestamp.fromDate(now),
       });
     }
   }

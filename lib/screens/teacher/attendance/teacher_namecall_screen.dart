@@ -203,9 +203,9 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
         'sessionName': '${slot.subject} (${slot.startTime}–${slot.endTime})',
         'roomId': slot.roomId,
         'roomName': slot.roomName,
-        'recordedAt': FieldValue.serverTimestamp(),
+        'recordedAt': Timestamp.fromDate(now),
         'note': '',
-        'createdAt': FieldValue.serverTimestamp(),
+        'createdAt': Timestamp.fromDate(now),
       };
 
       if (existing.docs.isNotEmpty) {
@@ -217,7 +217,7 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
           'sessionName': '${slot.subject} (${slot.startTime}–${slot.endTime})',
           'roomId': slot.roomId,
           'roomName': slot.roomName,
-          'recordedAt': FieldValue.serverTimestamp(),
+          'recordedAt': Timestamp.fromDate(now),
         });
       } else {
         await FirebaseFirestore.instance.collection('attendance').add(data);
