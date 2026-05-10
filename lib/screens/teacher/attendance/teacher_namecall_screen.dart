@@ -5,7 +5,7 @@ import '../../../theme/theme.dart';
 import '../../../widgets/widgets.dart';
 import '../../../providers/providers.dart';
 import '../../../models/models.dart';
-import '../../../services/notification_service.dart';
+import '../../../services/services.dart';
 
 class TeacherNamecallScreen extends ConsumerStatefulWidget {
   // Optional pre-selected séance (passed from timetable screen tap)
@@ -256,7 +256,7 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
         if (status == AttendanceStatus.absent) {
           await notifService.sendToUser(
             studentUserId,
-            '⚠️ Absence enregistrée',
+            '⚠️ Marked Absent',
             'You have been marked absent for $sessionInfo on $dateStr.\n'
                 'Teacher: $teacherName',
             type: 'attendance',
@@ -276,16 +276,18 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
             senderRole: 'teacher',
           );
         } else if (status == AttendanceStatus.present) {
-          // Only notify if toggling back from absent/late
-          final prev = _attendanceMap[student.id];
-          if (prev == AttendanceStatus.absent ||
-              prev == AttendanceStatus.late) {
+          // Check the ACTUAL previous status from Firestore (not _attendanceMap
+          // which may be stale or empty for past-date edits)
+          final prevStatus =
+              existing.docs.isNotEmpty
+                  ? existing.docs.first.data()['status']?.toString() ?? ''
+                  : '';
+          if (prevStatus == 'absent' || prevStatus == 'late') {
             await notifService.sendToUser(
               studentUserId,
-              '✅ Attendance corrected',
+              '✅ Attendance corrected to Present',
               'Your attendance for $sessionInfo on $dateStr '
-                  'has been updated to Present.\n'
-                  'Teacher: $teacherName',
+                  'has been updated to Present by $teacherName.',
               type: 'attendance',
               senderId: teacherId,
               senderName: teacherName,
@@ -446,8 +448,8 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
         'senderRole': 'admin',
         'title':
             flagType == 'frequentAbsent'
-                ? '⚠️ Absence threshold reached'
-                : '⏰ Late arrival threshold reached',
+                ? '🚩 You have been flagged for frequent absences'
+                : '🚩 You have been flagged for frequent late arrivals',
         'message': details,
         'messageType': 'absence_flag',
         'isRead': false,
