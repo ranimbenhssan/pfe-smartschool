@@ -10,3 +10,4 @@ export 'dashboard_provider.dart';
 export '../services/auth_service.dart';
 export '../services/firestore_service.dart';
 export 'semester_provider.dart';
+export '../providers/iot_provider.dart';

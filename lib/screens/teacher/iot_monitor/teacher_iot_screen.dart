@@ -1,10 +1,10 @@
+// lib/screens/teacher/iot_monitor/teacher_iot_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../../../theme/theme.dart';
 import '../../../widgets/widgets.dart';
 import '../../../providers/providers.dart';
-import '../../../navigation/app_routes.dart';
+import '../../../models/models.dart';
 
 class TeacherIotScreen extends ConsumerWidget {
   const TeacherIotScreen({super.key});
@@ -13,14 +13,7 @@ class TeacherIotScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final rooms = ref.watch(roomsProvider);
-    final sensorData = ref.watch(
-      latestSensorDataProvider(
-        rooms.maybeWhen(
-          data: (list) => list.isNotEmpty ? list.first.id : '',
-          orElse: () => '',
-        ),
-      ),
-    );
+    final rtdbTemp = ref.watch(rtdbTemperatureProvider);
 
     return Scaffold(
       backgroundColor:
@@ -29,136 +22,247 @@ class TeacherIotScreen extends ConsumerWidget {
         title: const Text('Classroom IoT Monitor'),
         backgroundColor:
             isDark ? AppColors.darkSurface : AppColors.lightSurface,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.history_rounded),
-            onPressed: () => context.push(AppRoutes.teacherIotHistory),
+      ),
+      body: Column(
+        children: [
+          // ── Live sensor banner ─────────────────────────────────────────────
+          rtdbTemp.when(
+            loading: () => const SizedBox.shrink(),
+            error: (_, __) => _OfflineBanner(isDark: isDark),
+            data:
+                (data) =>
+                    data == null
+                        ? _OfflineBanner(isDark: isDark)
+                        : _LiveBanner(data: data, isDark: isDark),
+          ),
+
+          // ── Rooms list ─────────────────────────────────────────────────────
+          Expanded(
+            child: rooms.when(
+              loading: () => const LoadingWidget(),
+              error:
+                  (e, _) => EmptyState(
+                    title: 'Error',
+                    message: e.toString(),
+                    icon: Icons.error_outline_rounded,
+                  ),
+              data:
+                  (list) =>
+                      list.isEmpty
+                          ? const EmptyState(
+                            title: 'No Rooms',
+                            message: 'No rooms configured yet.',
+                            icon: Icons.meeting_room_outlined,
+                          )
+                          : ListView.builder(
+                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                            itemCount: list.length,
+                            itemBuilder:
+                                (ctx, i) => _RoomRow(
+                                  room: list[i],
+                                  rtdbTemp: rtdbTemp,
+                                  isDark: isDark,
+                                ),
+                          ),
+            ),
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ─── Comfort Score ───
-            sensorData.when(
-              loading: () => const LoadingWidget(),
-              error: (_, __) => const SizedBox.shrink(),
-              data: (data) {
-                if (data == null) {
-                  return const EmptyState(
-                    title: 'No Sensor Data',
-                    message: 'No readings available yet',
-                    icon: Icons.sensors_off_rounded,
-                  );
-                }
-                final color =
-                    data.comfortScore >= 70
-                        ? AppColors.success
-                        : data.comfortScore >= 40
-                        ? AppColors.warning
-                        : AppColors.error;
-                return Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    gradient: AppColors.primaryGradient,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Column(
-                    children: [
-                      Text(
-                        '${data.comfortScore.toInt()}%',
-                        style: AppTypography.displayLarge.copyWith(
-                          color: color,
-                          fontSize: 48,
-                        ),
-                      ),
-                      Text(
-                        'Comfort Score',
-                        style: AppTypography.bodySmall.copyWith(
-                          color: Colors.white60,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        data.comfortRecommendation,
-                        style: AppTypography.caption.copyWith(
-                          color: Colors.white60,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 16),
+    );
+  }
+}
 
-            // ─── Sensor Gauges ───
-            Text(
-              'Live Readings',
-              style: AppTypography.headingMedium.copyWith(
-                color: isDark ? AppColors.darkText : AppColors.lightText,
-              ),
-            ),
-            const SizedBox(height: 12),
-            sensorData.when(
-              loading: () => const LoadingWidget(),
-              error: (_, __) => const SizedBox.shrink(),
-              data: (data) {
-                if (data == null) return const SizedBox.shrink();
-                return GridView.count(
-                  crossAxisCount: 2,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 12,
-                  childAspectRatio: 1.2,
+class _LiveBanner extends StatelessWidget {
+  final DhtData data;
+  final bool isDark;
+  const _LiveBanner({required this.data, required this.isDark});
+
+  String _ago() {
+    final d = DateTime.now().difference(data.updatedAt);
+    if (d.inSeconds < 60) return '${d.inSeconds}s ago';
+    if (d.inMinutes < 60) return '${d.inMinutes}m ago';
+    return '${d.inHours}h ago';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tColor =
+        data.temperature < 24
+            ? AppColors.success
+            : data.temperature < 28
+            ? AppColors.warning
+            : AppColors.error;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: tColor.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: tColor.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.thermostat_rounded, color: tColor, size: 26),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    SensorGauge(
-                      label: 'Temperature',
-                      value: data.temperature,
-                      min: 0,
-                      max: 50,
-                      unit: '°C',
-                      icon: Icons.thermostat_rounded,
-                      color: AppColors.error,
+                    Container(
+                      width: 7,
+                      height: 7,
+                      decoration: BoxDecoration(
+                        color: AppColors.success,
+                        shape: BoxShape.circle,
+                      ),
                     ),
-                    SensorGauge(
-                      label: 'Humidity',
-                      value: data.humidity,
-                      min: 0,
-                      max: 100,
-                      unit: '%',
-                      icon: Icons.water_drop_rounded,
-                      color: AppColors.info,
-                    ),
-                    SensorGauge(
-                      label: 'Light',
-                      value: data.lightLevel,
-                      min: 0,
-                      max: 1000,
-                      unit: 'lx',
-                      icon: Icons.light_mode_rounded,
-                      color: AppColors.warning,
-                    ),
-                    SensorGauge(
-                      label: 'Noise',
-                      value: data.noiseLevel,
-                      min: 0,
-                      max: 100,
-                      unit: 'dB',
-                      icon: Icons.volume_up_rounded,
-                      color: AppColors.success,
+                    const SizedBox(width: 5),
+                    Text(
+                      'LIVE · Updated ${_ago()}',
+                      style: AppTypography.caption.copyWith(
+                        color: AppColors.success,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ],
-                );
-              },
+                ),
+                Text('dht22_ED26 · Floor 2', style: AppTypography.caption),
+              ],
             ),
-          ],
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                '${data.temperature.toStringAsFixed(1)}°C',
+                style: AppTypography.headingSmall.copyWith(color: tColor),
+              ),
+              Text(
+                '${data.humidity.toStringAsFixed(0)}% RH',
+                style: AppTypography.caption.copyWith(color: AppColors.info),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OfflineBanner extends StatelessWidget {
+  final bool isDark;
+  const _OfflineBanner({required this.isDark});
+  @override
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+    decoration: BoxDecoration(
+      color: AppColors.error.withValues(alpha: 0.07),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: AppColors.error.withValues(alpha: 0.25)),
+    ),
+    child: const Row(
+      children: [
+        Icon(Icons.sensors_off_rounded, color: AppColors.error, size: 16),
+        SizedBox(width: 8),
+        Text(
+          'Sensor offline — waiting for ESP32',
+          style: TextStyle(fontSize: 12),
         ),
+      ],
+    ),
+  );
+}
+
+class _RoomRow extends StatelessWidget {
+  final RoomModel room;
+  final AsyncValue<DhtData?> rtdbTemp;
+  final bool isDark;
+  const _RoomRow({
+    required this.room,
+    required this.rtdbTemp,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkCard : AppColors.lightCard,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: AppColors.teacherColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(
+              Icons.meeting_room_rounded,
+              color: AppColors.teacherColor,
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  room.name,
+                  style: AppTypography.labelMedium.copyWith(
+                    color: isDark ? AppColors.darkText : AppColors.lightText,
+                  ),
+                ),
+                Text(
+                  'Floor ${room.floor} · ${room.capacity} seats',
+                  style: AppTypography.caption,
+                ),
+              ],
+            ),
+          ),
+          rtdbTemp.when(
+            loading:
+                () => const SizedBox(
+                  width: 12,
+                  height: 12,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+            error:
+                (_, __) => const Text(
+                  '--',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+            data:
+                (d) =>
+                    d == null
+                        ? const Text(
+                          '--',
+                          style: TextStyle(fontSize: 12, color: Colors.grey),
+                        )
+                        : Text(
+                          '${d.temperature.toStringAsFixed(1)}°C',
+                          style: AppTypography.labelLarge.copyWith(
+                            color:
+                                d.temperature < 24
+                                    ? AppColors.success
+                                    : d.temperature < 28
+                                    ? AppColors.warning
+                                    : AppColors.error,
+                          ),
+                        ),
+          ),
+        ],
       ),
     );
   }
