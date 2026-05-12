@@ -6,11 +6,25 @@ import '../../../widgets/widgets.dart';
 import '../../../providers/providers.dart';
 import '../../../models/models.dart';
 
-class TeacherIotScreen extends ConsumerWidget {
+class TeacherIotScreen extends ConsumerStatefulWidget {
   const TeacherIotScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<TeacherIotScreen> createState() => _TeacherIotScreenState();
+}
+
+class _TeacherIotScreenState extends ConsumerState<TeacherIotScreen> {
+  final _searchCtrl = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final rooms = ref.watch(roomsProvider);
     final rtdbTemp = ref.watch(rtdbTemperatureProvider);
@@ -19,7 +33,7 @@ class TeacherIotScreen extends ConsumerWidget {
       backgroundColor:
           isDark ? AppColors.darkBackground : AppColors.lightBackground,
       appBar: AppBar(
-        title: const Text('Classroom IoT Monitor'),
+        title: const Text('Classroom Environment'),
         backgroundColor:
             isDark ? AppColors.darkSurface : AppColors.lightSurface,
       ),
@@ -36,6 +50,39 @@ class TeacherIotScreen extends ConsumerWidget {
                         : _LiveBanner(data: data, isDark: isDark),
           ),
 
+          // ── Search ───────────────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: TextField(
+              controller: _searchCtrl,
+              onChanged: (v) => setState(() => _query = v),
+              decoration: InputDecoration(
+                hintText: 'Search rooms...',
+                prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                suffixIcon:
+                    _query.isNotEmpty
+                        ? IconButton(
+                          icon: const Icon(Icons.clear_rounded, size: 18),
+                          onPressed: () {
+                            _searchCtrl.clear();
+                            setState(() => _query = '');
+                          },
+                        )
+                        : null,
+                filled: true,
+                fillColor: isDark ? AppColors.darkCard : AppColors.lightCard,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+              ),
+            ),
+          ),
+
           // ── Rooms list ─────────────────────────────────────────────────────
           Expanded(
             child: rooms.when(
@@ -46,24 +93,44 @@ class TeacherIotScreen extends ConsumerWidget {
                     message: e.toString(),
                     icon: Icons.error_outline_rounded,
                   ),
-              data:
-                  (list) =>
-                      list.isEmpty
-                          ? const EmptyState(
-                            title: 'No Rooms',
-                            message: 'No rooms configured yet.',
-                            icon: Icons.meeting_room_outlined,
-                          )
-                          : ListView.builder(
-                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                            itemCount: list.length,
-                            itemBuilder:
-                                (ctx, i) => _RoomRow(
-                                  room: list[i],
-                                  rtdbTemp: rtdbTemp,
-                                  isDark: isDark,
-                                ),
-                          ),
+              data: (list) {
+                final filtered =
+                    _query.isEmpty
+                        ? list
+                        : list
+                            .where(
+                              (r) =>
+                                  r.name.toLowerCase().contains(
+                                    _query.toLowerCase(),
+                                  ) ||
+                                  r.floor.toString().contains(_query),
+                            )
+                            .toList();
+                if (list.isEmpty) {
+                  return const EmptyState(
+                    title: 'No Rooms',
+                    message: 'No rooms configured yet.',
+                    icon: Icons.meeting_room_outlined,
+                  );
+                }
+                if (filtered.isEmpty) {
+                  return const EmptyState(
+                    title: 'No Results',
+                    message: '',
+                    icon: Icons.search_off_rounded,
+                  );
+                }
+                return ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                  itemCount: filtered.length,
+                  itemBuilder:
+                      (ctx, i) => _RoomRow(
+                        room: filtered[i],
+                        rtdbTemp: rtdbTemp,
+                        isDark: isDark,
+                      ),
+                );
+              },
             ),
           ),
         ],
@@ -76,13 +143,6 @@ class _LiveBanner extends StatelessWidget {
   final DhtData data;
   final bool isDark;
   const _LiveBanner({required this.data, required this.isDark});
-
-  String _ago() {
-    final d = DateTime.now().difference(data.updatedAt);
-    if (d.inSeconds < 60) return '${d.inSeconds}s ago';
-    if (d.inMinutes < 60) return '${d.inMinutes}m ago';
-    return '${d.inHours}h ago';
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -120,7 +180,7 @@ class _LiveBanner extends StatelessWidget {
                     ),
                     const SizedBox(width: 5),
                     Text(
-                      'LIVE · Updated ${_ago()}',
+                      'LIVE',
                       style: AppTypography.caption.copyWith(
                         color: AppColors.success,
                         fontWeight: FontWeight.bold,
@@ -128,21 +188,10 @@ class _LiveBanner extends StatelessWidget {
                     ),
                   ],
                 ),
-                Text('dht22_ED26 · Floor 2', style: AppTypography.caption),
               ],
             ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                '${data.temperature.toStringAsFixed(1)}°C',
-                style: AppTypography.headingSmall.copyWith(color: tColor),
-              ),
-              Text(
-                '${data.humidity.toStringAsFixed(0)}% RH',
-                style: AppTypography.caption.copyWith(color: AppColors.info),
-              ),
+          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
             ],
           ),
         ],
@@ -250,16 +299,32 @@ class _RoomRow extends StatelessWidget {
                           '--',
                           style: TextStyle(fontSize: 12, color: Colors.grey),
                         )
-                        : Text(
-                          '${d.temperature.toStringAsFixed(1)}°C',
-                          style: AppTypography.labelLarge.copyWith(
-                            color:
-                                d.temperature < 24
-                                    ? AppColors.success
-                                    : d.temperature < 28
-                                    ? AppColors.warning
-                                    : AppColors.error,
-                          ),
+                        : Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              '${d.temperature.toStringAsFixed(1)}°C',
+                              style: AppTypography.labelLarge.copyWith(
+                                color:
+                                    d.temperature < 24
+                                        ? AppColors.success
+                                        : d.temperature < 28
+                                        ? AppColors.warning
+                                        : AppColors.error,
+                              ),
+                            ),
+                            Text(
+                              '${d.humidity.toStringAsFixed(0)}% RH',
+                              style: AppTypography.labelSmall.copyWith(
+                                color:
+                                    d.humidity < 40
+                                        ? AppColors.warning
+                                        : d.humidity < 80
+                                        ? AppColors.success
+                                        : AppColors.error,
+                              ),
+                            ),
+                          ],
                         ),
           ),
         ],

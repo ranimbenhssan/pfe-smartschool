@@ -8,11 +8,25 @@ import '../../../providers/providers.dart';
 import '../../../navigation/app_routes.dart';
 import '../../../models/models.dart';
 
-class AdminIotScreen extends ConsumerWidget {
+class AdminIotScreen extends ConsumerStatefulWidget {
   const AdminIotScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AdminIotScreen> createState() => _AdminIotScreenState();
+}
+
+class _AdminIotScreenState extends ConsumerState<AdminIotScreen> {
+  final _searchCtrl = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final rooms = ref.watch(roomsProvider);
     final rtdbTemp = ref.watch(rtdbTemperatureProvider);
@@ -21,16 +35,9 @@ class AdminIotScreen extends ConsumerWidget {
       backgroundColor:
           isDark ? AppColors.darkBackground : AppColors.lightBackground,
       appBar: AppBar(
-        title: const Text('Sensor Devices'),
+        title: const Text('Temperature Monitor'),
         backgroundColor:
             isDark ? AppColors.darkSurface : AppColors.lightSurface,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.people_rounded),
-            tooltip: 'Teacher Presence',
-            onPressed: () => context.push(AppRoutes.adminTeacherPresence),
-          ),
-        ],
       ),
       body: Column(
         children: [
@@ -45,6 +52,39 @@ class AdminIotScreen extends ConsumerWidget {
                         : _DhtBanner(data: data, isDark: isDark),
           ),
 
+          // ── Search ───────────────────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: TextField(
+              controller: _searchCtrl,
+              onChanged: (v) => setState(() => _query = v),
+              decoration: InputDecoration(
+                hintText: 'Search rooms...',
+                prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                suffixIcon:
+                    _query.isNotEmpty
+                        ? IconButton(
+                          icon: const Icon(Icons.clear_rounded, size: 18),
+                          onPressed: () {
+                            _searchCtrl.clear();
+                            setState(() => _query = '');
+                          },
+                        )
+                        : null,
+                filled: true,
+                fillColor: isDark ? AppColors.darkCard : AppColors.lightCard,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+              ),
+            ),
+          ),
+
           // ── Rooms scrollable list ──────────────────────────────────────────
           Expanded(
             child: rooms.when(
@@ -56,17 +96,29 @@ class AdminIotScreen extends ConsumerWidget {
                     icon: Icons.error_outline_rounded,
                   ),
               data: (list) {
-                if (list.isEmpty) {
+                final filtered =
+                    _query.isEmpty
+                        ? list
+                        : list
+                            .where(
+                              (r) =>
+                                  r.name.toLowerCase().contains(
+                                    _query.toLowerCase(),
+                                  ) ||
+                                  r.floor.toString().contains(_query),
+                            )
+                            .toList();
+                if (filtered.isEmpty) {
                   return const EmptyState(
-                    title: 'No Rooms',
-                    message: 'No rooms configured yet.',
-                    icon: Icons.meeting_room_outlined,
+                    title: 'No Results',
+                    message: '',
+                    icon: Icons.search_off_rounded,
                   );
                 }
 
                 // Group by floor
                 final Map<int, List<RoomModel>> byFloor = {};
-                for (final r in list) {
+                for (final r in filtered) {
                   byFloor.putIfAbsent(r.floor, () => []).add(r);
                 }
                 final floors = byFloor.keys.toList()..sort();
@@ -256,7 +308,7 @@ class _RoomTile extends StatelessWidget {
                               const SizedBox(width: 6),
                               _TempChip(
                                 label: '${d.humidity.toStringAsFixed(0)}%',
-                                color: AppColors.info,
+                                color: _humColor(d.humidity),
                               ),
                             ],
                           ),
@@ -271,6 +323,12 @@ class _RoomTile extends StatelessWidget {
     if (t < 18) return Colors.blue;
     if (t < 24) return AppColors.success;
     if (t < 28) return AppColors.warning;
+    return AppColors.error;
+  }
+
+  Color _humColor(double h) {
+    if (h < 30) return Colors.blue;
+    if (h < 80) return AppColors.success;
     return AppColors.error;
   }
 }
@@ -318,25 +376,14 @@ class _DhtBanner extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'DHT22 — dht22_ED26 · Floor 2',
-                  style: AppTypography.labelMedium,
+                  'Live Temperature',
+                  style: AppTypography.labelMedium.copyWith(
+                    color: tColor,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-                Text('Updated ${_ago()}', style: AppTypography.caption),
               ],
             ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                '${data.temperature.toStringAsFixed(1)}°C',
-                style: AppTypography.headingMedium.copyWith(color: tColor),
-              ),
-              Text(
-                '${data.humidity.toStringAsFixed(0)}% hum',
-                style: AppTypography.caption.copyWith(color: AppColors.info),
-              ),
-            ],
           ),
         ],
       ),

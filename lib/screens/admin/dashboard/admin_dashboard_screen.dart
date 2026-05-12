@@ -213,6 +213,10 @@ class _DashboardBody extends ConsumerWidget {
             _buildQuickActions(context),
             const SizedBox(height: 24),
 
+            // ── Live Temperature ──────────────────────────────────────────
+            _buildTemperatureSection(context, isDark, ref),
+            const SizedBox(height: 24),
+
             _buildRecentMessages(context, isDark, ref),
             const SizedBox(height: 20),
           ],
@@ -461,10 +465,141 @@ class _DashboardBody extends ConsumerWidget {
         ),
         const SizedBox(width: 10),
         _QuickAction(
-          label: 'Settings',
-          icon: Icons.settings_rounded,
-          color: AppColors.warning,
-          onTap: () => context.push(AppRoutes.adminSettings),
+          label: 'Teacher Presence',
+          icon: Icons.people_rounded,
+          color: AppColors.info,
+          onTap: () => context.push(AppRoutes.adminTeacherPresence),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTemperatureSection(
+    BuildContext context,
+    bool isDark,
+    WidgetRef ref,
+  ) {
+    final rtdbTemp = ref.watch(rtdbTemperatureProvider);
+    final rooms = ref.watch(roomsProvider);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Classroom Temperature',
+              style: AppTypography.headingMedium.copyWith(
+                color: isDark ? AppColors.darkText : AppColors.lightText,
+              ),
+            ),
+            TextButton(
+              onPressed: () => context.push(AppRoutes.adminIot),
+              child: const Text('See all'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+
+        // Sensor status
+        rtdbTemp.when(
+          loading: () => const LoadingWidget(),
+          error:
+              (_, __) => Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.error.withValues(alpha: 0.07),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(
+                      Icons.sensors_off_rounded,
+                      color: AppColors.error,
+                      size: 16,
+                    ),
+                    SizedBox(width: 8),
+                    Text('Sensor offline'),
+                  ],
+                ),
+              ),
+          data: (d) {
+            if (d == null) {
+              return Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isDark ? AppColors.darkCard : AppColors.lightCard,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Text('Waiting for sensor data...'),
+              );
+            }
+
+            final tColor =
+                d.temperature < 24
+                    ? AppColors.success
+                    : d.temperature < 28
+                    ? AppColors.warning
+                    : AppColors.error;
+
+            return Column(
+              children: [
+                // Scrollable rooms list
+                rooms.when(
+                  loading: () => const SizedBox.shrink(),
+                  error: (_, __) => const SizedBox.shrink(),
+                  data:
+                      (list) => SizedBox(
+                        height: 80,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: list.take(10).length,
+                          separatorBuilder: (_, __) => const SizedBox(width: 8),
+                          itemBuilder: (ctx, i) {
+                            final room = list[i];
+                            return Container(
+                              width: 110,
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color:
+                                    isDark
+                                        ? AppColors.darkCard
+                                        : AppColors.lightCard,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: tColor.withValues(alpha: 0.25),
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    room.name,
+                                    style: AppTypography.labelSmall,
+                                  ),
+                                  Text(
+                                    'Floor ${room.floor}',
+                                    style: AppTypography.caption,
+                                  ),
+                                  Text(
+                                    '${d.temperature.toStringAsFixed(1)}°C',
+                                    style: AppTypography.labelSmall.copyWith(
+                                      color: tColor,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                ),
+              ],
+            );
+          },
         ),
       ],
     );
@@ -810,25 +945,28 @@ class _QuickAction extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: color.withValues(alpha: 0.2)),
-          ),
-          child: Column(
-            children: [
-              Icon(icon, color: color, size: 22),
-              const SizedBox(height: 6),
-              Text(
-                label,
-                style: AppTypography.labelSmall.copyWith(color: color),
-                textAlign: TextAlign.center,
-              ),
-            ],
+      child: SizedBox(
+        height: 86,
+        child: GestureDetector(
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: color.withValues(alpha: 0.2)),
+            ),
+            child: Column(
+              children: [
+                Icon(icon, color: color, size: 22),
+                const SizedBox(height: 6),
+                Text(
+                  label,
+                  style: AppTypography.labelSmall.copyWith(color: color),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
           ),
         ),
       ),
