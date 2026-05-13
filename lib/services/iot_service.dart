@@ -349,78 +349,17 @@ class RfidScanListener {
     String tag,
     String floor,
   ) async {
-    final now = DateTime.now();
-    final dateStr = _fmtDate(now);
+    // RFID = university access control only
+    // Student attendance is handled by teacher namecall — NOT here
 
-    // ── Boolean toggle using students/{id}.isInside ────────────────────────
-    // false (or missing) → entry  → set true
-    // true               → exit   → set false
     final studentRef = _db.collection('students').doc(studentId);
-    // Force server read — bypasses Firestore local cache which may hold stale isInside value
     final studentDoc = await studentRef.get(
       const GetOptions(source: Source.server),
     );
     final isInside = studentDoc.data()?['isInside'] as bool? ?? false;
     final direction = isInside ? 'out' : 'in';
 
-    // set+merge creates the field if it doesn't exist yet
     await studentRef.set({'isInside': !isInside}, SetOptions(merge: true));
-    debugPrint(
-      '[RFID] Student ${d['name']} isInside=$isInside → ${!isInside} ($direction)',
-    );
-
-    // Record attendance on entry only
-    if (!isInside) {
-      // Entry — check if already marked today by a teacher namecall
-      final existing =
-          await _db
-              .collection('attendance')
-              .where('studentId', isEqualTo: studentId)
-              .where('date', isEqualTo: dateStr)
-              .where('subject', isEqualTo: 'Entry')
-              .limit(1)
-              .get();
-
-      if (existing.docs.isEmpty) {
-        final schoolStart = DateTime(now.year, now.month, now.day, 8, 0);
-        final status =
-            now.difference(schoolStart).inMinutes > 15 ? 'late' : 'present';
-        await _db.collection('attendance').add({
-          'studentId': studentId,
-          'studentName': d['name'] ?? '',
-          'classId': d['classId'] ?? '',
-          'className': d['className'] ?? '',
-          'date': dateStr,
-          'status': status,
-          'entryTime': Timestamp.fromDate(now),
-          'exitTime': null,
-          'teacherId': '',
-          'teacherName': '',
-          'subject': 'Entry',
-          'sessionName': 'University Entry',
-          'roomId': '',
-          'roomName': '',
-          'recordedAt': FieldValue.serverTimestamp(),
-          'note': 'RFID — $floor',
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-      }
-    } else {
-      // Exit — update exitTime on the entry record
-      final existing =
-          await _db
-              .collection('attendance')
-              .where('studentId', isEqualTo: studentId)
-              .where('date', isEqualTo: dateStr)
-              .where('subject', isEqualTo: 'Entry')
-              .limit(1)
-              .get();
-      if (existing.docs.isNotEmpty) {
-        await existing.docs.first.reference.update({
-          'exitTime': Timestamp.fromDate(now),
-        });
-      }
-    }
 
     await _db.collection('rfid_logs').add({
       'rfidTag': tag,
@@ -433,7 +372,7 @@ class RfidScanListener {
       'timestamp': FieldValue.serverTimestamp(),
     });
 
-    debugPrint('[RFID] Student ${d['name']} → $direction (logged)');
+    debugPrint('[RFID] Student ${d['name']} → $direction');
   }
 
   Future<void> _processTeacherEntry(
