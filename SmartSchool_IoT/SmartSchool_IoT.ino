@@ -65,7 +65,7 @@
 
 // ─── DHT22 — single sensor ────────────────────────────────────────────────────
 #define SENSOR_NAME   "dht22"
-#define SENSOR_PIN    6
+#define SENSOR_PIN    27
 
 #define DHT_TYPE  DHT22
 
@@ -78,10 +78,10 @@
 
 // ─── LEDs ─────────────────────────────────────────────────────────────────────
 #define LED_GREEN  26
-#define LED_RED    27
+#define LED_RED    25
 
 // ─── Servo ────────────────────────────────────────────────────────────────────
-#define SERVO_PIN    3
+#define SERVO_PIN    13
 #define SERVO_OPEN   90
 #define SERVO_CLOSE   0
 #define SERVO_HOLD   3000
@@ -116,6 +116,7 @@ void setup() {
   gateServo.write(SERVO_CLOSE);
 
   // ── LCD ───────────────────────────────────────────────────────────────────
+  Wire.begin(21, 22);
   lcd.init();
   lcd.backlight();
   lcdPrint("SmartSchool","");
