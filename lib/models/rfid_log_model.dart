@@ -29,7 +29,7 @@ class RfidLogModel {
       id: doc.id,
       rfidTag: data['rfidTag'] ?? '',
       studentId: data['studentId'] ?? '',
-      studentName: data['studentName'] ?? '',
+      studentName: data['studentName'] ?? data['teacherName'] ?? '',
       doorId: data['doorId'] ?? '',
       direction:
           (data['direction'] as String? ?? '').toLowerCase() == 'in'
