@@ -356,7 +356,10 @@ class RfidScanListener {
     // false (or missing) → entry  → set true
     // true               → exit   → set false
     final studentRef = _db.collection('students').doc(studentId);
-    final studentDoc = await studentRef.get();
+    // Force server read — bypasses Firestore local cache which may hold stale isInside value
+    final studentDoc = await studentRef.get(
+      const GetOptions(source: Source.server),
+    );
     final isInside = studentDoc.data()?['isInside'] as bool? ?? false;
     final direction = isInside ? 'out' : 'in';
 
@@ -447,7 +450,10 @@ class RfidScanListener {
     // false (or missing) → entry  → set true
     // true               → exit   → set false
     final teacherRef = _db.collection('teachers').doc(teacherId);
-    final teacherDoc = await teacherRef.get();
+    // Force server read — bypasses Firestore local cache
+    final teacherDoc = await teacherRef.get(
+      const GetOptions(source: Source.server),
+    );
     final isInside = teacherDoc.data()?['isInside'] as bool? ?? false;
     final direction = isInside ? 'out' : 'in';
 
