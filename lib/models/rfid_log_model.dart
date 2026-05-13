@@ -31,7 +31,10 @@ class RfidLogModel {
       studentId: data['studentId'] ?? '',
       studentName: data['studentName'] ?? '',
       doorId: data['doorId'] ?? '',
-      direction: data['direction'] == 'IN' ? RfidDirection.in_ : RfidDirection.out,
+      direction:
+          (data['direction'] as String? ?? '').toLowerCase() == 'in'
+              ? RfidDirection.in_
+              : RfidDirection.out,
       timestamp: (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now(),
       isRecognized: data['isRecognized'] ?? false,
     );
