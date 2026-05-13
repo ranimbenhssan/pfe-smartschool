@@ -351,37 +351,68 @@ class RfidScanListener {
   ) async {
     final now = DateTime.now();
     final dateStr = _fmtDate(now);
-    final existing =
-        await _db
-            .collection('attendance')
-            .where('studentId', isEqualTo: studentId)
-            .where('date', isEqualTo: dateStr)
-            .limit(1)
-            .get();
 
-    if (existing.docs.isEmpty) {
-      final schoolStart = DateTime(now.year, now.month, now.day, 8, 0);
-      final status =
-          now.difference(schoolStart).inMinutes > 15 ? 'late' : 'present';
-      await _db.collection('attendance').add({
-        'studentId': studentId,
-        'studentName': d['name'] ?? '',
-        'classId': d['classId'] ?? '',
-        'className': d['className'] ?? '',
-        'date': dateStr,
-        'status': status,
-        'entryTime': Timestamp.fromDate(now),
-        'exitTime': null,
-        'teacherId': '',
-        'teacherName': '',
-        'subject': 'Entry',
-        'sessionName': 'University Entry',
-        'roomId': '',
-        'roomName': '',
-        'recordedAt': FieldValue.serverTimestamp(),
-        'note': 'RFID — $floor',
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+    // ── Boolean toggle using students/{id}.isInside ────────────────────────
+    // false (or missing) → entry  → set true
+    // true               → exit   → set false
+    final studentRef = _db.collection('students').doc(studentId);
+    final studentDoc = await studentRef.get();
+    final isInside = studentDoc.data()?['isInside'] as bool? ?? false;
+    final direction = isInside ? 'out' : 'in';
+
+    await studentRef.update({'isInside': !isInside});
+
+    // Record attendance on entry only
+    if (!isInside) {
+      // Entry — check if already marked today by a teacher namecall
+      final existing =
+          await _db
+              .collection('attendance')
+              .where('studentId', isEqualTo: studentId)
+              .where('date', isEqualTo: dateStr)
+              .where('subject', isEqualTo: 'Entry')
+              .limit(1)
+              .get();
+
+      if (existing.docs.isEmpty) {
+        final schoolStart = DateTime(now.year, now.month, now.day, 8, 0);
+        final status =
+            now.difference(schoolStart).inMinutes > 15 ? 'late' : 'present';
+        await _db.collection('attendance').add({
+          'studentId': studentId,
+          'studentName': d['name'] ?? '',
+          'classId': d['classId'] ?? '',
+          'className': d['className'] ?? '',
+          'date': dateStr,
+          'status': status,
+          'entryTime': Timestamp.fromDate(now),
+          'exitTime': null,
+          'teacherId': '',
+          'teacherName': '',
+          'subject': 'Entry',
+          'sessionName': 'University Entry',
+          'roomId': '',
+          'roomName': '',
+          'recordedAt': FieldValue.serverTimestamp(),
+          'note': 'RFID — $floor',
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+    } else {
+      // Exit — update exitTime on the entry record
+      final existing =
+          await _db
+              .collection('attendance')
+              .where('studentId', isEqualTo: studentId)
+              .where('date', isEqualTo: dateStr)
+              .where('subject', isEqualTo: 'Entry')
+              .limit(1)
+              .get();
+      if (existing.docs.isNotEmpty) {
+        await existing.docs.first.reference.update({
+          'exitTime': Timestamp.fromDate(now),
+        });
+      }
     }
 
     await _db.collection('rfid_logs').add({
@@ -389,11 +420,13 @@ class RfidScanListener {
       'studentId': studentId,
       'studentName': d['name'] ?? '',
       'isRecognized': true,
-      'direction': 'in',
+      'direction': direction,
       'role': 'student',
       'floor': floor,
       'timestamp': FieldValue.serverTimestamp(),
     });
+
+    debugPrint('[RFID] Student ${d['name']} → $direction');
   }
 
   Future<void> _processTeacherEntry(
@@ -406,12 +439,21 @@ class RfidScanListener {
     final dateStr = _fmtDate(now);
     final teacherName = d['name']?.toString() ?? '';
 
-    final ref = _db.collection('teacher_daily_presence').doc(teacherId);
-    final doc = await ref.get();
-    final isFirst = !doc.exists || doc.data()?['date'] != dateStr;
+    // ── Boolean toggle using teachers/{id}.isInside ────────────────────────
+    // false (or missing) → entry  → set true
+    // true               → exit   → set false
+    final teacherRef = _db.collection('teachers').doc(teacherId);
+    final teacherDoc = await teacherRef.get();
+    final isInside = teacherDoc.data()?['isInside'] as bool? ?? false;
+    final direction = isInside ? 'out' : 'in';
 
-    if (isFirst) {
-      await ref.set({
+    await teacherRef.update({'isInside': !isInside});
+
+    final presenceRef = _db.collection('teacher_daily_presence').doc(teacherId);
+
+    if (!isInside) {
+      // ── Entry ──────────────────────────────────────────────────────────
+      await presenceRef.set({
         'teacherId': teacherId,
         'teacherName': teacherName,
         'date': dateStr,
@@ -419,10 +461,19 @@ class RfidScanListener {
         'exitTime': null,
         'status': 'in',
       });
+      debugPrint('[RFID] Teacher $teacherName → Entry');
     } else {
+      // ── Exit ───────────────────────────────────────────────────────────
+      final presenceDoc = await presenceRef.get();
       final entryTime =
-          (doc.data()?['entryTime'] as Timestamp?)?.toDate() ?? now;
-      await ref.update({'exitTime': Timestamp.fromDate(now), 'status': 'out'});
+          (presenceDoc.data()?['entryTime'] as Timestamp?)?.toDate() ?? now;
+
+      await presenceRef.update({
+        'exitTime': Timestamp.fromDate(now),
+        'status': 'out',
+      });
+
+      // Write permanent sheet record
       await _db
           .collection('teacher_attendance')
           .doc(teacherId)
@@ -438,6 +489,11 @@ class RfidScanListener {
             'duration': now.difference(entryTime).inMinutes,
             'recordedAt': FieldValue.serverTimestamp(),
           });
+
+      debugPrint(
+        '[RFID] Teacher $teacherName → Exit '
+        '(${now.difference(entryTime).inMinutes} min)',
+      );
     }
 
     await _db.collection('rfid_logs').add({
@@ -445,7 +501,7 @@ class RfidScanListener {
       'teacherId': teacherId,
       'teacherName': teacherName,
       'isRecognized': true,
-      'direction': isFirst ? 'in' : 'out',
+      'direction': direction,
       'role': 'teacher',
       'floor': floor,
       'timestamp': FieldValue.serverTimestamp(),
