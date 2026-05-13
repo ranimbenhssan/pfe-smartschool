@@ -360,7 +360,11 @@ class RfidScanListener {
     final isInside = studentDoc.data()?['isInside'] as bool? ?? false;
     final direction = isInside ? 'out' : 'in';
 
-    await studentRef.update({'isInside': !isInside});
+    // set+merge creates the field if it doesn't exist yet
+    await studentRef.set({'isInside': !isInside}, SetOptions(merge: true));
+    debugPrint(
+      '[RFID] Student ${d['name']} isInside=$isInside → ${!isInside} ($direction)',
+    );
 
     // Record attendance on entry only
     if (!isInside) {
@@ -426,7 +430,7 @@ class RfidScanListener {
       'timestamp': FieldValue.serverTimestamp(),
     });
 
-    debugPrint('[RFID] Student ${d['name']} → $direction');
+    debugPrint('[RFID] Student ${d['name']} → $direction (logged)');
   }
 
   Future<void> _processTeacherEntry(
@@ -447,7 +451,10 @@ class RfidScanListener {
     final isInside = teacherDoc.data()?['isInside'] as bool? ?? false;
     final direction = isInside ? 'out' : 'in';
 
-    await teacherRef.update({'isInside': !isInside});
+    await teacherRef.set({'isInside': !isInside}, SetOptions(merge: true));
+    debugPrint(
+      '[RFID] Teacher $teacherName isInside=$isInside → ${!isInside} ($direction)',
+    );
 
     final presenceRef = _db.collection('teacher_daily_presence').doc(teacherId);
 
