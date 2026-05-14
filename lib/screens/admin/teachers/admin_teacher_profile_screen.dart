@@ -57,7 +57,7 @@ class AdminTeacherProfileScreen extends ConsumerWidget {
       slivers: [
         // ─── Header ───
         SliverAppBar(
-          expandedHeight: 200,
+          expandedHeight: 220,
           pinned: true,
           backgroundColor:
               isDark ? AppColors.darkSurface : AppColors.lightSurface,
@@ -74,53 +74,54 @@ class AdminTeacherProfileScreen extends ConsumerWidget {
               decoration: const BoxDecoration(
                 gradient: AppColors.primaryGradient,
               ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const SizedBox(height: 60),
-                  CircleAvatar(
-                    radius: 40,
-                    backgroundColor: AppColors.teacherColor.withValues(
-                      alpha: 0.2,
-                    ),
-                  ),
-                  CircleAvatar(
-                    radius: 22,
-                    backgroundColor: AppColors.teacherColor.withValues(alpha: 0.15),
-                    child: Text(
-                      teacher.name.isNotEmpty
-                          ? teacher.name[0].toUpperCase()
-                          : '?',
-                      style: AppTypography.labelLarge.copyWith(
-                        color: AppColors.teacherColor,
+              child: SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 40, bottom: 12),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Single avatar — remove the double CircleAvatar
+                      CircleAvatar(
+                        radius: 36,
+                        backgroundColor: Colors.white.withValues(alpha: 0.2),
+                        child: Text(
+                          teacher.name.isNotEmpty
+                              ? teacher.name[0].toUpperCase()
+                              : '?',
+                          style: AppTypography.headingLarge.copyWith(
+                            color: Colors.white,
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    teacher.name,
-                    style: AppTypography.headingLarge.copyWith(
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.teacherColor.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      'TEACHER',
-                      style: AppTypography.labelSmall.copyWith(
-                        color: AppColors.teacherColor,
+                      const SizedBox(height: 10),
+                      Text(
+                        teacher.name,
+                        style: AppTypography.headingLarge.copyWith(
+                          color: Colors.white,
+                        ),
                       ),
-                    ),
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.teacherColor.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          'TEACHER',
+                          style: AppTypography.labelSmall.copyWith(
+                            color: AppColors.teacherColor,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ),
@@ -269,35 +270,48 @@ class AdminTeacherProfileScreen extends ConsumerWidget {
                     return timetable.when(
                       loading: () => const LoadingWidget(),
                       error: (e, _) => const SizedBox.shrink(),
-                      data:
-                          (list) =>
-                              list.isEmpty
-                                  ? Container(
-                                    padding: const EdgeInsets.all(16),
-                                    decoration: BoxDecoration(
-                                      color:
-                                          isDark
-                                              ? AppColors.darkCard
-                                              : AppColors.lightCard,
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color:
-                                            isDark
-                                                ? AppColors.darkBorder
-                                                : AppColors.lightBorder,
-                                      ),
-                                    ),
-                                    child: Text(
-                                      'No timetable entries yet',
-                                      style: AppTypography.bodySmall.copyWith(
-                                        color:
-                                            isDark
-                                                ? AppColors.darkTextSecondary
-                                                : AppColors.lightTextSecondary,
-                                      ),
-                                    ),
-                                  )
-                                  : TimetableGrid(entries: list),
+                      data: (list) {
+                        if (list.isEmpty) {
+                          return Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color:
+                                  isDark
+                                      ? AppColors.darkCard
+                                      : AppColors.lightCard,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color:
+                                    isDark
+                                        ? AppColors.darkBorder
+                                        : AppColors.lightBorder,
+                              ),
+                            ),
+                            child: Text(
+                              'No timetable entries yet',
+                              style: AppTypography.bodySmall.copyWith(
+                                color:
+                                    isDark
+                                        ? AppColors.darkTextSecondary
+                                        : AppColors.lightTextSecondary,
+                              ),
+                            ),
+                          );
+                        }
+
+                        // ── Deduplicate TP groups ───────────────────────
+                        // A teacher assigned to TP1 + TP2 gets the same seance twice.
+                        // Keep only one entry per subject+day+startTime+endTime.
+                        final seen = <String>{};
+                        final deduplicated =
+                            list.where((e) {
+                              final key =
+                                  '${e.subject}|${e.dayOfWeek}|${e.startTime}|${e.endTime}';
+                              return seen.add(key);
+                            }).toList();
+
+                        return TimetableGrid(entries: deduplicated);
+                      },
                     );
                   },
                 ),
