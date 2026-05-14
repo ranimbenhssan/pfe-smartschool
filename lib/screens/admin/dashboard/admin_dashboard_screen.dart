@@ -955,16 +955,16 @@ class _MoreMenu extends ConsumerWidget {
             route: AppRoutes.adminmessage,
           ),
           _MoreItem(
-            label: 'Import',
-            icon: Icons.upload_file_rounded,
-            color: AppColors.success,
-            route: AppRoutes.adminImport,
-          ),
-          _MoreItem(
-            label: 'Password Requests',
+            label: 'Staff Password Reqs',
             icon: Icons.lock_reset_rounded,
             color: AppColors.warning,
             route: AppRoutes.adminPasswordRequests,
+          ),
+          _MoreItem(
+            label: 'Import Staff',
+            icon: Icons.upload_file_rounded,
+            color: AppColors.success,
+            route: AppRoutes.adminStaffImport,
           ),
           _MoreItem(
             label: 'Settings',

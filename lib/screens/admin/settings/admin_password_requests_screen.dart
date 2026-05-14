@@ -5,15 +5,38 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../theme/theme.dart';
 import '../../../widgets/widgets.dart';
 import '../../../services/password_reset_service.dart';
+import '../../../providers/providers.dart';
+import '../../../models/models.dart';
 
 final _resetRequestsProvider = StreamProvider<List<Map<String, dynamic>>>((
   ref,
 ) {
-  return FirebaseFirestore.instance
+  final role = ref.watch(currentUserProvider).value?.role ?? UserRole.unknown;
+
+  final query = FirebaseFirestore.instance
       .collection('password_reset_requests')
-      .orderBy('requestedAt', descending: true)
-      .snapshots()
-      .map((s) => s.docs.map((d) => {'id': d.id, ...d.data()}).toList());
+      .orderBy('requestedAt', descending: true);
+
+  return query.snapshots().map((s) {
+    final all = s.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+
+    if (role == UserRole.superAdmin) {
+      return all.where((r) {
+        final r2 = r['role']?.toString() ?? '';
+        return r2 == 'admin_rh' || r2 == 'admin_scolarite';
+      }).toList();
+    }
+
+    if (role == UserRole.adminRH) {
+      return all.where((r) => r['role']?.toString() == 'teacher').toList();
+    }
+
+    if (role == UserRole.adminScolarite) {
+      return all.where((r) => r['role']?.toString() == 'student').toList();
+    }
+
+    return all;
+  });
 });
 
 class AdminPasswordRequestsScreen extends ConsumerWidget {

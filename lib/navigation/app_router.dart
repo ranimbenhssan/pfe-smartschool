@@ -68,6 +68,7 @@ import '../screens/shared/message_detail_screen.dart';
 import '../screens/shared/message_reply_screen.dart';
 import '../screens/shared/change_password_screen.dart';
 import '../screens/admin/import/admin_import_screen.dart';
+import '../screens/admin/import/super_admin_import_screen.dart';
 
 class PlaceholderScreen extends StatelessWidget {
   final String title;
@@ -160,6 +161,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.adminTeacherSheet,
         builder: (context, state) => const AdminTeacherSheetScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.adminStaffImport,
+        builder: (context, state) => const SuperAdminImportScreen(),
       ),
       GoRoute(
         path: AppRoutes.adminDashboard,

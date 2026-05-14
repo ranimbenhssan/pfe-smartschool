@@ -43,20 +43,29 @@ class PasswordResetService {
         'newPassword': null,
       });
 
-      // Notify the correct staff category based on the requesting user's role:
-      // teacher → notify adminRH
-      // student → notify adminScolarite
-      // fallback → notify superAdmin
-      final String targetAdminRole;
+      // Route notification to correct staff category:
+      // teacher → adminRH
+      // student → adminScolarite
+      // admin_rh / admin_scolarite / super_admin → superAdmin (staff reset)
+      // No notification sent to superAdmin for teacher/student resets
+
+      String? targetAdminRole;
+      String? recipientLabel;
+
       if (role == 'teacher') {
         targetAdminRole = 'admin_rh';
+        recipientLabel = 'HR Staff';
       } else if (role == 'student') {
         targetAdminRole = 'admin_scolarite';
+        recipientLabel = 'Registrar';
       } else {
+        // Staff member (admin_rh / admin_scolarite) requesting reset
+        // → notify superAdmin only
         targetAdminRole = 'super_admin';
+        recipientLabel = 'Director';
       }
 
-      // Try the targeted role first, fall back to super_admin if not found
+      // Find the recipient account
       var recipientSnap =
           await _db
               .collection('users')
@@ -64,18 +73,8 @@ class PasswordResetService {
               .limit(1)
               .get();
 
-      if (recipientSnap.docs.isEmpty) {
-        // Fallback to super_admin
-        recipientSnap =
-            await _db
-                .collection('users')
-                .where('role', isEqualTo: 'super_admin')
-                .limit(1)
-                .get();
-      }
-
-      // Also legacy fallback to old 'admin' role
-      if (recipientSnap.docs.isEmpty) {
+      // Fallback to legacy 'admin' role if target not found
+      if (recipientSnap.docs.isEmpty && targetAdminRole == 'super_admin') {
         recipientSnap =
             await _db
                 .collection('users')
@@ -85,10 +84,8 @@ class PasswordResetService {
       }
 
       if (recipientSnap.docs.isNotEmpty) {
-        final recipientId = recipientSnap.docs.first.id;
-        final recipientLabel = role == 'teacher' ? 'HR Staff' : 'Registrar';
         await _db.collection('notifications').add({
-          'userId': recipientId,
+          'userId': recipientSnap.docs.first.id,
           'senderId': userId,
           'senderName': userName,
           'senderRole': role,
