@@ -829,6 +829,12 @@ class _MoreMenu extends StatelessWidget {
         color: AppColors.info,
         route: AppRoutes.adminSemesters,
       ),
+      _MoreItem(
+        label: 'Teacher Sheet',
+        icon: Icons.table_rows_rounded,
+        color: AppColors.info,
+        route: AppRoutes.adminTeacherSheet,
+      ),
     ];
 
     return ListView.builder(

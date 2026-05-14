@@ -48,6 +48,13 @@ class AdminTeacherPresenceScreen extends ConsumerWidget {
         title: const Text('Teacher Presence'),
         backgroundColor:
             isDark ? AppColors.darkSurface : AppColors.lightSurface,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.table_rows_rounded),
+            tooltip: 'Teacher Attendance Sheet',
+            onPressed: () => context.push(AppRoutes.adminTeacherSheet),
+          ),
+        ],
       ),
       body: Column(
         children: [

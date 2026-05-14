@@ -44,6 +44,7 @@ class AppRoutes {
   static const String adminSemesters = '/admin/semesters';
   static const String adminPasswordRequests = '/admin/password-requests';
   static const String adminTeacherPresence = '/admin/teacher-presence';
+  static const String adminTeacherSheet = '/admin/teacher-sheet';
 
   // ─── Teacher ───
   static const String teacherDashboard = '/teacher/dashboard';
