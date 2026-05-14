@@ -100,7 +100,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       }
 
       switch (currentUser.role) {
-        case UserRole.admin:
+        case UserRole.superAdmin:
+        case UserRole.adminRH:
+        case UserRole.adminScolarite:
           context.go(AppRoutes.adminDashboard);
           break;
         case UserRole.teacher:

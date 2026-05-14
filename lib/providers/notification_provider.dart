@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/models.dart';
+import '../services/auth_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  NOTIFICATIONS PROVIDER  — single query, no duplicates
@@ -20,29 +21,43 @@ import '../models/models.dart';
 //  (the sender's own outbox copy written by sendToUser when target == self).
 //  Since sendToUser only creates ONE doc, there is no duplication risk.
 // ─────────────────────────────────────────────────────────────────────────────
-final notificationsProvider = StreamProvider.family<
-  List<NotificationModel>,
-  String
->((ref, userId) {
-  if (userId.isEmpty) return Stream.value([]);
+final notificationsProvider = StreamProvider<List<NotificationModel>>((ref) {
+  final userAsync = ref.watch(currentUserProvider);
+  return userAsync.when(
+    loading: () => const Stream.empty(),
+    error: (_, __) => const Stream.empty(),
+    data: (user) {
+      if (user == null) return const Stream.empty();
 
-  // Primary: all messages where this user is a recipient.
-  // For broadcasts: sender is always included as a recipient by sendToAll/sendToClass.
-  // For direct messages received: included naturally.
-  // For direct messages sent to others: NOT included here (handled below).
-  return FirebaseFirestore.instance
-      .collection('notifications')
-      .where('userId', isEqualTo: userId)
-      .orderBy('createdAt', descending: true)
-      .limit(100)
-      .snapshots()
-      .map((snap) => snap.docs.map(NotificationModel.fromFirestore).toList());
+      final db = FirebaseFirestore.instance;
+
+      if (user.role == UserRole.superAdmin) {
+        return db
+            .collection('notifications')
+            .orderBy('createdAt', descending: true)
+            .limit(100)
+            .snapshots()
+            .map(
+              (snap) => snap.docs.map(NotificationModel.fromFirestore).toList(),
+            );
+      }
+
+      return db
+          .collection('notifications')
+          .where('userId', isEqualTo: user.id)
+          .orderBy('createdAt', descending: true)
+          .snapshots()
+          .map(
+            (snap) => snap.docs.map(NotificationModel.fromFirestore).toList(),
+          );
+    },
+  );
 });
 
 /// Unread badge count — received messages only
-final unreadmessageCountProvider = Provider.family<int, String>((ref, userId) {
+final unreadmessageCountProvider = Provider<int>((ref) {
   return ref
-      .watch(notificationsProvider(userId))
+      .watch(notificationsProvider)
       .maybeWhen(
         data: (list) => list.where((n) => !n.isRead).length,
         orElse: () => 0,

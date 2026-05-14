@@ -188,6 +188,14 @@ class NotificationService {
       }
 
       await batch.commit();
+
+      await _copyToSuperAdmin(
+        payload,
+        originalRecipient:
+            recipientLabel.isNotEmpty ? recipientLabel : 'Direct message',
+        recipientUserId: recipientUserId,
+        senderId: senderId,
+      );
       return true;
     } catch (e) {
       debugPrint('[FCM] sendToUser error: $e');
@@ -244,6 +252,20 @@ class NotificationService {
     String className = '',
   }) async {
     try {
+      final payload = {
+        'title': title,
+        'message': body,
+        'messageType': type,
+        'senderId': senderId,
+        'senderName': senderName,
+        'senderRole': senderRole,
+        'attachments': attachments,
+        'recipientLabel': className.isNotEmpty ? 'Class $className' : 'Class',
+        'replyToId': '',
+        'replyToTitle': '',
+        'isRead': false,
+        'createdAt': FieldValue.serverTimestamp(),
+      };
       final studentsSnap =
           await _db
               .collection('students')
@@ -253,25 +275,50 @@ class NotificationService {
         final userId = studentDoc.data()['userId'] as String? ?? '';
         if (userId.isEmpty) continue;
         await _db.collection('notifications').add({
+          ...payload,
           'userId': userId,
-          'title': title,
-          'message': body,
-          'messageType': type,
-          'senderId': senderId,
-          'senderName': senderName,
-          'senderRole': senderRole,
-          'attachments': attachments, // ← was missing
-          'recipientLabel': className.isNotEmpty ? 'Class $className' : 'Class',
-          'replyToId': '',
-          'replyToTitle': '',
-          'isRead': false,
-          'createdAt': FieldValue.serverTimestamp(),
         });
       }
+
+      await _copyToSuperAdmin(
+        payload,
+        originalRecipient: className.isNotEmpty ? 'Class $className' : 'Class',
+        senderId: senderId,
+      );
       return true;
     } catch (e) {
       debugPrint('[FCM] sendToClass error: $e');
       return false;
+    }
+  }
+
+  Future<void> _copyToSuperAdmin(
+    Map<String, dynamic> payload, {
+    required String originalRecipient,
+    String? recipientUserId,
+    String? senderId,
+  }) async {
+    try {
+      final superAdminSnap =
+          await _db
+              .collection('users')
+              .where('role', isEqualTo: 'super_admin')
+              .limit(1)
+              .get();
+
+      if (superAdminSnap.docs.isEmpty) return;
+      final superAdminId = superAdminSnap.docs.first.id;
+      if (superAdminId == recipientUserId || superAdminId == senderId) return;
+
+      await _db.collection('notifications').add({
+        ...payload,
+        'userId': superAdminId,
+        'isCopy': true,
+        'originalRecipient': originalRecipient,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      debugPrint('[FCM] superAdmin copy error: $e');
     }
   }
 

@@ -366,7 +366,7 @@ class _DashboardBody extends ConsumerWidget {
     WidgetRef ref,
     String userId,
   ) {
-    final messages = ref.watch(notificationsProvider(userId));
+    final messages = ref.watch(notificationsProvider);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

@@ -95,7 +95,7 @@ class _MessageListState extends ConsumerState<_MessageList> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final messages = ref.watch(notificationsProvider(widget.userId));
+    final messages = ref.watch(notificationsProvider);
 
     return messages.when(
       loading: () => const LoadingWidget(),
