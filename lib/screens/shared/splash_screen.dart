@@ -230,7 +230,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                     fontFamily: AppTypography.displayFont,
                     fontSize: 32,
                     fontWeight: FontWeight.w700,
-                    color: Colors.white,
+                    color: const Color.fromARGB(255, 255, 212, 103),
                     letterSpacing: -0.5,
                   ),
                 ),
