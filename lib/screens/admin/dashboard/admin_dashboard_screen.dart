@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -28,19 +27,6 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final pendingCount =
-        ref
-            .watch(
-              StreamProvider(
-                (ref) => FirebaseFirestore.instance
-                    .collection('password_reset_requests')
-                    .where('status', isEqualTo: 'pending')
-                    .snapshots()
-                    .map((s) => s.docs.length),
-              ),
-            )
-            .value ??
-        0;
 
     return Scaffold(
       backgroundColor:
@@ -51,7 +37,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
         children: [
           const _DashboardBody(),
           const _StudentsTab(),
-          _MoreMenu(pendingCount: pendingCount),
+          const _MoreMenu(),
         ],
       ),
       bottomNavigationBar: _buildBottomNav(isDark),
@@ -213,7 +199,7 @@ class _DashboardBody extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 12),
-            _buildQuickActions(context, role),
+            _buildQuickActions(context, ref, isDark),
             const SizedBox(height: 24),
 
             // ── Live Temperature ──────────────────────────────────────────
@@ -452,44 +438,112 @@ class _DashboardBody extends ConsumerWidget {
     );
   }
 
-  Widget _buildQuickActions(BuildContext context, UserRole role) {
-    return Row(
-      children: [
-        if (role.canManageTeachers) ...[
-          _QuickAction(
+  Widget _buildQuickActions(BuildContext context, WidgetRef ref, bool isDark) {
+    final role = ref.watch(currentUserProvider).value?.role ?? UserRole.unknown;
+
+    if (role == UserRole.superAdmin) {
+      return Row(
+        children: [
+          _QA(
+            label: 'Teacher\nPresence',
+            icon: Icons.how_to_reg_rounded,
+            color: AppColors.teacherColor,
+            onTap: () => context.push(AppRoutes.adminTeacherPresence),
+          ),
+          const SizedBox(width: 10),
+          _QA(
+            label: 'RFID Logs',
+            icon: Icons.nfc_rounded,
+            color: AppColors.accent,
+            onTap: () => context.push(AppRoutes.adminRfid),
+          ),
+          const SizedBox(width: 10),
+          _QA(
+            label: 'Flags',
+            icon: Icons.warning_amber_rounded,
+            color: AppColors.error,
+            onTap: () => context.push(AppRoutes.adminAiAlerts),
+          ),
+          const SizedBox(width: 10),
+          _QA(
+            label: 'Messages',
+            icon: Icons.message_rounded,
+            color: AppColors.secondary,
+            onTap: () => context.push(AppRoutes.adminmessage),
+          ),
+        ],
+      );
+    }
+
+    if (role == UserRole.adminRH) {
+      return Row(
+        children: [
+          _QA(
             label: 'Teachers',
             icon: Icons.person_rounded,
             color: AppColors.teacherColor,
             onTap: () => context.push(AppRoutes.adminTeachers),
           ),
           const SizedBox(width: 10),
+          _QA(
+            label: 'Presence',
+            icon: Icons.how_to_reg_rounded,
+            color: AppColors.success,
+            onTap: () => context.push(AppRoutes.adminTeacherPresence),
+          ),
+          const SizedBox(width: 10),
+          _QA(
+            label: 'Import',
+            icon: Icons.upload_file_rounded,
+            color: AppColors.info,
+            onTap: () => context.push(AppRoutes.adminImport),
+          ),
+          const SizedBox(width: 10),
+          _QA(
+            label: 'Messages',
+            icon: Icons.message_rounded,
+            color: AppColors.secondary,
+            onTap: () => context.push(AppRoutes.adminmessage),
+          ),
         ],
-        if (role.canManageStudents) ...[
-          _QuickAction(
+      );
+    }
+
+    if (role == UserRole.adminScolarite) {
+      return Row(
+        children: [
+          _QA(
             label: 'Students',
             icon: Icons.school_rounded,
             color: AppColors.studentColor,
             onTap: () => context.push(AppRoutes.adminStudents),
           ),
           const SizedBox(width: 10),
-        ],
-        if (role.canManageTimetable) ...[
-          _QuickAction(
+          _QA(
             label: 'Timetable',
             icon: Icons.schedule_rounded,
             color: AppColors.info,
             onTap: () => context.push(AppRoutes.adminTimetable),
           ),
           const SizedBox(width: 10),
+          _QA(
+            label: 'Import',
+            icon: Icons.upload_file_rounded,
+            color: AppColors.accent,
+            onTap: () => context.push(AppRoutes.adminImport),
+          ),
+          const SizedBox(width: 10),
+          _QA(
+            label: 'Messages',
+            icon: Icons.message_rounded,
+            color: AppColors.secondary,
+            onTap: () => context.push(AppRoutes.adminmessage),
+          ),
         ],
-        _QuickAction(
-          label: 'Messages',
-          icon: Icons.message_rounded,
-          color: AppColors.accent,
-          onTap: () => context.push(AppRoutes.adminmessage),
-        ),
-      ],
-    );
+      );
+    }
+
+    return const SizedBox.shrink();
   }
 
   Widget _buildTemperatureSection(
@@ -634,7 +688,7 @@ class _DashboardBody extends ConsumerWidget {
       error: (_, __) => const SizedBox.shrink(),
       data: (user) {
         if (user == null) return const SizedBox.shrink();
-        final messages = ref.watch(notificationsProvider);
+        final messages = ref.watch(notificationsProvider(user.id));
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -772,114 +826,13 @@ class _StudentsTab extends ConsumerWidget {
 //  MORE MENU
 // ─────────────────────────────────────────
 class _MoreMenu extends ConsumerWidget {
-  final int pendingCount;
-
-  const _MoreMenu({required this.pendingCount});
+  const _MoreMenu();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final user = ref.watch(currentUserProvider).value;
-    final role = user?.role ?? UserRole.unknown;
-
-    final items = [
-      _MoreItem(
-        label: 'Messages',
-        icon: Icons.message_rounded,
-        color: AppColors.secondary,
-        route: AppRoutes.adminmessage,
-      ),
-      if (role == UserRole.superAdmin) ...[
-        _MoreItem(
-          label: 'IoT Monitor',
-          icon: Icons.sensors_rounded,
-          color: AppColors.accent,
-          route: AppRoutes.adminIot,
-        ),
-        _MoreItem(
-          label: 'Teacher Presence',
-          icon: Icons.how_to_reg_rounded,
-          color: AppColors.teacherColor,
-          route: AppRoutes.adminTeacherPresence,
-        ),
-        _MoreItem(
-          label: 'Teacher Sheet',
-          icon: Icons.table_rows_rounded,
-          color: AppColors.info,
-          route: AppRoutes.adminTeacherSheet,
-        ),
-        _MoreItem(
-          label: 'Absence Flags',
-          icon: Icons.warning_amber_rounded,
-          color: AppColors.error,
-          route: AppRoutes.adminAiAlerts,
-        ),
-        _MoreItem(
-          label: 'Password Requests',
-          icon: Icons.lock_reset_rounded,
-          color: AppColors.warning,
-          route: AppRoutes.adminPasswordRequests,
-        ),
-        _MoreItem(
-          label: 'Settings',
-          icon: Icons.settings_rounded,
-          color: AppColors.accent,
-          route: AppRoutes.adminSettings,
-        ),
-        _MoreItem(
-          label: 'Import',
-          icon: Icons.upload_rounded,
-          color: AppColors.success,
-          route: AppRoutes.adminImport,
-        ),
-      ],
-      if (role.canManageTeachers && role != UserRole.superAdmin) ...[
-        _MoreItem(
-          label: 'Teachers',
-          icon: Icons.person_rounded,
-          color: AppColors.teacherColor,
-          route: AppRoutes.adminTeachers,
-        ),
-        _MoreItem(
-          label: 'Password Requests',
-          icon: Icons.lock_reset_rounded,
-          color: AppColors.warning,
-          route: AppRoutes.adminPasswordRequests,
-        ),
-      ],
-      if (role.canManageStudents && role != UserRole.superAdmin) ...[
-        _MoreItem(
-          label: 'Students',
-          icon: Icons.school_rounded,
-          color: AppColors.studentColor,
-          route: AppRoutes.adminStudents,
-        ),
-        _MoreItem(
-          label: 'Timetable',
-          icon: Icons.schedule_rounded,
-          color: AppColors.info,
-          route: AppRoutes.adminTimetable,
-        ),
-        _MoreItem(
-          label: 'Classes',
-          icon: Icons.class_rounded,
-          color: AppColors.accent,
-          route: AppRoutes.adminClasses,
-        ),
-        _MoreItem(
-          label: 'Absence Flags',
-          icon: Icons.warning_amber_rounded,
-          color: AppColors.error,
-          route: AppRoutes.adminAiAlerts,
-        ),
-        _MoreItem(
-          label: 'Import',
-          icon: Icons.upload_rounded,
-          color: AppColors.success,
-          route: AppRoutes.adminImport,
-        ),
-      ],
-    ];
+    final role = ref.watch(currentUserProvider).value?.role ?? UserRole.unknown;
+    final items = _itemsFor(role);
 
     return ListView.builder(
       padding: const EdgeInsets.all(16),
@@ -907,13 +860,7 @@ class _MoreMenu extends ConsumerWidget {
                     color: item.color.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child:
-                      item.label == 'Password Requests' && pendingCount > 0
-                          ? Badge(
-                            label: Text(pendingCount.toString()),
-                            child: Icon(item.icon, color: item.color, size: 20),
-                          )
-                          : Icon(item.icon, color: item.color, size: 20),
+                  child: Icon(item.icon, color: item.color, size: 20),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -934,6 +881,233 @@ class _MoreMenu extends ConsumerWidget {
           ),
         );
       },
+    );
+  }
+
+  List<_MoreItem> _itemsFor(UserRole role) {
+    switch (role) {
+      case UserRole.superAdmin:
+        return const [
+          _MoreItem(
+            label: 'Teachers',
+            icon: Icons.person_rounded,
+            color: AppColors.teacherColor,
+            route: AppRoutes.adminTeachers,
+          ),
+          _MoreItem(
+            label: 'Students',
+            icon: Icons.school_rounded,
+            color: AppColors.studentColor,
+            route: AppRoutes.adminStudents,
+          ),
+          _MoreItem(
+            label: 'Classes',
+            icon: Icons.class_rounded,
+            color: AppColors.accent,
+            route: AppRoutes.adminClasses,
+          ),
+          _MoreItem(
+            label: 'Timetable',
+            icon: Icons.schedule_rounded,
+            color: AppColors.info,
+            route: AppRoutes.adminTimetable,
+          ),
+          _MoreItem(
+            label: 'RFID Logs',
+            icon: Icons.nfc_rounded,
+            color: AppColors.accent,
+            route: AppRoutes.adminRfid,
+          ),
+          _MoreItem(
+            label: 'Teacher Presence',
+            icon: Icons.how_to_reg_rounded,
+            color: AppColors.teacherColor,
+            route: AppRoutes.adminTeacherPresence,
+          ),
+          _MoreItem(
+            label: 'Teacher Sheet',
+            icon: Icons.table_rows_rounded,
+            color: AppColors.info,
+            route: AppRoutes.adminTeacherSheet,
+          ),
+          _MoreItem(
+            label: 'Absence Flags',
+            icon: Icons.warning_amber_rounded,
+            color: AppColors.error,
+            route: AppRoutes.adminAiAlerts,
+          ),
+          _MoreItem(
+            label: 'Attendance',
+            icon: Icons.bar_chart_rounded,
+            color: AppColors.success,
+            route: AppRoutes.adminAttendance,
+          ),
+          _MoreItem(
+            label: 'IoT Monitor',
+            icon: Icons.sensors_rounded,
+            color: AppColors.accent,
+            route: AppRoutes.adminIot,
+          ),
+          _MoreItem(
+            label: 'Messages',
+            icon: Icons.message_rounded,
+            color: AppColors.secondary,
+            route: AppRoutes.adminmessage,
+          ),
+          _MoreItem(
+            label: 'Import',
+            icon: Icons.upload_file_rounded,
+            color: AppColors.success,
+            route: AppRoutes.adminImport,
+          ),
+          _MoreItem(
+            label: 'Password Requests',
+            icon: Icons.lock_reset_rounded,
+            color: AppColors.warning,
+            route: AppRoutes.adminPasswordRequests,
+          ),
+          _MoreItem(
+            label: 'Settings',
+            icon: Icons.settings_rounded,
+            color: AppColors.accent,
+            route: AppRoutes.adminSettings,
+          ),
+        ];
+      case UserRole.adminRH:
+        return const [
+          _MoreItem(
+            label: 'Teachers',
+            icon: Icons.person_rounded,
+            color: AppColors.teacherColor,
+            route: AppRoutes.adminTeachers,
+          ),
+          _MoreItem(
+            label: 'Teacher Presence',
+            icon: Icons.how_to_reg_rounded,
+            color: AppColors.success,
+            route: AppRoutes.adminTeacherPresence,
+          ),
+          _MoreItem(
+            label: 'Teacher Sheet',
+            icon: Icons.table_rows_rounded,
+            color: AppColors.info,
+            route: AppRoutes.adminTeacherSheet,
+          ),
+          _MoreItem(
+            label: 'Import Teachers',
+            icon: Icons.upload_file_rounded,
+            color: AppColors.success,
+            route: AppRoutes.adminImport,
+          ),
+          _MoreItem(
+            label: 'Messages',
+            icon: Icons.message_rounded,
+            color: AppColors.secondary,
+            route: AppRoutes.adminmessage,
+          ),
+          _MoreItem(
+            label: 'Password Requests',
+            icon: Icons.lock_reset_rounded,
+            color: AppColors.warning,
+            route: AppRoutes.adminPasswordRequests,
+          ),
+        ];
+      case UserRole.adminScolarite:
+        return const [
+          _MoreItem(
+            label: 'Students',
+            icon: Icons.school_rounded,
+            color: AppColors.studentColor,
+            route: AppRoutes.adminStudents,
+          ),
+          _MoreItem(
+            label: 'Classes',
+            icon: Icons.class_rounded,
+            color: AppColors.accent,
+            route: AppRoutes.adminClasses,
+          ),
+          _MoreItem(
+            label: 'Timetable',
+            icon: Icons.schedule_rounded,
+            color: AppColors.info,
+            route: AppRoutes.adminTimetable,
+          ),
+          _MoreItem(
+            label: 'Attendance',
+            icon: Icons.bar_chart_rounded,
+            color: AppColors.success,
+            route: AppRoutes.adminAttendance,
+          ),
+          _MoreItem(
+            label: 'Absence Flags',
+            icon: Icons.warning_amber_rounded,
+            color: AppColors.error,
+            route: AppRoutes.adminAiAlerts,
+          ),
+          _MoreItem(
+            label: 'Import',
+            icon: Icons.upload_file_rounded,
+            color: AppColors.success,
+            route: AppRoutes.adminImport,
+          ),
+          _MoreItem(
+            label: 'Messages',
+            icon: Icons.message_rounded,
+            color: AppColors.secondary,
+            route: AppRoutes.adminmessage,
+          ),
+          _MoreItem(
+            label: 'Password Requests',
+            icon: Icons.lock_reset_rounded,
+            color: AppColors.warning,
+            route: AppRoutes.adminPasswordRequests,
+          ),
+        ];
+      default:
+        return const [];
+    }
+  }
+}
+
+class _QA extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _QA({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: color.withValues(alpha: 0.2)),
+          ),
+          child: Column(
+            children: [
+              Icon(icon, color: color, size: 22),
+              const SizedBox(height: 5),
+              Text(
+                label,
+                style: AppTypography.labelSmall.copyWith(color: color),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

@@ -46,6 +46,7 @@ class NotificationModel {
   final String title;
   final String message;
   final MessageType messageType;
+  final String rawMessageType; // raw Firestore string e.g. 'attendance'
   final List<AttachmentModel> attachments;
   final String recipientLabel;
   final String replyToId;
@@ -62,6 +63,7 @@ class NotificationModel {
     required this.title,
     required this.message,
     required this.messageType,
+    this.rawMessageType = '',
     required this.attachments,
     required this.recipientLabel,
     this.replyToId = '',
@@ -97,6 +99,7 @@ class NotificationModel {
         (t) => t.name == raw['messageType'],
         orElse: () => MessageType.general,
       ),
+      rawMessageType: raw['messageType']?.toString() ?? '',
       attachments: parseAttachments(),
       recipientLabel: raw['recipientLabel']?.toString() ?? '',
       replyToId: raw['replyToId']?.toString() ?? '',

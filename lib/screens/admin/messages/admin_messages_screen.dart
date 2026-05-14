@@ -6,6 +6,7 @@ import '../../../widgets/widgets.dart';
 import '../../../providers/providers.dart';
 import '../../../services/services.dart';
 import '../../../navigation/app_routes.dart';
+import '../../../models/models.dart';
 
 class AdminmessageScreen extends ConsumerWidget {
   const AdminmessageScreen({super.key});
@@ -95,7 +96,7 @@ class _MessageListState extends ConsumerState<_MessageList> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final messages = ref.watch(notificationsProvider);
+    final messages = ref.watch(notificationsProvider(widget.userId));
 
     return messages.when(
       loading: () => const LoadingWidget(),
@@ -106,10 +107,24 @@ class _MessageListState extends ConsumerState<_MessageList> {
             icon: Icons.error_outline_rounded,
           ),
       data: (list) {
+        final role =
+            ref.watch(currentUserProvider).value?.role ?? UserRole.unknown;
+        const systemTypes = {'attendance', 'password_reset'};
+        final filteredByRole =
+            role == UserRole.superAdmin
+                ? list.where((n) {
+                  final t = n.rawMessageType;
+                  if (systemTypes.contains(t)) return false;
+                  if (t == 'absence_flag') {
+                    return n.recipientLabel == 'Admin';
+                  }
+                  return true;
+                }).toList()
+                : list;
         final filtered =
             _query.isEmpty
-                ? list
-                : list.where((m) {
+                ? filteredByRole
+                : filteredByRole.where((m) {
                   final q = _query.toLowerCase();
                   return m.title.toLowerCase().contains(q) ||
                       m.message.toLowerCase().contains(q) ||

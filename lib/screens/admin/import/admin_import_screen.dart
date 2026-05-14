@@ -10,6 +10,7 @@ import '../../../widgets/widgets.dart';
 import '../../../providers/providers.dart';
 import '../../../services/excel_import_service.dart';
 import '../../../services/timetable_excel_import_service.dart';
+import '../../../models/models.dart';
 import 'package:intl/intl.dart';
 
 class AdminImportScreen extends ConsumerStatefulWidget {
@@ -124,6 +125,45 @@ class _AdminImportScreenState extends ConsumerState<AdminImportScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final role = ref.watch(currentUserProvider).value?.role ?? UserRole.unknown;
+    final canTeachers = role.canManageTeachers;
+    final canStudents = role.canManageStudents;
+    final canTimetable = role.canManageTimetable;
+
+    final userItems = <_FormatItem>[
+      if (canStudents)
+        const _FormatItem(
+          sheetName: 'Classes',
+          columns: 'Name | Grade | Level | Group (optional)',
+          example: 'DNI | 1 | 1 | TP 2',
+        ),
+      if (canTeachers)
+        const _FormatItem(
+          sheetName: 'Teachers',
+          columns: 'Name | RfidTag (optional)',
+          example: 'Moez Hachem | A1B2C3',
+        ),
+      if (canStudents)
+        const _FormatItem(
+          sheetName: 'Students',
+          columns: 'Name | Class | RfidTag (optional)',
+          example: 'Ranim Ben Hassan | 1 DNI 2 | D4E5F6',
+        ),
+    ];
+
+    final userNotes = <String>[
+      'Sheet names must contain: "Classes", "Teachers", "Students"',
+      'Email & password are auto-generated from the full name',
+      if (canStudents) 'Classes must be imported before Teachers/Students',
+      'Download credentials Excel after import to share logins',
+    ];
+
+    final usersButtonLabel =
+        canTeachers && canStudents
+            ? 'Select Users Excel File'
+            : canTeachers
+            ? 'Select Teachers Excel File'
+            : 'Select Students & Classes Excel File';
 
     return Scaffold(
       backgroundColor:
@@ -141,123 +181,97 @@ class _AdminImportScreenState extends ConsumerState<AdminImportScreen> {
             // ════════════════════════════════════════════════════════════════
             //  SECTION 1 — USERS (Classes, Teachers, Students)
             // ════════════════════════════════════════════════════════════════
-            _SectionHeader(
-              icon: Icons.people_rounded,
-              title: 'Import Users',
-              subtitle: 'Classes · Teachers · Students',
-              color: AppColors.accent,
-            ),
-            const SizedBox(height: 12),
-
-            // Format info
-            _FormatCard(
-              isDark: isDark,
-              color: AppColors.accent,
-              items: const [
-                _FormatItem(
-                  sheetName: 'Classes',
-                  columns: 'Name | Grade | Level | Group (optional)',
-                  example: 'DNI | 1 | 1 | TP 2',
-                ),
-                _FormatItem(
-                  sheetName: 'Teachers',
-                  columns: 'Name | RfidTag (optional)',
-                  example: 'Moez Hachem | A1B2C3',
-                ),
-                _FormatItem(
-                  sheetName: 'Students',
-                  columns: 'Name | Class | RfidTag (optional)',
-                  example: 'Ranim Ben Hassan | 1 DNI 2 | D4E5F6',
-                ),
-              ],
-              notes: const [
-                'Sheet names must contain: "Classes", "Teachers", "Students"',
-                'Email & password are auto-generated from the full name',
-                'Classes must be imported before Teachers/Students',
-                'Download credentials Excel after import to share logins',
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            AppButton(
-              label:
-                  _isImportingUsers
-                      ? 'Importing...'
-                      : 'Select Users Excel File',
-              onPressed: _isImportingUsers ? () {} : _pickAndImportUsers,
-              isLoading: _isImportingUsers,
-              width: double.infinity,
-              icon: Icons.upload_file_rounded,
-            ),
-
-            if (_usersResult != null) ...[
-              const SizedBox(height: 16),
-              _UsersResultCard(
-                result: _usersResult!,
+            if (canTeachers || canStudents) ...[
+              _SectionHeader(
+                icon: Icons.people_rounded,
+                title: 'Import Users',
+                subtitle:
+                    canTeachers && canStudents
+                        ? 'Classes · Teachers · Students'
+                        : canTeachers
+                        ? 'Teachers'
+                        : 'Classes · Students',
+                color: AppColors.accent,
+              ),
+              const SizedBox(height: 12),
+              _FormatCard(
                 isDark: isDark,
-                onDownload:
-                    () => _downloadCredentials(_usersResult!.credentials),
+                color: AppColors.accent,
+                items: userItems,
+                notes: userNotes,
+              ),
+              const SizedBox(height: 16),
+              AppButton(
+                label: _isImportingUsers ? 'Importing...' : usersButtonLabel,
+                onPressed: _isImportingUsers ? () {} : _pickAndImportUsers,
+                isLoading: _isImportingUsers,
+                width: double.infinity,
+                icon: Icons.upload_file_rounded,
+              ),
+              if (_usersResult != null) ...[
+                const SizedBox(height: 16),
+                _UsersResultCard(
+                  result: _usersResult!,
+                  isDark: isDark,
+                  onDownload:
+                      () => _downloadCredentials(_usersResult!.credentials),
+                ),
+              ],
+            ],
+            if (canTimetable) ...[
+              const SizedBox(height: 32),
+              const Divider(),
+              const SizedBox(height: 24),
+              _SectionHeader(
+                icon: Icons.calendar_today_rounded,
+                title: 'Import Timetable',
+                subtitle: 'Week A & Week B per class',
+                color: AppColors.teacherColor,
+              ),
+              const SizedBox(height: 12),
+              _FormatCard(
+                isDark: isDark,
+                color: AppColors.teacherColor,
+                items: const [
+                  _FormatItem(
+                    sheetName: 'Week A',
+                    columns: 'Day | Time Slot | Subject | Teacher | Room',
+                    example:
+                        'Monday | 08:30-09:25 | Maths | Mohamed Hachem | Salle 7',
+                  ),
+                  _FormatItem(
+                    sheetName: 'Week B',
+                    columns: 'Day | Time Slot | Subject | Teacher | Room',
+                    example:
+                        'Tuesday | 10:30-11:25 | Networks | Moez Ben Ali | Salle 3',
+                  ),
+                ],
+                notes: const [
+                  'Row 1: Class name  (e.g. "1 DNI 2")  ← identifies the class',
+                  'Row 2: Column headers (Day, Time Slot, Subject, Teacher, Room)',
+                  'Row 3+: Session data',
+                  'Time format: "08:30-09:25"  (French: "8h30-9h25" also works)',
+                  'Days: Monday / Mon / Lundi / Lun',
+                  'Standard morning slots: 08:30 · 09:25 · 10:30 · 11:25',
+                  'Break: 12:20 – 13:00  (rows with this slot are ignored)',
+                  'Standard afternoon slots: 13:00 · 13:55 · 15:00 · 15:55 · 16:50 · 17:45',
+                  'One file per class — existing Week A / B entries are replaced',
+                ],
+              ),
+              const SizedBox(height: 16),
+              AppButton(
+                label:
+                    _isImportingTimetable
+                        ? 'Importing...'
+                        : 'Select Timetable Excel File',
+                onPressed:
+                    _isImportingTimetable ? () {} : _pickAndImportTimetable,
+                isLoading: _isImportingTimetable,
+                width: double.infinity,
+                icon: Icons.calendar_today_rounded,
+                color: AppColors.teacherColor,
               ),
             ],
-
-            const SizedBox(height: 32),
-            const Divider(),
-            const SizedBox(height: 24),
-
-            // ════════════════════════════════════════════════════════════════
-            //  SECTION 2 — TIMETABLE
-            // ════════════════════════════════════════════════════════════════
-            _SectionHeader(
-              icon: Icons.calendar_today_rounded,
-              title: 'Import Timetable',
-              subtitle: 'Week A & Week B per class',
-              color: AppColors.teacherColor,
-            ),
-            const SizedBox(height: 12),
-
-            _FormatCard(
-              isDark: isDark,
-              color: AppColors.teacherColor,
-              items: const [
-                _FormatItem(
-                  sheetName: 'Week A',
-                  columns: 'Day | Time Slot | Subject | Teacher | Room',
-                  example:
-                      'Monday | 08:30-09:25 | Maths | Mohamed Hachem | Salle 7',
-                ),
-                _FormatItem(
-                  sheetName: 'Week B',
-                  columns: 'Day | Time Slot | Subject | Teacher | Room',
-                  example:
-                      'Tuesday | 10:30-11:25 | Networks | Moez Ben Ali | Salle 3',
-                ),
-              ],
-              notes: const [
-                'Row 1: Class name  (e.g. "1 DNI 2")  ← identifies the class',
-                'Row 2: Column headers (Day, Time Slot, Subject, Teacher, Room)',
-                'Row 3+: Session data',
-                'Time format: "08:30-09:25"  (French: "8h30-9h25" also works)',
-                'Days: Monday / Mon / Lundi / Lun',
-                'Standard morning slots: 08:30 · 09:25 · 10:30 · 11:25',
-                'Break: 12:20 – 13:00  (rows with this slot are ignored)',
-                'Standard afternoon slots: 13:00 · 13:55 · 15:00 · 15:55 · 16:50 · 17:45',
-                'One file per class — existing Week A / B entries are replaced',
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            AppButton(
-              label:
-                  _isImportingTimetable
-                      ? 'Importing...'
-                      : 'Select Timetable Excel File',
-              onPressed:
-                  _isImportingTimetable ? () {} : _pickAndImportTimetable,
-              isLoading: _isImportingTimetable,
-              width: double.infinity,
-              icon: Icons.calendar_today_rounded,
-              color: AppColors.teacherColor,
-            ),
 
             if (_timetableResult != null) ...[
               const SizedBox(height: 16),

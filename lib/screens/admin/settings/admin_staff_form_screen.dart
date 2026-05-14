@@ -57,6 +57,7 @@ class _AdminStaffFormScreenState extends ConsumerState<AdminStaffFormScreen> {
         return;
       }
 
+      // Store temp_password for password reset flow
       await ref.read(firestoreServiceProvider).updateUser(result.userId!, {
         'temp_password': _passCtrl.text.trim(),
       });
@@ -65,7 +66,7 @@ class _AdminStaffFormScreenState extends ConsumerState<AdminStaffFormScreen> {
         context.pop();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('${_selectedRole.label} account created'),
+            content: Text('${_selectedRole.label} account created ✅'),
             backgroundColor: AppColors.success,
           ),
         );
@@ -100,6 +101,7 @@ class _AdminStaffFormScreenState extends ConsumerState<AdminStaffFormScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // ── Role selector ─────────────────────────────────────────────
               Text(
                 'Staff Role',
                 style: AppTypography.labelLarge.copyWith(
@@ -135,6 +137,8 @@ class _AdminStaffFormScreenState extends ConsumerState<AdminStaffFormScreen> {
                 ],
               ),
               const SizedBox(height: 24),
+
+              // ── Name ─────────────────────────────────────────────────────
               AppTextField(
                 label: 'Full Name',
                 hint: 'e.g. Sana Trabelsi',
@@ -143,6 +147,8 @@ class _AdminStaffFormScreenState extends ConsumerState<AdminStaffFormScreen> {
                 validator: (v) => v == null || v.isEmpty ? 'Required' : null,
               ),
               const SizedBox(height: 14),
+
+              // ── Email ────────────────────────────────────────────────────
               AppTextField(
                 label: 'Email',
                 hint: 'staff@smartschool.com',
@@ -156,6 +162,8 @@ class _AdminStaffFormScreenState extends ConsumerState<AdminStaffFormScreen> {
                 },
               ),
               const SizedBox(height: 14),
+
+              // ── Password ─────────────────────────────────────────────────
               AppTextField(
                 label: 'Temporary Password',
                 hint: 'Min 8 characters',

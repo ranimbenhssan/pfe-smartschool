@@ -77,7 +77,7 @@ class _StudentmessageScreenState extends ConsumerState<StudentmessageScreen> {
             );
           }
 
-          final messages = ref.watch(notificationsProvider);
+          final messages = ref.watch(notificationsProvider(user.id));
 
           return messages.when(
             loading: () => const LoadingWidget(),

@@ -43,17 +43,52 @@ class PasswordResetService {
         'newPassword': null,
       });
 
-      // Notify admin in-app
-      final adminSnap =
+      // Notify the correct staff category based on the requesting user's role:
+      // teacher → notify adminRH
+      // student → notify adminScolarite
+      // fallback → notify superAdmin
+      final String targetAdminRole;
+      if (role == 'teacher') {
+        targetAdminRole = 'admin_rh';
+      } else if (role == 'student') {
+        targetAdminRole = 'admin_scolarite';
+      } else {
+        targetAdminRole = 'super_admin';
+      }
+
+      // Try the targeted role first, fall back to super_admin if not found
+      var recipientSnap =
           await _db
               .collection('users')
-              .where('role', isEqualTo: 'admin')
+              .where('role', isEqualTo: targetAdminRole)
               .limit(1)
               .get();
 
-      if (adminSnap.docs.isNotEmpty) {
+      if (recipientSnap.docs.isEmpty) {
+        // Fallback to super_admin
+        recipientSnap =
+            await _db
+                .collection('users')
+                .where('role', isEqualTo: 'super_admin')
+                .limit(1)
+                .get();
+      }
+
+      // Also legacy fallback to old 'admin' role
+      if (recipientSnap.docs.isEmpty) {
+        recipientSnap =
+            await _db
+                .collection('users')
+                .where('role', isEqualTo: 'admin')
+                .limit(1)
+                .get();
+      }
+
+      if (recipientSnap.docs.isNotEmpty) {
+        final recipientId = recipientSnap.docs.first.id;
+        final recipientLabel = role == 'teacher' ? 'HR Staff' : 'Registrar';
         await _db.collection('notifications').add({
-          'userId': adminSnap.docs.first.id,
+          'userId': recipientId,
           'senderId': userId,
           'senderName': userName,
           'senderRole': role,
@@ -62,7 +97,7 @@ class PasswordResetService {
           'messageType': 'password_reset',
           'isRead': false,
           'attachments': [],
-          'recipientLabel': 'Admin',
+          'recipientLabel': recipientLabel,
           'replyToId': '',
           'replyToTitle': '',
           'resetRequestId': userId,
