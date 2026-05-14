@@ -1,17 +1,37 @@
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:excel/excel.dart' hide Border;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../../theme/theme.dart';
 import '../../../widgets/widgets.dart';
 import '../../../providers/providers.dart';
 import '../../../providers/iot_provider.dart';
 
-class AdminTeacherSheetScreen extends ConsumerWidget {
+class AdminTeacherSheetScreen extends ConsumerStatefulWidget {
   const AdminTeacherSheetScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AdminTeacherSheetScreen> createState() =>
+      _AdminTeacherSheetScreenState();
+}
+
+class _AdminTeacherSheetScreenState
+    extends ConsumerState<AdminTeacherSheetScreen> {
+  final _searchCtrl = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final teachers = ref.watch(teachersProvider);
 
@@ -22,6 +42,13 @@ class AdminTeacherSheetScreen extends ConsumerWidget {
         title: const Text('Teacher Attendance Sheet'),
         backgroundColor:
             isDark ? AppColors.darkSurface : AppColors.lightSurface,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.download_rounded),
+            tooltip: 'Export to Excel',
+            onPressed: () => _exportToExcel(context, ref),
+          ),
+        ],
       ),
       body: teachers.when(
         loading: () => const LoadingWidget(),
@@ -31,28 +58,225 @@ class AdminTeacherSheetScreen extends ConsumerWidget {
               message: e.toString(),
               icon: Icons.error_outline_rounded,
             ),
-        data:
-            (list) =>
-                list.isEmpty
-                    ? const EmptyState(
-                      title: 'No Teachers',
-                      message: 'No teachers found.',
-                      icon: Icons.person_off_rounded,
-                    )
-                    : ListView.builder(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: list.length,
-                      itemBuilder:
-                          (ctx, i) => _TeacherSheetCard(
-                            teacher: list[i],
-                            isDark: isDark,
-                          ),
+        data: (list) {
+          if (list.isEmpty) {
+            return const EmptyState(
+              title: 'No Teachers',
+              message: 'No teachers found.',
+              icon: Icons.person_off_rounded,
+            );
+          }
+
+          final filtered =
+              _query.isEmpty
+                  ? list
+                  : list
+                      .where(
+                        (t) => (t.name ?? '').toLowerCase().contains(
+                          _query.toLowerCase(),
+                        ),
+                      )
+                      .toList();
+
+          return Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                child: TextField(
+                  controller: _searchCtrl,
+                  onChanged: (v) => setState(() => _query = v),
+                  decoration: InputDecoration(
+                    hintText: 'Search teachers...',
+                    prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                    suffixIcon:
+                        _query.isNotEmpty
+                            ? IconButton(
+                              icon: const Icon(Icons.clear_rounded, size: 18),
+                              onPressed: () {
+                                _searchCtrl.clear();
+                                setState(() => _query = '');
+                              },
+                            )
+                            : null,
+                    filled: true,
+                    fillColor:
+                        isDark ? AppColors.darkCard : AppColors.lightCard,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
                     ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                  ),
+                ),
+              ),
+              Expanded(
+                child:
+                    filtered.isEmpty
+                        ? const EmptyState(
+                          title: 'No Results',
+                          message: '',
+                          icon: Icons.search_off_rounded,
+                        )
+                        : ListView.builder(
+                          padding: const EdgeInsets.all(16),
+                          itemCount: filtered.length,
+                          itemBuilder:
+                              (ctx, i) => _TeacherSheetCard(
+                                teacher: filtered[i],
+                                isDark: isDark,
+                              ),
+                        ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  //  EXPORT → Excel
+  //  Columns: Day | Date | Teacher Name | In | Out | Hours | Minutes
+  // ─────────────────────────────────────────────────────────────────────────
+  Future<void> _exportToExcel(BuildContext context, WidgetRef ref) async {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Preparing Excel file...')));
+
+    try {
+      final teachers = ref.read(teachersProvider).value ?? [];
+      final excel = Excel.createExcel();
+      final sheet = excel['Teacher Attendance'];
+
+      // ── Header ──────────────────────────────────────────────────────────
+      const headers = [
+        'Day',
+        'Date',
+        'Teacher Name',
+        'In',
+        'Out',
+        'Hours',
+        'Minutes',
+      ];
+      for (int c = 0; c < headers.length; c++) {
+        final cell = sheet.cell(
+          CellIndex.indexByColumnRow(columnIndex: c, rowIndex: 0),
+        );
+        cell.value = TextCellValue(headers[c]);
+        cell.cellStyle = CellStyle(
+          bold: true,
+          backgroundColorHex: ExcelColor.fromHexString('FF1565C0'),
+          fontColorHex: ExcelColor.fromHexString('FFFFFFFF'),
+          horizontalAlign: HorizontalAlign.Center,
+        );
+      }
+
+      // ── Rows ─────────────────────────────────────────────────────────────
+      int row = 1;
+      for (final teacher in teachers) {
+        final snap =
+            await FirebaseFirestore.instance
+                .collection('teacher_attendance')
+                .doc(teacher.userId)
+                .collection('sessions')
+                .orderBy('date', descending: false)
+                .get();
+
+        for (final doc in snap.docs) {
+          final d = doc.data();
+          final dayName = d['dayName']?.toString() ?? '';
+          final date = d['date']?.toString() ?? '';
+          final teacherName =
+              d['teacherName']?.toString() ?? teacher.name ?? '';
+          final entryTs = d['entryTime'] as Timestamp?;
+          final exitTs = d['exitTime'] as Timestamp?;
+          final durationMin = d['duration'] as int? ?? 0;
+
+          final entryStr =
+              entryTs != null
+                  ? DateFormat('HH:mm').format(entryTs.toDate())
+                  : '--';
+          final exitStr =
+              exitTs != null
+                  ? DateFormat('HH:mm').format(exitTs.toDate())
+                  : '--';
+          final hours = durationMin ~/ 60;
+          final minutes = durationMin % 60;
+
+          final bgHex = row.isOdd ? 'FFF5F5F5' : 'FFFFFFFF';
+
+          void w(int col, dynamic value) {
+            final cell = sheet.cell(
+              CellIndex.indexByColumnRow(columnIndex: col, rowIndex: row),
+            );
+            cell.value =
+                value is int
+                    ? IntCellValue(value)
+                    : TextCellValue(value.toString());
+            cell.cellStyle = CellStyle(
+              backgroundColorHex: ExcelColor.fromHexString(bgHex),
+            );
+          }
+
+          w(0, dayName);
+          w(1, date);
+          w(2, teacherName);
+          w(3, entryStr);
+          w(4, exitStr);
+          w(5, hours);
+          w(6, minutes);
+
+          row++;
+        }
+      }
+
+      // ── Column widths ────────────────────────────────────────────────────
+      sheet.setColumnWidth(0, 12);
+      sheet.setColumnWidth(1, 14);
+      sheet.setColumnWidth(2, 24);
+      sheet.setColumnWidth(3, 10);
+      sheet.setColumnWidth(4, 10);
+      sheet.setColumnWidth(5, 8);
+      sheet.setColumnWidth(6, 10);
+
+      // ── Remove default empty sheet ───────────────────────────────────────
+      excel.delete('Sheet1');
+
+      // ── Save to temp dir + share ─────────────────────────────────────────
+      final bytes = excel.encode();
+      if (bytes == null) throw Exception('Failed to encode');
+
+      final dir = await getTemporaryDirectory();
+      final name =
+          'teacher_attendance_'
+          '${DateFormat('yyyy-MM-dd').format(DateTime.now())}.xlsx';
+      final file = File('${dir.path}/$name');
+      await file.writeAsBytes(bytes);
+
+      await Share.shareXFiles([
+        XFile(file.path),
+      ], subject: 'Teacher Attendance Sheet');
+
+      if (context.mounted) ScaffoldMessenger.of(context).clearSnackBars();
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Export failed: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
 }
 
+// ─────────────────────────────────────────
+//  TEACHER EXPANDABLE CARD
+// ─────────────────────────────────────────
 class _TeacherSheetCard extends ConsumerStatefulWidget {
   final dynamic teacher;
   final bool isDark;
@@ -82,7 +306,7 @@ class _TeacherSheetCardState extends ConsumerState<_TeacherSheetCard> {
       ),
       child: Column(
         children: [
-          // ── Teacher header ──────────────────────────────────────────────
+          // Header
           InkWell(
             onTap: () => setState(() => _expanded = !_expanded),
             borderRadius: BorderRadius.circular(14),
@@ -120,7 +344,7 @@ class _TeacherSheetCardState extends ConsumerState<_TeacherSheetCard> {
                         sessions.when(
                           data:
                               (s) => Text(
-                                '${s.length} sessions recorded',
+                                '${s.length} sessions',
                                 style: AppTypography.caption,
                               ),
                           loading:
@@ -144,7 +368,7 @@ class _TeacherSheetCardState extends ConsumerState<_TeacherSheetCard> {
             ),
           ),
 
-          // ── Sessions list (expanded) ────────────────────────────────────
+          // Sessions
           if (_expanded)
             sessions.when(
               loading:
@@ -176,7 +400,7 @@ class _TeacherSheetCardState extends ConsumerState<_TeacherSheetCard> {
                                         ? AppColors.darkBorder
                                         : AppColors.lightBorder,
                               ),
-                              // Header row
+                              // Table header
                               Padding(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 16,
@@ -188,7 +412,7 @@ class _TeacherSheetCardState extends ConsumerState<_TeacherSheetCard> {
                                     _Col('Date', flex: 3, bold: true),
                                     _Col('In', flex: 2, bold: true),
                                     _Col('Out', flex: 2, bold: true),
-                                    _Col('Min', flex: 2, bold: true),
+                                    _Col('Dur', flex: 2, bold: true),
                                   ],
                                 ),
                               ),
@@ -199,10 +423,10 @@ class _TeacherSheetCardState extends ConsumerState<_TeacherSheetCard> {
                                         ? AppColors.darkBorder
                                         : AppColors.lightBorder,
                               ),
-                              // Session rows
-                              ...list.map((session) {
-                                final entryTs = session['entryTime'];
-                                final exitTs = session['exitTime'];
+                              // Rows
+                              ...list.map((s) {
+                                final entryTs = s['entryTime'];
+                                final exitTs = s['exitTime'];
                                 final entry =
                                     entryTs is Timestamp
                                         ? entryTs.toDate()
@@ -211,36 +435,35 @@ class _TeacherSheetCardState extends ConsumerState<_TeacherSheetCard> {
                                     exitTs is Timestamp
                                         ? exitTs.toDate()
                                         : null;
-                                final dur = session['duration'] as int? ?? 0;
-                                final dayName =
-                                    session['dayName']?.toString() ?? '';
-                                final date = session['date']?.toString() ?? '';
+                                final dur = s['duration'] as int? ?? 0;
+                                final h = dur ~/ 60;
+                                final m = dur % 60;
+                                final day = s['dayName']?.toString() ?? '';
 
                                 return Container(
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 16,
                                     vertical: 10,
                                   ),
-                                  decoration: BoxDecoration(
-                                    color:
-                                        widget.isDark
-                                            ? AppColors.darkBackground
-                                                .withValues(alpha: 0.3)
-                                            : AppColors.lightBackground
-                                                .withValues(alpha: 0.5),
-                                  ),
+                                  color:
+                                      widget.isDark
+                                          ? AppColors.darkBackground.withValues(
+                                            alpha: 0.3,
+                                          )
+                                          : AppColors.lightBackground
+                                              .withValues(alpha: 0.5),
                                   child: Row(
                                     children: [
                                       _Col(
-                                        dayName.substring(
-                                          0,
-                                          dayName.length > 3
-                                              ? 3
-                                              : dayName.length,
-                                        ),
+                                        day.length > 3
+                                            ? day.substring(0, 3)
+                                            : day,
                                         flex: 2,
                                       ),
-                                      _Col(date, flex: 3),
+                                      _Col(
+                                        s['date']?.toString() ?? '',
+                                        flex: 3,
+                                      ),
                                       _Col(
                                         entry != null
                                             ? DateFormat('HH:mm').format(entry)
@@ -255,7 +478,7 @@ class _TeacherSheetCardState extends ConsumerState<_TeacherSheetCard> {
                                         flex: 2,
                                         color: AppColors.info,
                                       ),
-                                      _Col('${dur}m', flex: 2),
+                                      _Col('${h}h ${m}m', flex: 2),
                                     ],
                                   ),
                                 );
@@ -276,7 +499,6 @@ class _Col extends StatelessWidget {
   final bool bold;
   final Color? color;
   const _Col(this.text, {this.flex = 1, this.bold = false, this.color});
-
   @override
   Widget build(BuildContext context) => Expanded(
     flex: flex,
