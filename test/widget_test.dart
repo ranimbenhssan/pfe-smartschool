@@ -17,8 +17,8 @@ void main() {
     await tester.pumpWidget(const ProviderScope(child: SmartSchoolApp()));
 
     // Verify that the app builds without errors
-    expect(find.text('SmartSchool'), findsOneWidget);
-    expect(find.text('Welcome to SmartSchool!'), findsOneWidget);
+    expect(find.text('Faccna'), findsOneWidget);
+    expect(find.text('Welcome to Faccna!'), findsOneWidget);
 
     // Tap the '+' icon and trigger a frame.
     await tester.tap(find.byIcon(Icons.add));

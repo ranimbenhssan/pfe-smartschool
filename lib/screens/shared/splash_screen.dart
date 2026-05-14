@@ -146,7 +146,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                 textAlign: TextAlign.center,
               ),
               content: const Text(
-                'SmartSchool requires an internet connection to work.\n\n'
+                'Faccna requires an internet connection to work.\n\n'
                 'Please check your WiFi or mobile data and try again.',
                 textAlign: TextAlign.center,
               ),
@@ -225,7 +225,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                 ),
                 const SizedBox(height: 24),
                 Text(
-                  'SmartSchool',
+                  'Faccna',
                   style: TextStyle(
                     fontFamily: AppTypography.displayFont,
                     fontSize: 32,

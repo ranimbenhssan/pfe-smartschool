@@ -61,7 +61,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
     return AppBar(
       backgroundColor: isDark ? AppColors.darkSurface : AppColors.lightSurface,
       title: Text(
-        'SmartSchool',
+        'Faccna',
         style: AppTypography.headingMedium.copyWith(
           color: isDark ? AppColors.darkText : AppColors.lightText,
           fontFamily: AppTypography.displayFont,

@@ -72,7 +72,7 @@ class _TeacherDashboardScreenState
           ),
           const SizedBox(width: 10),
           Text(
-            'SmartSchool',
+            'Faccna',
             style: AppTypography.headingMedium.copyWith(
               color: isDark ? AppColors.darkText : AppColors.lightText,
               fontFamily: AppTypography.displayFont,

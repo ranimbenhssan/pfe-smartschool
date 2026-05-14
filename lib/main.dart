@@ -44,7 +44,7 @@ class _SmartSchoolAppState extends ConsumerState<SmartSchoolApp> {
     final themeMode = ref.watch(themeModeProvider);
 
     return MaterialApp.router(
-      title: 'SmartSchool',
+      title: 'Faccna',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,

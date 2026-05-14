@@ -25,7 +25,7 @@ class NotificationService {
   final _db = FirebaseFirestore.instance;
 
   static const _channelId = 'smartschool_channel';
-  static const _channelName = 'SmartSchool message';
+  static const _channelName = 'Faccna message';
 
   String? _currentUserId;
 

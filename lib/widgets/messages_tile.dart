@@ -167,7 +167,7 @@ class MessagesTile extends StatelessWidget {
                                   ? 'From Administration'
                                   : message.senderRole == 'teacher'
                                   ? 'From Teacher'
-                                  : 'SmartSchool',
+                                  : 'Faccna',
                               style: AppTypography.caption,
                             ),
                           ],

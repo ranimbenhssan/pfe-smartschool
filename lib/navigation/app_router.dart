@@ -655,7 +655,7 @@ class _SplashLoadingScreen extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             const Text(
-              'SmartSchool',
+              'Faccna',
               style: TextStyle(
                 fontFamily: 'Playfair',
                 fontSize: 28,

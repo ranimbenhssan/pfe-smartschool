@@ -313,7 +313,7 @@ class AttendanceService {
         await _db.collection('notifications').add({
           'userId': studentUserId,
           'senderId': 'system',
-          'senderName': 'SmartSchool',
+          'senderName': 'Faccna',
           'senderRole': 'admin',
           'title': title,
           'message': message,
@@ -342,7 +342,7 @@ class AttendanceService {
         await _db.collection('notifications').add({
           'userId': adminSnap.docs.first.id,
           'senderId': 'system',
-          'senderName': 'SmartSchool',
+          'senderName': 'Faccna',
           'senderRole': 'system',
           'title': '🚩 Absence Flag — $studentName',
           'message': details,

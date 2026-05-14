@@ -172,7 +172,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                             ),
                             const SizedBox(height: 16),
                             Text(
-                              'SmartSchool',
+                              'Faccna',
                               style: AppTypography.displaySmall.copyWith(
                                 color: Colors.white,
                                 fontFamily: AppTypography.displayFont,
