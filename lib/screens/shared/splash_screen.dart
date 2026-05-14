@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -5,7 +6,8 @@ import '../../theme/theme.dart';
 import '../../providers/providers.dart';
 import '../../services/auth_service.dart';
 import '../../navigation/app_routes.dart';
-import '../../models/models.dart';    // ← ADD THIS
+import '../../models/models.dart';
+
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
@@ -18,6 +20,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
+  bool _showingDialog = false;
 
   @override
   void initState() {
@@ -44,10 +47,36 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     super.dispose();
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  //  CONNECTIVITY CHECK
+  //  Tries to resolve a known host — if it fails, no internet.
+  // ─────────────────────────────────────────────────────────────────────────
+  Future<bool> _hasInternet() async {
+    try {
+      final result = await InternetAddress.lookup(
+        'google.com',
+      ).timeout(const Duration(seconds: 5));
+      return result.isNotEmpty && result.first.rawAddress.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  //  NAVIGATE — checks internet first, retries until connected
+  // ─────────────────────────────────────────────────────────────────────────
   Future<void> _navigate() async {
     await Future.delayed(const Duration(milliseconds: 2500));
     if (!mounted) return;
 
+    // Check connectivity
+    final connected = await _hasInternet();
+    if (!connected) {
+      _showNoConnectionDialog();
+      return;
+    }
+
+    // Proceed with auth check
     try {
       final authState = ref.read(authStateProvider);
       final user = authState.value;
@@ -57,9 +86,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         return;
       }
 
-      // ─── Check first_login ───
       final currentUser = await ref.read(currentUserProvider.future);
-
       if (!mounted) return;
 
       if (currentUser == null) {
@@ -91,6 +118,77 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
     }
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  //  NO CONNECTION DIALOG
+  //  Blocks navigation — user must tap "Try Again" to retry.
+  // ─────────────────────────────────────────────────────────────────────────
+  void _showNoConnectionDialog() {
+    if (!mounted || _showingDialog) return;
+    _showingDialog = true;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false, // user cannot dismiss by tapping outside
+      builder:
+          (ctx) => PopScope(
+            canPop: false, // back button also blocked
+            child: AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              icon: const Icon(
+                Icons.wifi_off_rounded,
+                color: AppColors.error,
+                size: 48,
+              ),
+              title: const Text(
+                'No Internet Connection',
+                textAlign: TextAlign.center,
+              ),
+              content: const Text(
+                'SmartSchool requires an internet connection to work.\n\n'
+                'Please check your WiFi or mobile data and try again.',
+                textAlign: TextAlign.center,
+              ),
+              actionsAlignment: MainAxisAlignment.center,
+              actions: [
+                FilledButton.icon(
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Try Again'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.accent,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 12,
+                    ),
+                  ),
+                  onPressed: () async {
+                    Navigator.of(ctx).pop();
+                    _showingDialog = false;
+
+                    // Re-check connectivity
+                    final connected = await _hasInternet();
+                    if (!mounted) return;
+
+                    if (connected) {
+                      // Connected — proceed with navigation
+                      _navigate();
+                    } else {
+                      // Still offline — show dialog again
+                      _showNoConnectionDialog();
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -103,7 +201,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // ─── Logo ───
+                // ── Logo ─────────────────────────────────────────────────
                 Container(
                   width: 120,
                   height: 120,
@@ -122,15 +220,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                     child: Image.asset(
                       'assets/images/logo.png',
                       fit: BoxFit.cover,
-                      errorBuilder:
-                          (_, __, ___) => Container(
-                            color: AppColors.accent.withValues(alpha: 0.2),
-                            child: const Icon(
-                              Icons.school_rounded,
-                              color: AppColors.accent,
-                              size: 60,
-                            ),
-                          ),
                     ),
                   ),
                 ),
@@ -138,29 +227,29 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                 Text(
                   'SmartSchool',
                   style: TextStyle(
-                    color: AppColors.accent,
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
                     fontFamily: AppTypography.displayFont,
-                    letterSpacing: 1.2,
+                    fontSize: 32,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                    letterSpacing: -0.5,
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  'Smart School Management',
+                const Text(
+                  'Smart. Connected. Efficient.',
                   style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.6),
-                    fontSize: 14,
-                    letterSpacing: 0.5,
+                    fontSize: 13,
+                    color: Color(0xFF8FA3C0),
+                    letterSpacing: 1.2,
                   ),
                 ),
-                const SizedBox(height: 60),
-                SizedBox(
-                  width: 32,
-                  height: 32,
+                const SizedBox(height: 48),
+                const SizedBox(
+                  width: 24,
+                  height: 24,
                   child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: AppColors.accent.withValues(alpha: 0.7),
+                    color: AppColors.accent,
+                    strokeWidth: 2.5,
                   ),
                 ),
               ],
