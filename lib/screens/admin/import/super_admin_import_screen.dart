@@ -479,39 +479,47 @@ class _ResultSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final rhCount =
+        result.credentials.where((c) => c.role == 'HR Staff').length;
+    final scCount =
+        result.credentials.where((c) => c.role == 'Registrar').length;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Success count
+        // ── Summary ────────────────────────────────────────────────────
         Container(
-          padding: const EdgeInsets.all(14),
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: AppColors.success.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
           ),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.check_circle_rounded, color: AppColors.success),
-              const SizedBox(width: 10),
               Text(
-                '${result.created} account'
-                '${result.created == 1 ? '' : 's'} created',
+                'Import Complete ✅',
                 style: AppTypography.labelLarge.copyWith(
                   color: AppColors.success,
                 ),
               ),
+              const SizedBox(height: 10),
+              _SummaryRow('👔 HR Staff created', rhCount),
+              _SummaryRow('📋 Registrar created', scCount),
             ],
           ),
         ),
 
-        // Errors
+        // ── Errors ─────────────────────────────────────────────────────
         if (result.errors.isNotEmpty) ...[
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           Container(
+            width: double.infinity,
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: AppColors.error.withValues(alpha: 0.07),
+              color: AppColors.error.withValues(alpha: 0.06),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
             ),
@@ -519,17 +527,22 @@ class _ResultSection extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${result.errors.length} issue'
-                  '${result.errors.length == 1 ? '' : 's'}',
+                  '${result.errors.length} Warning(s)',
                   style: AppTypography.labelMedium.copyWith(
                     color: AppColors.error,
                   ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 8),
                 ...result.errors.map(
                   (e) => Padding(
-                    padding: const EdgeInsets.only(bottom: 3),
-                    child: Text('• $e', style: AppTypography.caption),
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('⚠️ ', style: TextStyle(fontSize: 12)),
+                        Expanded(child: Text(e, style: AppTypography.caption)),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -537,57 +550,15 @@ class _ResultSection extends StatelessWidget {
           ),
         ],
 
-        // Credentials table + download
+        // ── Download credentials ────────────────────────────────────────
         if (result.credentials.isNotEmpty) ...[
           const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('Generated Credentials', style: AppTypography.headingMedium),
-              TextButton.icon(
-                icon: const Icon(Icons.download_rounded, size: 18),
-                label: const Text('Download Excel'),
-                onPressed: onDownload,
-                style: TextButton.styleFrom(foregroundColor: AppColors.accent),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-
-          // Header
-          _CredRow(
-            name: 'Name',
-            role: 'Role',
-            email: 'Email',
-            password: 'Password',
-            rfidTag: 'RFID Tag',
-            isHeader: true,
-            isDark: isDark,
-          ),
-
-          // Rows
-          ...result.credentials.map(
-            (c) => GestureDetector(
-              onTap: () {
-                Clipboard.setData(
-                  ClipboardData(
-                    text: '${c.name}|${c.role}|${c.email}|${c.password}',
-                  ),
-                );
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(const SnackBar(content: Text('Copied!')));
-              },
-              child: _CredRow(
-                name: c.name,
-                role: c.role,
-                email: c.email,
-                password: c.password,
-                rfidTag: c.rfidTag,
-                isHeader: false,
-                isDark: isDark,
-              ),
-            ),
+          AppButton(
+            label: 'Download Credentials Excel',
+            onPressed: onDownload,
+            icon: Icons.download_rounded,
+            width: double.infinity,
+            isOutlined: true,
           ),
         ],
       ],
@@ -595,71 +566,24 @@ class _ResultSection extends StatelessWidget {
   }
 }
 
-class _CredRow extends StatelessWidget {
-  final String name, role, email, password, rfidTag;
-  final bool isHeader, isDark;
-  const _CredRow({
-    required this.name,
-    required this.role,
-    required this.email,
-    required this.password,
-    required this.rfidTag,
-    this.isHeader = false,
-    this.isDark = false,
-  });
+class _SummaryRow extends StatelessWidget {
+  final String label;
+  final int count;
+  const _SummaryRow(this.label, this.count);
   @override
-  Widget build(BuildContext context) {
-    final style =
-        isHeader
-            ? AppTypography.labelSmall.copyWith(fontWeight: FontWeight.bold)
-            : AppTypography.caption;
-    final bg =
-        isHeader
-            ? AppColors.accent.withValues(alpha: 0.12)
-            : isDark
-            ? AppColors.darkCard
-            : AppColors.lightCard;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-      margin: const EdgeInsets.only(bottom: 3),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            flex: 2,
-            child: Text(name, style: style, overflow: TextOverflow.ellipsis),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(role, style: style, overflow: TextOverflow.ellipsis),
-          ),
-          Expanded(
-            flex: 3,
-            child: Text(email, style: style, overflow: TextOverflow.ellipsis),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              password,
-              style: style.copyWith(fontFamily: 'monospace'),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              rfidTag.isNotEmpty ? rfidTag : '-',
-              style: style,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 4),
+    child: Row(
+      children: [
+        Text(label, style: AppTypography.bodySmall),
+        const Spacer(),
+        Text(
+          '$count',
+          style: AppTypography.labelLarge.copyWith(color: AppColors.success),
+        ),
+      ],
+    ),
+  );
 }
 
 // ─────────────────────────────────────────
