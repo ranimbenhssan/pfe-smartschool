@@ -18,29 +18,77 @@ class AdminDashboardScreen extends ConsumerStatefulWidget {
 class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
   int _selectedIndex = 0;
 
+  // ── Role-aware nav items ──────────────────────────────────────────────────
+  List<_NavItem> _navItemsFor(UserRole role) {
+    switch (role) {
+      case UserRole.adminRH:
+        return const [
+          _NavItem(icon: Icons.home_rounded, label: 'Home'),
+          _NavItem(icon: Icons.more_horiz, label: 'More'),
+        ];
+      case UserRole.adminScolarite:
+        return const [
+          _NavItem(icon: Icons.home_rounded, label: 'Home'),
+          _NavItem(icon: Icons.people_rounded, label: 'Students'),
+          _NavItem(icon: Icons.more_horiz, label: 'More'),
+        ];
+      default: // superAdmin
+        return const [
+          _NavItem(icon: Icons.home_rounded, label: 'Home'),
+          _NavItem(icon: Icons.people_rounded, label: 'Students'),
+          _NavItem(icon: Icons.more_horiz, label: 'More'),
+        ];
+    }
+  }
+
+  // ── Role-aware body ───────────────────────────────────────────────────────
+  Widget _bodyFor(UserRole role) {
+    switch (role) {
+      case UserRole.adminRH:
+        switch (_selectedIndex) {
+          case 1:
+            return const _MoreMenu();
+          default:
+            return const _RhDashboardBody();
+        }
+      case UserRole.adminScolarite:
+        switch (_selectedIndex) {
+          case 1:
+            return const _StudentsTab();
+          case 2:
+            return const _MoreMenu();
+          default:
+            return const _ScolariteDashboardBody();
+        }
+      default: // superAdmin
+        switch (_selectedIndex) {
+          case 1:
+            return const _StudentsTab();
+          case 2:
+            return const _MoreMenu();
+          default:
+            return const _SuperAdminDashboardBody();
+        }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final role = ref.watch(currentUserProvider).value?.role ?? UserRole.unknown;
     final navItems = _navItemsFor(role);
-    // Clamp index in case role changed
+
     if (_selectedIndex >= navItems.length) {
       WidgetsBinding.instance.addPostFrameCallback(
         (_) => setState(() => _selectedIndex = 0),
       );
     }
+
     return Scaffold(
       backgroundColor:
           isDark ? AppColors.darkBackground : AppColors.lightBackground,
       appBar: _buildAppBar(isDark),
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: [
-          const _DashboardBody(),
-          const _StudentsTab(),
-          const _MoreMenu(),
-        ],
-      ),
+      body: _bodyFor(role),
       bottomNavigationBar: _buildBottomNav(isDark, navItems),
     );
   }
@@ -49,7 +97,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
     return AppBar(
       backgroundColor: isDark ? AppColors.darkSurface : AppColors.lightSurface,
       title: Text(
-        'Faccna',
+        'SmartSchool',
         style: AppTypography.headingMedium.copyWith(
           color: isDark ? AppColors.darkText : AppColors.lightText,
           fontFamily: AppTypography.displayFont,
@@ -67,11 +115,9 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                 size: 20,
               ),
               onPressed: () {
-                final current = ref.read(themeModeProvider);
+                final c = ref.read(themeModeProvider);
                 ref.read(themeModeProvider.notifier).state =
-                    current == ThemeMode.dark
-                        ? ThemeMode.light
-                        : ThemeMode.dark;
+                    c == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
               },
             );
           },
@@ -119,11 +165,14 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
         ),
       ),
       child: BottomNavigationBar(
-        currentIndex: _selectedIndex,
+        currentIndex: _selectedIndex.clamp(0, navItems.length - 1),
         onTap: (i) => setState(() => _selectedIndex = i),
         backgroundColor: Colors.transparent,
         elevation: 0,
         selectedItemColor: AppColors.accent,
+        unselectedItemColor:
+            isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+        type: BottomNavigationBarType.fixed,
         items:
             navItems
                 .map(
@@ -136,62 +185,25 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
       ),
     );
   }
-
-  List<_NavItem> _navItemsFor(UserRole role) {
-    if (role == UserRole.adminRH) {
-      return const [
-        _NavItem(icon: Icons.home_rounded, label: 'Home'),
-        _NavItem(icon: Icons.more_horiz, label: 'More'),
-      ];
-    }
-    // superAdmin and adminScolarite keep the original 3 tabs
-    return const [
-      _NavItem(icon: Icons.home_rounded, label: 'Home'),
-      _NavItem(icon: Icons.people_rounded, label: 'Students'),
-      _NavItem(icon: Icons.more_horiz, label: 'More'),
-    ];
-  }
-
-  Widget _bodyFor(UserRole role) {
-    if (role == UserRole.adminRH) {
-      // adminRH: index 0 = Dashboard, index 1 = More (no Students tab)
-      switch (_selectedIndex) {
-        case 1:
-          return const _MoreMenu();
-        default:
-          return const _DashboardBody();
-      }
-    }
-    // superAdmin + adminScolarite: original 3-tab layout
-    switch (_selectedIndex) {
-      case 1:
-        return const _StudentsTab();
-      case 2:
-        return const _MoreMenu();
-      default:
-        return const _DashboardBody();
-    }
-  }
 }
 
-// ─────────────────────────────────────────
-//  DASHBOARD BODY
-// ─────────────────────────────────────────
-class _DashboardBody extends ConsumerWidget {
-  const _DashboardBody();
+// ═══════════════════════════════════════════════════════════════════════════
+//  SUPER ADMIN DASHBOARD — everything
+// ═══════════════════════════════════════════════════════════════════════════
+class _SuperAdminDashboardBody extends ConsumerWidget {
+  const _SuperAdminDashboardBody();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final currentUser = ref.watch(currentUserProvider).value;
-    final role = currentUser?.role ?? UserRole.unknown;
-
-    // ── All count providers return int — use directly, no .maybeWhen ───────
     final stats = ref.watch(dashboardStatsProvider);
     final activeFlags = ref.watch(activeFlagsCountProvider);
-    final present = ref.watch(todayPresentCountProvider); // int
-    final absent = ref.watch(todayAbsentCountProvider); // int
-    final late = ref.watch(todayLateCountProvider); // int
+    final present = ref.watch(todayPresentCountProvider);
+    final absent = ref.watch(todayAbsentCountProvider);
+    final late = ref.watch(todayLateCountProvider);
+    final rtdbTemp = ref.watch(rtdbTemperatureProvider);
+    final rooms = ref.watch(roomsProvider);
 
     return RefreshIndicator(
       color: AppColors.accent,
@@ -202,13 +214,18 @@ class _DashboardBody extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildGreeting(isDark, currentUser, role),
+            _Greeting(
+              user: currentUser,
+              role: UserRole.superAdmin,
+              isDark: isDark,
+            ),
             const SizedBox(height: 24),
 
-            // ── Hero attendance card ────────────────────────────────────
-            _buildHeroCard(context, isDark, present, absent, late),
+            // Attendance hero card
+            _HeroAttendanceCard(present: present, absent: absent, late: late),
             const SizedBox(height: 24),
 
+            // Stats — all 4
             Text(
               'Overview',
               style: AppTypography.headingMedium.copyWith(
@@ -216,7 +233,6 @@ class _DashboardBody extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 12),
-
             stats.when(
               loading: () => const LoadingWidget(),
               error:
@@ -225,10 +241,53 @@ class _DashboardBody extends ConsumerWidget {
                     message: e.toString(),
                     icon: Icons.error_outline_rounded,
                   ),
-              data: (data) => _buildStatsGrid(context, data, activeFlags),
+              data:
+                  (data) => GridView.count(
+                    crossAxisCount: 2,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    childAspectRatio: 1.4,
+                    children: [
+                      StatCard(
+                        title: 'Total Students',
+                        value: '${data['totalStudents'] ?? 0}',
+                        icon: Icons.people_rounded,
+                        color: AppColors.info,
+                        onTap: () => context.push(AppRoutes.adminStudents),
+                      ),
+                      StatCard(
+                        title: 'Total Teachers',
+                        value: '${data['totalTeachers'] ?? 0}',
+                        icon: Icons.person_rounded,
+                        color: AppColors.accent,
+                        onTap: () => context.push(AppRoutes.adminTeachers),
+                      ),
+                      StatCard(
+                        title: 'Total Classes',
+                        value: '${data['totalClasses'] ?? 0}',
+                        icon: Icons.class_rounded,
+                        color: AppColors.success,
+                        onTap: () => context.push(AppRoutes.adminClasses),
+                      ),
+                      StatCard(
+                        title: 'Active Absence Flags',
+                        value: '$activeFlags',
+                        icon: Icons.warning_amber_rounded,
+                        color: AppColors.error,
+                        onTap: () => context.push(AppRoutes.adminAiAlerts),
+                        subtitle:
+                            activeFlags > 0
+                                ? '$activeFlags need attention'
+                                : null,
+                      ),
+                    ],
+                  ),
             ),
             const SizedBox(height: 24),
 
+            // Quick Actions
             Text(
               'Quick Actions',
               style: AppTypography.headingMedium.copyWith(
@@ -236,578 +295,336 @@ class _DashboardBody extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 12),
-            _buildQuickActions(context, ref, isDark),
+            Row(
+              children: [
+                _QA(
+                  label: 'Teacher\nPresence',
+                  icon: Icons.how_to_reg_rounded,
+                  color: AppColors.teacherColor,
+                  onTap: () => context.push(AppRoutes.adminTeacherPresence),
+                ),
+                const SizedBox(width: 10),
+                _QA(
+                  label: 'RFID Logs',
+                  icon: Icons.nfc_rounded,
+                  color: AppColors.accent,
+                  onTap: () => context.push(AppRoutes.adminRfid),
+                ),
+                const SizedBox(width: 10),
+                _QA(
+                  label: 'Flags',
+                  icon: Icons.warning_amber_rounded,
+                  color: AppColors.error,
+                  onTap: () => context.push(AppRoutes.adminAiAlerts),
+                ),
+                const SizedBox(width: 10),
+                _QA(
+                  label: 'Messages',
+                  icon: Icons.message_rounded,
+                  color: AppColors.secondary,
+                  onTap: () => context.push(AppRoutes.adminmessage),
+                ),
+              ],
+            ),
             const SizedBox(height: 24),
 
-            // ── Live Temperature ──────────────────────────────────────────
-            _buildTemperatureSection(context, isDark, ref),
+            // Temperature
+            _TemperatureSection(
+              rtdbTemp: rtdbTemp,
+              rooms: rooms,
+              isDark: isDark,
+            ),
             const SizedBox(height: 24),
 
-            _buildRecentMessages(context, isDark, ref),
+            _RecentMessages(isDark: isDark),
             const SizedBox(height: 20),
           ],
         ),
       ),
     );
   }
+}
 
-  Widget _buildGreeting(bool isDark, UserModel? user, UserRole role) {
-    final hour = DateTime.now().hour;
-    final greeting =
-        hour < 12
-            ? 'Good Morning'
-            : hour < 17
-            ? 'Good Afternoon'
-            : 'Good Evening';
-    final now = DateTime.now();
-    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '$greeting, ${user?.name ?? 'Admin'} 👋',
-          style: AppTypography.headingLarge.copyWith(
-            color: isDark ? AppColors.darkText : AppColors.lightText,
-          ),
-        ),
-        Text(
-          role.label,
-          style: AppTypography.caption.copyWith(
-            color:
-                isDark
-                    ? AppColors.darkTextSecondary
-                    : AppColors.lightTextSecondary,
-          ),
-        ),
-        Text(
-          '${days[now.weekday - 1]}, ${now.day} ${months[now.month - 1]} ${now.year}',
-          style: AppTypography.bodySmall.copyWith(
-            color:
-                isDark
-                    ? AppColors.darkTextSecondary
-                    : AppColors.lightTextSecondary,
-          ),
-        ),
-      ],
-    );
-  }
+// ═══════════════════════════════════════════════════════════════════════════
+//  RH ADMIN DASHBOARD — teachers only
+// ═══════════════════════════════════════════════════════════════════════════
+class _RhDashboardBody extends ConsumerWidget {
+  const _RhDashboardBody();
 
-  // ── Hero card — present/absent/late are plain int ──────────────────────
-  Widget _buildHeroCard(
-    BuildContext context,
-    bool isDark,
-    int present,
-    int absent,
-    int late,
-  ) {
-    final total = present + absent + late;
-    final rate = total > 0 ? ((present / total) * 100).toInt() : 0;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final currentUser = ref.watch(currentUserProvider).value;
+    final stats = ref.watch(dashboardStatsProvider);
 
-    return GestureDetector(
-      onTap: () => context.push(AppRoutes.adminAttendance),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          gradient: AppColors.primaryGradient,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primary.withValues(alpha: 0.4),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
+    return RefreshIndicator(
+      color: AppColors.teacherColor,
+      onRefresh: () async => ref.refresh(dashboardStatsProvider),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppColors.accent.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                "TODAY'S ATTENDANCE",
-                style: AppTypography.labelSmall.copyWith(
-                  color: AppColors.accent,
-                  letterSpacing: 1.0,
-                ),
-              ),
+            _Greeting(
+              user: currentUser,
+              role: UserRole.adminRH,
+              isDark: isDark,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
 
-            // ── Stat row — uses plain int directly ──────────────────────
-            Row(
-              children: [
-                Expanded(
-                  child: _AttendanceStat(
-                    label: 'Present',
-                    value: '$present', // int → String directly
-                    color: AppColors.success,
-                    icon: Icons.check_circle_rounded,
-                  ),
-                ),
-                Container(width: 1, height: 50, color: Colors.white12),
-                Expanded(
-                  child: _AttendanceStat(
-                    label: 'Absent',
-                    value: '$absent',
-                    color: AppColors.error,
-                    icon: Icons.cancel_rounded,
-                  ),
-                ),
-                Container(width: 1, height: 50, color: Colors.white12),
-                Expanded(
-                  child: _AttendanceStat(
-                    label: 'Late',
-                    value: '$late',
-                    color: AppColors.warning,
-                    icon: Icons.watch_later_rounded,
-                  ),
-                ),
-                Container(width: 1, height: 50, color: Colors.white12),
-                Expanded(
-                  child: _AttendanceStat(
-                    label: 'Rate',
-                    value: '$rate%',
-                    color: AppColors.accent,
-                    icon: Icons.percent_rounded,
-                  ),
-                ),
-              ],
+            // Stats — teachers only
+            Text(
+              'Overview',
+              style: AppTypography.headingMedium.copyWith(
+                color: isDark ? AppColors.darkText : AppColors.lightText,
+              ),
             ),
             const SizedBox(height: 12),
+            stats.when(
+              loading: () => const LoadingWidget(),
+              error:
+                  (e, _) => EmptyState(
+                    title: 'Error',
+                    message: e.toString(),
+                    icon: Icons.error_outline_rounded,
+                  ),
+              data:
+                  (data) => GridView.count(
+                    crossAxisCount: 2,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    childAspectRatio: 1.4,
+                    children: [
+                      StatCard(
+                        title: 'Total Teachers',
+                        value: '${data['totalTeachers'] ?? 0}',
+                        icon: Icons.person_rounded,
+                        color: AppColors.teacherColor,
+                        onTap: () => context.push(AppRoutes.adminTeachers),
+                      ),
+                      StatCard(
+                        title: 'Total Classes',
+                        value: '${data['totalClasses'] ?? 0}',
+                        icon: Icons.class_rounded,
+                        color: AppColors.success,
+                        onTap: () => context.push(AppRoutes.adminClasses),
+                      ),
+                    ],
+                  ),
+            ),
+            const SizedBox(height: 24),
 
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: total > 0 ? present / total : 0,
-                backgroundColor: Colors.white12,
-                valueColor: const AlwaysStoppedAnimation<Color>(
-                  AppColors.success,
-                ),
-                minHeight: 5,
+            // Quick Actions — teachers only
+            Text(
+              'Quick Actions',
+              style: AppTypography.headingMedium.copyWith(
+                color: isDark ? AppColors.darkText : AppColors.lightText,
               ),
             ),
-            const SizedBox(height: 8),
-
+            const SizedBox(height: 12),
             Row(
               children: [
-                Text(
-                  'View full attendance report',
-                  style: AppTypography.labelSmall.copyWith(
-                    color: Colors.white60,
-                  ),
+                _QA(
+                  label: 'Teachers',
+                  icon: Icons.person_rounded,
+                  color: AppColors.teacherColor,
+                  onTap: () => context.push(AppRoutes.adminTeachers),
                 ),
-                const SizedBox(width: 4),
-                const Icon(
-                  Icons.arrow_forward_rounded,
-                  color: Colors.white60,
-                  size: 14,
+                const SizedBox(width: 10),
+                _QA(
+                  label: 'Presence',
+                  icon: Icons.how_to_reg_rounded,
+                  color: AppColors.success,
+                  onTap: () => context.push(AppRoutes.adminTeacherPresence),
+                ),
+                const SizedBox(width: 10),
+                _QA(
+                  label: 'Import',
+                  icon: Icons.upload_file_rounded,
+                  color: AppColors.info,
+                  onTap: () => context.push(AppRoutes.adminImport),
+                ),
+                const SizedBox(width: 10),
+                _QA(
+                  label: 'Messages',
+                  icon: Icons.message_rounded,
+                  color: AppColors.secondary,
+                  onTap: () => context.push(AppRoutes.adminmessage),
                 ),
               ],
             ),
+            const SizedBox(height: 24),
+
+            _TemperatureSection(
+              rtdbTemp: ref.watch(rtdbTemperatureProvider),
+              rooms: ref.watch(roomsProvider),
+              isDark: isDark,
+            ),
+            const SizedBox(height: 24),
+
+            _RecentMessages(isDark: isDark),
+            const SizedBox(height: 20),
           ],
         ),
       ),
     );
   }
+}
 
-  Widget _buildStatsGrid(
-    BuildContext context,
-    Map<String, int> data,
-    int activeFlags,
-  ) {
-    return GridView.count(
-      crossAxisCount: 2,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: 12,
-      crossAxisSpacing: 12,
-      childAspectRatio: 1.4,
-      children: [
-        StatCard(
-          title: 'Total Students',
-          value: data['totalStudents'].toString(),
-          icon: Icons.people_rounded,
-          color: AppColors.info,
-          onTap: () => context.push(AppRoutes.adminStudents),
-        ),
-        StatCard(
-          title: 'Total Teachers',
-          value: data['totalTeachers'].toString(),
-          icon: Icons.person_rounded,
-          color: AppColors.accent,
-          onTap: () => context.push(AppRoutes.adminTeachers),
-        ),
-        StatCard(
-          title: 'Total Classes',
-          value: data['totalClasses'].toString(),
-          icon: Icons.class_rounded,
-          color: AppColors.success,
-          onTap: () => context.push(AppRoutes.adminClasses),
-        ),
-        StatCard(
-          title: 'Active Absence Flags',
-          value: activeFlags.toString(),
-          icon: Icons.warning_amber_rounded,
-          color: AppColors.error,
-          onTap: () => context.push(AppRoutes.adminAiAlerts),
-          subtitle: activeFlags > 0 ? '$activeFlags need attention' : null,
-        ),
-      ],
-    );
-  }
+// ═══════════════════════════════════════════════════════════════════════════
+//  SCOLARITE DASHBOARD — students, classes, flags, timetables
+// ═══════════════════════════════════════════════════════════════════════════
+class _ScolariteDashboardBody extends ConsumerWidget {
+  const _ScolariteDashboardBody();
 
-  Widget _buildQuickActions(BuildContext context, WidgetRef ref, bool isDark) {
-    final role = ref.watch(currentUserProvider).value?.role ?? UserRole.unknown;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final currentUser = ref.watch(currentUserProvider).value;
+    final stats = ref.watch(dashboardStatsProvider);
+    final activeFlags = ref.watch(activeFlagsCountProvider);
+    final present = ref.watch(todayPresentCountProvider);
+    final absent = ref.watch(todayAbsentCountProvider);
+    final late = ref.watch(todayLateCountProvider);
 
-    if (role == UserRole.superAdmin) {
-      return Column(
-        children: [
-          Row(
-            children: [
-              _QA(
-                label: 'Teacher\nPresence',
-                icon: Icons.how_to_reg_rounded,
-                color: AppColors.teacherColor,
-                onTap: () => context.push(AppRoutes.adminTeacherPresence),
-              ),
-              const SizedBox(width: 10),
-              _QA(
-                label: 'Staff',
-                icon: Icons.badge_rounded,
-                color: AppColors.info,
-                onTap: () => context.push(AppRoutes.adminStaff),
-              ),
-              const SizedBox(width: 10),
-              _QA(
-                label: 'RFID Logs',
-                icon: Icons.nfc_rounded,
-                color: AppColors.accent,
-                onTap: () => context.push(AppRoutes.adminRfid),
-              ),
-              const SizedBox(width: 10),
-              _QA(
-                label: 'Flags',
-                icon: Icons.warning_amber_rounded,
-                color: AppColors.error,
-                onTap: () => context.push(AppRoutes.adminAiAlerts),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              _QA(
-                label: 'Messages',
-                icon: Icons.message_rounded,
-                color: AppColors.secondary,
-                onTap: () => context.push(AppRoutes.adminmessage),
-              ),
-              const Spacer(),
-            ],
-          ),
-        ],
-      );
-    }
-
-    if (role == UserRole.adminRH) {
-      return Row(
-        children: [
-          _QA(
-            label: 'Teachers',
-            icon: Icons.person_rounded,
-            color: AppColors.teacherColor,
-            onTap: () => context.push(AppRoutes.adminTeachers),
-          ),
-          const SizedBox(width: 10),
-          _QA(
-            label: 'Presence',
-            icon: Icons.how_to_reg_rounded,
-            color: AppColors.success,
-            onTap: () => context.push(AppRoutes.adminTeacherPresence),
-          ),
-          const SizedBox(width: 10),
-          _QA(
-            label: 'Import',
-            icon: Icons.upload_file_rounded,
-            color: AppColors.info,
-            onTap: () => context.push(AppRoutes.adminImport),
-          ),
-          const SizedBox(width: 10),
-          _QA(
-            label: 'Messages',
-            icon: Icons.message_rounded,
-            color: AppColors.secondary,
-            onTap: () => context.push(AppRoutes.adminmessage),
-          ),
-        ],
-      );
-    }
-
-    if (role == UserRole.adminScolarite) {
-      return Row(
-        children: [
-          _QA(
-            label: 'Students',
-            icon: Icons.school_rounded,
-            color: AppColors.studentColor,
-            onTap: () => context.push(AppRoutes.adminStudents),
-          ),
-          const SizedBox(width: 10),
-          _QA(
-            label: 'Timetable',
-            icon: Icons.schedule_rounded,
-            color: AppColors.info,
-            onTap: () => context.push(AppRoutes.adminTimetable),
-          ),
-          const SizedBox(width: 10),
-          _QA(
-            label: 'Import',
-            icon: Icons.upload_file_rounded,
-            color: AppColors.accent,
-            onTap: () => context.push(AppRoutes.adminImport),
-          ),
-          const SizedBox(width: 10),
-          _QA(
-            label: 'Messages',
-            icon: Icons.message_rounded,
-            color: AppColors.secondary,
-            onTap: () => context.push(AppRoutes.adminmessage),
-          ),
-        ],
-      );
-    }
-
-    return const SizedBox.shrink();
-  }
-
-  Widget _buildTemperatureSection(
-    BuildContext context,
-    bool isDark,
-    WidgetRef ref,
-  ) {
-    final rtdbTemp = ref.watch(rtdbTemperatureProvider);
-    final rooms = ref.watch(roomsProvider);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return RefreshIndicator(
+      color: AppColors.info,
+      onRefresh: () async => ref.refresh(dashboardStatsProvider),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            _Greeting(
+              user: currentUser,
+              role: UserRole.adminScolarite,
+              isDark: isDark,
+            ),
+            const SizedBox(height: 24),
+
+            // Attendance hero (student focused)
+            _HeroAttendanceCard(present: present, absent: absent, late: late),
+            const SizedBox(height: 24),
+
+            // Stats — students + classes + flags only (no teachers)
             Text(
-              'Classroom Temperature',
+              'Overview',
               style: AppTypography.headingMedium.copyWith(
                 color: isDark ? AppColors.darkText : AppColors.lightText,
               ),
             ),
-            TextButton(
-              onPressed: () => context.push(AppRoutes.adminIot),
-              child: const Text('See all'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-
-        // Sensor status
-        rtdbTemp.when(
-          loading: () => const LoadingWidget(),
-          error:
-              (_, __) => Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.error.withValues(alpha: 0.07),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(
-                      Icons.sensors_off_rounded,
-                      color: AppColors.error,
-                      size: 16,
-                    ),
-                    SizedBox(width: 8),
-                    Text('Sensor offline'),
-                  ],
-                ),
-              ),
-          data: (d) {
-            if (d == null) {
-              return Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: isDark ? AppColors.darkCard : AppColors.lightCard,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Text('Waiting for sensor data...'),
-              );
-            }
-
-            final tColor =
-                d.temperature < 24
-                    ? AppColors.success
-                    : d.temperature < 28
-                    ? AppColors.warning
-                    : AppColors.error;
-
-            return Column(
-              children: [
-                // Scrollable rooms list
-                rooms.when(
-                  loading: () => const SizedBox.shrink(),
-                  error: (_, __) => const SizedBox.shrink(),
-                  data:
-                      (list) => SizedBox(
-                        height: 80,
-                        child: ListView.separated(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: list.take(10).length,
-                          separatorBuilder: (_, __) => const SizedBox(width: 8),
-                          itemBuilder: (ctx, i) {
-                            final room = list[i];
-                            return Container(
-                              width: 110,
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color:
-                                    isDark
-                                        ? AppColors.darkCard
-                                        : AppColors.lightCard,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color: tColor.withValues(alpha: 0.25),
-                                ),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    room.name,
-                                    style: AppTypography.labelSmall,
-                                  ),
-                                  Text(
-                                    'Floor ${room.floor}',
-                                    style: AppTypography.caption,
-                                  ),
-                                  Text(
-                                    '${d.temperature.toStringAsFixed(1)}°C',
-                                    style: AppTypography.labelSmall.copyWith(
-                                      color: tColor,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                ),
-              ],
-            );
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildRecentMessages(
-    BuildContext context,
-    bool isDark,
-    WidgetRef ref,
-  ) {
-    final currentUser = ref.watch(currentUserProvider);
-    return currentUser.when(
-      loading: () => const SizedBox.shrink(),
-      error: (_, __) => const SizedBox.shrink(),
-      data: (user) {
-        if (user == null) return const SizedBox.shrink();
-        final messages = ref.watch(notificationsProvider(user.id));
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Recent Messages',
-                  style: AppTypography.headingMedium.copyWith(
-                    color: isDark ? AppColors.darkText : AppColors.lightText,
-                  ),
-                ),
-                TextButton(
-                  onPressed: () => context.push(AppRoutes.adminmessage),
-                  child: const Text('See all'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            messages.when(
+            const SizedBox(height: 12),
+            stats.when(
               loading: () => const LoadingWidget(),
-              error: (_, __) => const SizedBox.shrink(),
-              data: (list) {
-                if (list.isEmpty) {
-                  return Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: isDark ? AppColors.darkCard : AppColors.lightCard,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color:
-                            isDark
-                                ? AppColors.darkBorder
-                                : AppColors.lightBorder,
+              error:
+                  (e, _) => EmptyState(
+                    title: 'Error',
+                    message: e.toString(),
+                    icon: Icons.error_outline_rounded,
+                  ),
+              data:
+                  (data) => GridView.count(
+                    crossAxisCount: 2,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    childAspectRatio: 1.4,
+                    children: [
+                      StatCard(
+                        title: 'Total Students',
+                        value: '${data['totalStudents'] ?? 0}',
+                        icon: Icons.people_rounded,
+                        color: AppColors.info,
+                        onTap: () => context.push(AppRoutes.adminStudents),
                       ),
-                    ),
-                    child: Text(
-                      'No messages yet',
-                      style: AppTypography.bodySmall.copyWith(
-                        color:
-                            isDark
-                                ? AppColors.darkTextSecondary
-                                : AppColors.lightTextSecondary,
+                      StatCard(
+                        title: 'Total Classes',
+                        value: '${data['totalClasses'] ?? 0}',
+                        icon: Icons.class_rounded,
+                        color: AppColors.success,
+                        onTap: () => context.push(AppRoutes.adminClasses),
                       ),
-                    ),
-                  );
-                }
-                return Column(
-                  children:
-                      list
-                          .take(3)
-                          .map((m) => MessagesTile(message: m))
-                          .toList(),
-                );
-              },
+                      StatCard(
+                        title: 'Absence Flags',
+                        value: '$activeFlags',
+                        icon: Icons.warning_amber_rounded,
+                        color: AppColors.error,
+                        onTap: () => context.push(AppRoutes.adminAiAlerts),
+                        subtitle:
+                            activeFlags > 0
+                                ? '$activeFlags need attention'
+                                : null,
+                      ),
+                    ],
+                  ),
             ),
+            const SizedBox(height: 24),
+
+            // Quick Actions — students only
+            Text(
+              'Quick Actions',
+              style: AppTypography.headingMedium.copyWith(
+                color: isDark ? AppColors.darkText : AppColors.lightText,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                _QA(
+                  label: 'Students',
+                  icon: Icons.school_rounded,
+                  color: AppColors.studentColor,
+                  onTap: () => context.push(AppRoutes.adminStudents),
+                ),
+                const SizedBox(width: 10),
+                _QA(
+                  label: 'Timetable',
+                  icon: Icons.schedule_rounded,
+                  color: AppColors.info,
+                  onTap: () => context.push(AppRoutes.adminTimetable),
+                ),
+                const SizedBox(width: 10),
+                _QA(
+                  label: 'Import',
+                  icon: Icons.upload_file_rounded,
+                  color: AppColors.accent,
+                  onTap: () => context.push(AppRoutes.adminImport),
+                ),
+                const SizedBox(width: 10),
+                _QA(
+                  label: 'Messages',
+                  icon: Icons.message_rounded,
+                  color: AppColors.secondary,
+                  onTap: () => context.push(AppRoutes.adminmessage),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+
+            _TemperatureSection(
+              rtdbTemp: ref.watch(rtdbTemperatureProvider),
+              rooms: ref.watch(roomsProvider),
+              isDark: isDark,
+            ),
+            const SizedBox(height: 24),
+
+            _RecentMessages(isDark: isDark),
+            const SizedBox(height: 20),
           ],
-        );
-      },
+        ),
+      ),
     );
   }
 }
 
-// ─────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
 //  STUDENTS TAB
-// ─────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
 class _StudentsTab extends ConsumerWidget {
   const _StudentsTab();
 
@@ -815,7 +632,6 @@ class _StudentsTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final students = ref.watch(filteredStudentsProvider);
-
     return Column(
       children: [
         Padding(
@@ -860,11 +676,11 @@ class _StudentsTab extends ConsumerWidget {
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           itemCount: list.length,
                           itemBuilder:
-                              (context, index) => StudentCard(
-                                student: list[index],
+                              (context, i) => StudentCard(
+                                student: list[i],
                                 onTap:
                                     () => context.push(
-                                      '${AppRoutes.adminStudentProfile}/${list[index].id}',
+                                      '${AppRoutes.adminStudentProfile}/${list[i].id}',
                                     ),
                               ),
                         ),
@@ -875,9 +691,9 @@ class _StudentsTab extends ConsumerWidget {
   }
 }
 
-// ─────────────────────────────────────────
-//  MORE MENU
-// ─────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+//  MORE MENU — role-aware
+// ═══════════════════════════════════════════════════════════════════════════
 class _MoreMenu extends ConsumerWidget {
   const _MoreMenu();
 
@@ -885,13 +701,12 @@ class _MoreMenu extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final role = ref.watch(currentUserProvider).value?.role ?? UserRole.unknown;
-    final items = _itemsFor(role);
 
     return ListView.builder(
       padding: const EdgeInsets.all(16),
-      itemCount: items.length,
-      itemBuilder: (context, index) {
-        final item = items[index];
+      itemCount: _itemsFor(role).length,
+      itemBuilder: (context, i) {
+        final item = _itemsFor(role)[i];
         return GestureDetector(
           onTap: () => context.push(item.route),
           child: Container(
@@ -942,16 +757,16 @@ class _MoreMenu extends ConsumerWidget {
       case UserRole.superAdmin:
         return const [
           _MoreItem(
-            label: 'Teachers',
-            icon: Icons.person_rounded,
-            color: AppColors.teacherColor,
-            route: AppRoutes.adminTeachers,
-          ),
-          _MoreItem(
             label: 'Staff',
             icon: Icons.badge_rounded,
             color: AppColors.info,
             route: AppRoutes.adminStaff,
+          ),
+          _MoreItem(
+            label: 'Teachers',
+            icon: Icons.person_rounded,
+            color: AppColors.teacherColor,
+            route: AppRoutes.adminTeachers,
           ),
           _MoreItem(
             label: 'Students',
@@ -1032,6 +847,7 @@ class _MoreMenu extends ConsumerWidget {
             route: AppRoutes.adminSettings,
           ),
         ];
+
       case UserRole.adminRH:
         return const [
           _MoreItem(
@@ -1053,6 +869,12 @@ class _MoreMenu extends ConsumerWidget {
             route: AppRoutes.adminTeacherSheet,
           ),
           _MoreItem(
+            label: 'Timetable',
+            icon: Icons.schedule_rounded,
+            color: AppColors.info,
+            route: AppRoutes.adminTimetable,
+          ),
+          _MoreItem(
             label: 'Import Teachers',
             icon: Icons.upload_file_rounded,
             color: AppColors.success,
@@ -1071,6 +893,7 @@ class _MoreMenu extends ConsumerWidget {
             route: AppRoutes.adminPasswordRequests,
           ),
         ];
+
       case UserRole.adminScolarite:
         return const [
           _MoreItem(
@@ -1122,9 +945,426 @@ class _MoreMenu extends ConsumerWidget {
             route: AppRoutes.adminPasswordRequests,
           ),
         ];
+
       default:
         return const [];
     }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  SHARED WIDGETS
+// ═══════════════════════════════════════════════════════════════════════════
+
+class _Greeting extends StatelessWidget {
+  final UserModel? user;
+  final UserRole role;
+  final bool isDark;
+  const _Greeting({
+    required this.user,
+    required this.role,
+    required this.isDark,
+  });
+
+  String _greeting() {
+    final h = DateTime.now().hour;
+    return h < 12
+        ? 'Good Morning'
+        : h < 17
+        ? 'Good Afternoon'
+        : 'Good Evening';
+  }
+
+  String _date() {
+    final now = DateTime.now();
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${days[now.weekday - 1]}, ${now.day} ${months[now.month - 1]} ${now.year}';
+  }
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        '${_greeting()}, ${user?.name ?? 'Admin'} 👋',
+        style: AppTypography.headingLarge.copyWith(
+          color: isDark ? AppColors.darkText : AppColors.lightText,
+        ),
+      ),
+      Text(
+        role.label,
+        style: AppTypography.caption.copyWith(
+          color:
+              isDark
+                  ? AppColors.darkTextSecondary
+                  : AppColors.lightTextSecondary,
+        ),
+      ),
+      Text(
+        _date(),
+        style: AppTypography.bodySmall.copyWith(
+          color:
+              isDark
+                  ? AppColors.darkTextSecondary
+                  : AppColors.lightTextSecondary,
+        ),
+      ),
+    ],
+  );
+}
+
+class _HeroAttendanceCard extends StatelessWidget {
+  final int present, absent, late;
+  const _HeroAttendanceCard({
+    required this.present,
+    required this.absent,
+    required this.late,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final total = present + absent + late;
+    final rate = total > 0 ? ((present / total) * 100).toInt() : 0;
+    return GestureDetector(
+      onTap: () => context.push(AppRoutes.adminAttendance),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          gradient: AppColors.primaryGradient,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primary.withValues(alpha: 0.4),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.accent.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                "TODAY'S ATTENDANCE",
+                style: AppTypography.labelSmall.copyWith(
+                  color: AppColors.accent,
+                  letterSpacing: 1.0,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: _Stat(
+                    'Present',
+                    '$present',
+                    AppColors.success,
+                    Icons.check_circle_rounded,
+                  ),
+                ),
+                Container(width: 1, height: 50, color: Colors.white12),
+                Expanded(
+                  child: _Stat(
+                    'Absent',
+                    '$absent',
+                    AppColors.error,
+                    Icons.cancel_rounded,
+                  ),
+                ),
+                Container(width: 1, height: 50, color: Colors.white12),
+                Expanded(
+                  child: _Stat(
+                    'Late',
+                    '$late',
+                    AppColors.warning,
+                    Icons.watch_later_rounded,
+                  ),
+                ),
+                Container(width: 1, height: 50, color: Colors.white12),
+                Expanded(
+                  child: _Stat(
+                    'Rate',
+                    '$rate%',
+                    AppColors.accent,
+                    Icons.percent_rounded,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: total > 0 ? present / total : 0,
+                backgroundColor: Colors.white12,
+                valueColor: const AlwaysStoppedAnimation(AppColors.success),
+                minHeight: 5,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Text(
+                  'View full attendance report',
+                  style: AppTypography.labelSmall.copyWith(
+                    color: Colors.white60,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                const Icon(
+                  Icons.arrow_forward_rounded,
+                  color: Colors.white60,
+                  size: 14,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Stat extends StatelessWidget {
+  final String label, value;
+  final Color color;
+  final IconData icon;
+  const _Stat(this.label, this.value, this.color, this.icon);
+  @override
+  Widget build(BuildContext context) => Column(
+    children: [
+      Icon(icon, color: color, size: 18),
+      const SizedBox(height: 4),
+      Text(
+        value,
+        style: AppTypography.statNumber.copyWith(
+          color: Colors.white,
+          fontSize: 22,
+        ),
+      ),
+      Text(label, style: AppTypography.caption.copyWith(color: Colors.white70)),
+    ],
+  );
+}
+
+class _TemperatureSection extends StatelessWidget {
+  final AsyncValue<DhtData?> rtdbTemp;
+  final AsyncValue<List<RoomModel>> rooms;
+  final bool isDark;
+  const _TemperatureSection({
+    required this.rtdbTemp,
+    required this.rooms,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Classroom Temperature',
+              style: AppTypography.headingMedium.copyWith(
+                color: isDark ? AppColors.darkText : AppColors.lightText,
+              ),
+            ),
+            TextButton(
+              onPressed: () => context.push(AppRoutes.adminIot),
+              child: const Text('See all'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        rtdbTemp.when(
+          loading: () => const LoadingWidget(),
+          error:
+              (_, __) => Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.error.withValues(alpha: 0.07),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(
+                      Icons.sensors_off_rounded,
+                      color: AppColors.error,
+                      size: 16,
+                    ),
+                    SizedBox(width: 8),
+                    Text('Sensor offline'),
+                  ],
+                ),
+              ),
+          data: (d) {
+            if (d == null)
+              return Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isDark ? AppColors.darkCard : AppColors.lightCard,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Text('Waiting for sensor data...'),
+              );
+            final tColor =
+                d.temperature < 24
+                    ? AppColors.success
+                    : d.temperature < 28
+                    ? AppColors.warning
+                    : AppColors.error;
+            return rooms.when(
+              loading: () => const SizedBox.shrink(),
+              error: (_, __) => const SizedBox.shrink(),
+              data:
+                  (list) => SizedBox(
+                    height: 80,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: list.take(10).length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 8),
+                      itemBuilder: (ctx, i) {
+                        final room = list[i];
+                        return Container(
+                          width: 110,
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color:
+                                isDark
+                                    ? AppColors.darkCard
+                                    : AppColors.lightCard,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: tColor.withValues(alpha: 0.25),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(room.name, style: AppTypography.labelSmall),
+                              Text(
+                                'Floor ${room.floor}',
+                                style: AppTypography.caption,
+                              ),
+                              Text(
+                                '${d.temperature.toStringAsFixed(1)}°C',
+                                style: AppTypography.labelSmall.copyWith(
+                                  color: tColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _RecentMessages extends ConsumerWidget {
+  final bool isDark;
+  const _RecentMessages({required this.isDark});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentUser = ref.watch(currentUserProvider);
+    return currentUser.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data: (user) {
+        if (user == null) return const SizedBox.shrink();
+        final messages = ref.watch(notificationsProvider(user.id));
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Recent Messages',
+                  style: AppTypography.headingMedium.copyWith(
+                    color: isDark ? AppColors.darkText : AppColors.lightText,
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => context.push(AppRoutes.adminmessage),
+                  child: const Text('See all'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            messages.when(
+              loading: () => const LoadingWidget(),
+              error: (_, __) => const SizedBox.shrink(),
+              data:
+                  (list) =>
+                      list.isEmpty
+                          ? Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color:
+                                  isDark
+                                      ? AppColors.darkCard
+                                      : AppColors.lightCard,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color:
+                                    isDark
+                                        ? AppColors.darkBorder
+                                        : AppColors.lightBorder,
+                              ),
+                            ),
+                            child: Text(
+                              'No messages yet',
+                              style: AppTypography.bodySmall.copyWith(
+                                color:
+                                    isDark
+                                        ? AppColors.darkTextSecondary
+                                        : AppColors.lightTextSecondary,
+                              ),
+                            ),
+                          )
+                          : Column(
+                            children:
+                                list
+                                    .take(3)
+                                    .map((m) => MessagesTile(message: m))
+                                    .toList(),
+                          ),
+            ),
+          ],
+        );
+      },
+    );
   }
 }
 
@@ -1133,141 +1373,46 @@ class _QA extends StatelessWidget {
   final IconData icon;
   final Color color;
   final VoidCallback onTap;
-
   const _QA({
     required this.label,
     required this.icon,
     required this.color,
     required this.onTap,
   });
-
   @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: color.withValues(alpha: 0.2)),
-          ),
-          child: Column(
-            children: [
-              Icon(icon, color: color, size: 22),
-              const SizedBox(height: 5),
-              Text(
-                label,
-                style: AppTypography.labelSmall.copyWith(color: color),
-                textAlign: TextAlign.center,
-                maxLines: 2,
-              ),
-            ],
-          ),
+  Widget build(BuildContext context) => Expanded(
+    child: GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: color.withValues(alpha: 0.2)),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: color, size: 22),
+            const SizedBox(height: 5),
+            Text(
+              label,
+              style: AppTypography.labelSmall.copyWith(color: color),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+            ),
+          ],
         ),
       ),
-    );
-  }
+    ),
+  );
 }
 
-// ─────────────────────────────────────────
-//  ATTENDANCE STAT WIDGET
-// ─────────────────────────────────────────
-class _AttendanceStat extends StatelessWidget {
-  final String label;
-  final String value; // pre-formatted string — no AsyncValue involved
-  final Color color;
-  final IconData icon;
-
-  const _AttendanceStat({
-    required this.label,
-    required this.value,
-    required this.color,
-    required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Icon(icon, color: color, size: 18),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: AppTypography.statNumber.copyWith(
-            color: Colors.white,
-            fontSize: 22,
-          ),
-        ),
-        Text(
-          label,
-          style: AppTypography.caption.copyWith(color: Colors.white70),
-        ),
-      ],
-    );
-  }
-}
-
-// ─────────────────────────────────────────
-//  QUICK ACTION
-// ─────────────────────────────────────────
-class _QuickAction extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _QuickAction({
-    required this.label,
-    required this.icon,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: SizedBox(
-        height: 86,
-        child: GestureDetector(
-          onTap: onTap,
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: color.withValues(alpha: 0.2)),
-            ),
-            child: Column(
-              children: [
-                Icon(icon, color: color, size: 22),
-                const SizedBox(height: 6),
-                Text(
-                  label,
-                  style: AppTypography.labelSmall.copyWith(color: color),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────
-//  PROFILE BOTTOM SHEET
-// ─────────────────────────────────────────
 class _ProfileBottomSheet extends ConsumerWidget {
   const _ProfileBottomSheet();
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final user = ref.watch(currentUserProvider);
-
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
