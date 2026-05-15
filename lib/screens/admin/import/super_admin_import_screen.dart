@@ -1,14 +1,4 @@
 // lib/screens/admin/import/super_admin_import_screen.dart
-//
-// SuperAdmin only — imports HR and Registrar staff accounts.
-// Excel format: one sheet named "Staff"
-// Columns: Name | Role
-//   Role values: "RH" / "HR" / "admin_rh"   → creates adminRH account
-//                "Scolarite" / "admin_scolarite" → creates adminScolarite account
-//
-// Returns a downloadable credentials file with:
-// Name | Role | Email | Generated Password
-
 import 'dart:math';
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -25,7 +15,6 @@ import '../../../theme/theme.dart';
 import '../../../widgets/widgets.dart';
 import '../../../firebase_options.dart';
 
-// ─────────────────────────────────────────────────────────────────────────────
 class SuperAdminImportScreen extends ConsumerStatefulWidget {
   const SuperAdminImportScreen({super.key});
 
@@ -37,7 +26,7 @@ class SuperAdminImportScreen extends ConsumerStatefulWidget {
 class _SuperAdminImportScreenState
     extends ConsumerState<SuperAdminImportScreen> {
   bool _isImporting = false;
-  _StaffImportResult? _result;
+  _ImportResult? _result;
 
   Future<void> _pickAndImport() async {
     final picked = await FilePicker.platform.pickFiles(
@@ -53,25 +42,20 @@ class _SuperAdminImportScreenState
       _isImporting = true;
       _result = null;
     });
-
     final result = await _importStaff(bytes);
-
     setState(() {
       _isImporting = false;
       _result = result;
     });
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  //  IMPORT STAFF
-  // ─────────────────────────────────────────────────────────────────────────
-  Future<_StaffImportResult> _importStaff(Uint8List bytes) async {
-    final credentials = <_StaffCredential>[];
+  Future<_ImportResult> _importStaff(Uint8List bytes) async {
+    final credentials = <_Credential>[];
     final errors = <String>[];
     int created = 0;
 
     try {
-      // Secondary Firebase app for user creation
+      // Secondary Firebase app for account creation
       FirebaseApp secondaryApp;
       try {
         secondaryApp = Firebase.app('staff_import');
@@ -85,8 +69,6 @@ class _SuperAdminImportScreenState
       final db = FirebaseFirestore.instance;
 
       final excel = Excel.decodeBytes(bytes);
-
-      // Find the staff sheet
       final sheetName = excel.tables.keys.firstWhere(
         (k) =>
             k.toLowerCase().contains('staff') ||
@@ -95,7 +77,7 @@ class _SuperAdminImportScreenState
       );
       final sheet = excel.tables[sheetName]!;
       if (sheet.rows.isEmpty) {
-        return _StaffImportResult(
+        return _ImportResult(
           created: 0,
           errors: ['Empty sheet'],
           credentials: [],
@@ -105,8 +87,9 @@ class _SuperAdminImportScreenState
       // Parse headers
       final headers = <String, int>{};
       for (int i = 0; i < sheet.rows[0].length; i++) {
-        final val = sheet.rows[0][i]?.value?.toString().toLowerCase().trim();
-        if (val != null && val.isNotEmpty) headers[val] = i;
+        final v =
+            sheet.rows[0][i]?.value?.toString().toLowerCase().trim() ?? '';
+        if (v.isNotEmpty) headers[v] = i;
       }
 
       for (int i = 1; i < sheet.rows.length; i++) {
@@ -117,6 +100,13 @@ class _SuperAdminImportScreenState
         final roleRaw =
             (_cell(row, headers, 'role') ?? _cell(row, headers, 'poste') ?? '')
                 .toLowerCase()
+                .trim();
+        final rfidTag =
+            (_cell(row, headers, 'rfid tag') ??
+                    _cell(row, headers, 'rfid') ??
+                    _cell(row, headers, 'tag') ??
+                    '')
+                .toUpperCase()
                 .trim();
 
         if (name.isEmpty) {
@@ -143,12 +133,13 @@ class _SuperAdminImportScreenState
           roleLabel = 'Registrar';
         } else {
           errors.add(
-            'Row ${i + 1} ($name): Unknown role "$roleRaw" — use "RH" or "Scolarite"',
+            'Row ${i + 1} ($name): Unknown role "$roleRaw"'
+            ' — use "RH" or "Scolarite"',
           );
           continue;
         }
 
-        // Generate email from name
+        // Generate email
         final emailBase = name
             .toLowerCase()
             .replaceAll(' ', '.')
@@ -156,7 +147,7 @@ class _SuperAdminImportScreenState
         final email = '$emailBase@smartschool.com';
         final password = _generatePassword();
 
-        // Check if email already exists
+        // Check existing email
         final existing =
             await db
                 .collection('users')
@@ -164,19 +155,16 @@ class _SuperAdminImportScreenState
                 .limit(1)
                 .get();
         if (existing.docs.isNotEmpty) {
-          errors.add(
-            'Row ${i + 1} ($name): Email $email already exists — skipped',
-          );
+          errors.add('Row ${i + 1} ($name): $email already exists — skipped');
           continue;
         }
 
         try {
-          // Create Firebase Auth account
-          final credential = await secondaryAuth.createUserWithEmailAndPassword(
+          final cred = await secondaryAuth.createUserWithEmailAndPassword(
             email: email,
             password: password,
           );
-          final uid = credential.user!.uid;
+          final uid = cred.user!.uid;
           await secondaryAuth.signOut();
 
           // Create user doc
@@ -186,15 +174,17 @@ class _SuperAdminImportScreenState
             'role': firestoreRole,
             'first_login': true,
             'temp_password': password,
+            'rfidTag': rfidTag.isNotEmpty ? rfidTag : null,
             'createdAt': FieldValue.serverTimestamp(),
           });
 
           credentials.add(
-            _StaffCredential(
+            _Credential(
               name: name,
               role: roleLabel,
               email: email,
               password: password,
+              rfidTag: rfidTag,
             ),
           );
           created++;
@@ -205,25 +195,21 @@ class _SuperAdminImportScreenState
 
       await secondaryAuth.signOut();
     } catch (e) {
-      errors.add('Fatal error: $e');
+      errors.add('Fatal: $e');
     }
 
-    return _StaffImportResult(
+    return _ImportResult(
       created: created,
       errors: errors,
       credentials: credentials,
     );
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  //  EXPORT credentials to Excel
-  // ─────────────────────────────────────────────────────────────────────────
-  Future<void> _downloadCredentials(List<_StaffCredential> creds) async {
+  Future<void> _downloadCredentials(List<_Credential> creds) async {
     final excel = Excel.createExcel();
     final sheet = excel['Staff Credentials'];
 
-    // Header
-    const headers = ['Name', 'Role', 'Email', 'Password'];
+    const headers = ['Name', 'Role', 'Email', 'Password', 'RFID Tag'];
     for (int c = 0; c < headers.length; c++) {
       final cell = sheet.cell(
         CellIndex.indexByColumnRow(columnIndex: c, rowIndex: 0),
@@ -251,12 +237,14 @@ class _SuperAdminImportScreenState
       w(1, c.role);
       w(2, c.email);
       w(3, c.password);
+      w(4, c.rfidTag);
     }
 
     sheet.setColumnWidth(0, 22);
     sheet.setColumnWidth(1, 14);
     sheet.setColumnWidth(2, 30);
     sheet.setColumnWidth(3, 16);
+    sheet.setColumnWidth(4, 14);
     excel.delete('Sheet1');
 
     final bytes = excel.encode();
@@ -268,7 +256,6 @@ class _SuperAdminImportScreenState
     await Share.shareXFiles([XFile(file.path)], subject: 'Staff Credentials');
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
   String _generatePassword({int length = 10}) {
     const chars =
         'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#\$';
@@ -285,7 +272,6 @@ class _SuperAdminImportScreenState
     return row[idx]?.value?.toString().trim();
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -303,7 +289,7 @@ class _SuperAdminImportScreenState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Instructions ────────────────────────────────────────────
+            // ── Format info ──────────────────────────────────────────
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -325,7 +311,7 @@ class _SuperAdminImportScreenState
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        'Excel File Format',
+                        'Excel Format',
                         style: AppTypography.labelLarge.copyWith(
                           color: AppColors.info,
                         ),
@@ -339,12 +325,30 @@ class _SuperAdminImportScreenState
                       color: AppColors.accent,
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Text('Columns: Name | Role', style: AppTypography.caption),
-                  const SizedBox(height: 8),
-                  _ExampleRow('Sana Trabelsi', 'RH'),
-                  _ExampleRow('Karim Boughdiri', 'Scolarite'),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
+                  // Column header example
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: isDark ? AppColors.darkCard : AppColors.lightCard,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _HeaderRow(isDark: isDark),
+                        const Divider(height: 8),
+                        _DataRow('Sana Trabelsi', 'RH', 'A1B2C3D4', isDark),
+                        _DataRow(
+                          'Karim Boughdiri',
+                          'Scolarite',
+                          'E5F6G7H8',
+                          isDark,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
@@ -358,26 +362,33 @@ class _SuperAdminImportScreenState
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Role values accepted:',
+                          'Role values:',
                           style: AppTypography.caption.copyWith(
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                         Text(
-                          '• HR / RH / admin_rh  → HR Staff account',
+                          '• RH / HR / admin_rh  → HR Staff',
                           style: AppTypography.caption,
                         ),
                         Text(
-                          '• Scolarite / Registrar / admin_scolarite  → Registrar account',
+                          '• Scolarite / Registrar  → Registrar',
                           style: AppTypography.caption,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '• RFID Tag: leave blank if not assigned',
+                          style: AppTypography.caption.copyWith(
+                            fontStyle: FontStyle.italic,
+                          ),
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    '• Email is auto-generated: firstname.lastname@smartschool.com\n'
-                    '• Password is auto-generated (10 chars)\n'
+                    '• Email auto-generated: firstname.lastname@smartschool.com\n'
+                    '• Password auto-generated (10 chars)\n'
                     '• Staff must change password on first login',
                     style: AppTypography.caption,
                   ),
@@ -386,7 +397,6 @@ class _SuperAdminImportScreenState
             ),
             const SizedBox(height: 24),
 
-            // ── Upload button ────────────────────────────────────────────
             AppButton(
               label: _isImporting ? 'Importing...' : 'Select Excel File',
               onPressed: _isImporting ? () {} : _pickAndImport,
@@ -395,10 +405,9 @@ class _SuperAdminImportScreenState
               icon: Icons.upload_file_rounded,
             ),
 
-            // ── Results ──────────────────────────────────────────────────
             if (_result != null) ...[
               const SizedBox(height: 24),
-              _ResultCard(
+              _ResultSection(
                 result: _result!,
                 isDark: isDark,
                 onDownload: () => _downloadCredentials(_result!.credentials),
@@ -412,30 +421,57 @@ class _SuperAdminImportScreenState
 }
 
 // ─────────────────────────────────────────
-class _ExampleRow extends StatelessWidget {
-  final String name, role;
-  const _ExampleRow(this.name, this.role);
+//  FORMAT PREVIEW WIDGETS
+// ─────────────────────────────────────────
+class _HeaderRow extends StatelessWidget {
+  final bool isDark;
+  const _HeaderRow({required this.isDark});
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 2),
-    child: Row(
-      children: [
-        const Icon(Icons.arrow_right_rounded, size: 14),
-        Text(
-          '$name  |  $role',
-          style: AppTypography.caption.copyWith(fontStyle: FontStyle.italic),
+  Widget build(BuildContext context) => Row(
+    children: [
+      _Cell('Name', bold: true),
+      _Cell('Role', bold: true),
+      _Cell('RFID Tag', bold: true),
+    ],
+  );
+}
+
+class _DataRow extends StatelessWidget {
+  final String name, role, rfid;
+  final bool isDark;
+  const _DataRow(this.name, this.role, this.rfid, this.isDark);
+  @override
+  Widget build(BuildContext context) =>
+      Row(children: [_Cell(name), _Cell(role), _Cell(rfid)]);
+}
+
+class _Cell extends StatelessWidget {
+  final String text;
+  final bool bold;
+  const _Cell(this.text, {this.bold = false});
+  @override
+  Widget build(BuildContext context) => Expanded(
+    child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 2),
+      child: Text(
+        text,
+        style: AppTypography.caption.copyWith(
+          fontWeight: bold ? FontWeight.bold : FontWeight.normal,
         ),
-      ],
+        overflow: TextOverflow.ellipsis,
+      ),
     ),
   );
 }
 
 // ─────────────────────────────────────────
-class _ResultCard extends StatelessWidget {
-  final _StaffImportResult result;
+//  RESULT SECTION
+// ─────────────────────────────────────────
+class _ResultSection extends StatelessWidget {
+  final _ImportResult result;
   final bool isDark;
   final VoidCallback onDownload;
-  const _ResultCard({
+  const _ResultSection({
     required this.result,
     required this.isDark,
     required this.onDownload,
@@ -446,12 +482,12 @@ class _ResultCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Summary
+        // Success count
         Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: AppColors.success.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
           ),
           child: Row(
@@ -459,7 +495,8 @@ class _ResultCard extends StatelessWidget {
               const Icon(Icons.check_circle_rounded, color: AppColors.success),
               const SizedBox(width: 10),
               Text(
-                '${result.created} account${result.created == 1 ? '' : 's'} created',
+                '${result.created} account'
+                '${result.created == 1 ? '' : 's'} created',
                 style: AppTypography.labelLarge.copyWith(
                   color: AppColors.success,
                 ),
@@ -470,7 +507,7 @@ class _ResultCard extends StatelessWidget {
 
         // Errors
         if (result.errors.isNotEmpty) ...[
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
@@ -482,7 +519,8 @@ class _ResultCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${result.errors.length} issue${result.errors.length == 1 ? '' : 's'}',
+                  '${result.errors.length} issue'
+                  '${result.errors.length == 1 ? '' : 's'}',
                   style: AppTypography.labelMedium.copyWith(
                     color: AppColors.error,
                   ),
@@ -499,7 +537,7 @@ class _ResultCard extends StatelessWidget {
           ),
         ],
 
-        // Credentials list + download
+        // Credentials table + download
         if (result.credentials.isNotEmpty) ...[
           const SizedBox(height: 16),
           Row(
@@ -515,22 +553,40 @@ class _ResultCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          // Header row
+
+          // Header
           _CredRow(
             name: 'Name',
             role: 'Role',
             email: 'Email',
             password: 'Password',
+            rfidTag: 'RFID Tag',
             isHeader: true,
+            isDark: isDark,
           ),
+
+          // Rows
           ...result.credentials.map(
-            (c) => _CredRow(
-              name: c.name,
-              role: c.role,
-              email: c.email,
-              password: c.password,
-              isHeader: false,
-              isDark: isDark,
+            (c) => GestureDetector(
+              onTap: () {
+                Clipboard.setData(
+                  ClipboardData(
+                    text: '${c.name}|${c.role}|${c.email}|${c.password}',
+                  ),
+                );
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(const SnackBar(content: Text('Copied!')));
+              },
+              child: _CredRow(
+                name: c.name,
+                role: c.role,
+                email: c.email,
+                password: c.password,
+                rfidTag: c.rfidTag,
+                isHeader: false,
+                isDark: isDark,
+              ),
             ),
           ),
         ],
@@ -540,18 +596,17 @@ class _ResultCard extends StatelessWidget {
 }
 
 class _CredRow extends StatelessWidget {
-  final String name, role, email, password;
-  final bool isHeader;
-  final bool isDark;
+  final String name, role, email, password, rfidTag;
+  final bool isHeader, isDark;
   const _CredRow({
     required this.name,
     required this.role,
     required this.email,
     required this.password,
+    required this.rfidTag,
     this.isHeader = false,
     this.isDark = false,
   });
-
   @override
   Widget build(BuildContext context) {
     final style =
@@ -564,73 +619,70 @@ class _CredRow extends StatelessWidget {
             : isDark
             ? AppColors.darkCard
             : AppColors.lightCard;
-
-    return GestureDetector(
-      onTap:
-          isHeader
-              ? null
-              : () {
-                Clipboard.setData(
-                  ClipboardData(text: '$name | $role | $email | $password'),
-                );
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(const SnackBar(content: Text('Copied!')));
-              },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-        margin: const EdgeInsets.only(bottom: 3),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              flex: 2,
-              child: Text(name, style: style, overflow: TextOverflow.ellipsis),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+      margin: const EdgeInsets.only(bottom: 3),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(name, style: style, overflow: TextOverflow.ellipsis),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(role, style: style, overflow: TextOverflow.ellipsis),
+          ),
+          Expanded(
+            flex: 3,
+            child: Text(email, style: style, overflow: TextOverflow.ellipsis),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              password,
+              style: style.copyWith(fontFamily: 'monospace'),
+              overflow: TextOverflow.ellipsis,
             ),
-            Expanded(
-              flex: 2,
-              child: Text(role, style: style, overflow: TextOverflow.ellipsis),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              rfidTag.isNotEmpty ? rfidTag : '-',
+              style: style,
+              overflow: TextOverflow.ellipsis,
             ),
-            Expanded(
-              flex: 3,
-              child: Text(email, style: style, overflow: TextOverflow.ellipsis),
-            ),
-            Expanded(
-              flex: 2,
-              child: Text(
-                password,
-                style: style.copyWith(fontFamily: 'monospace'),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 }
 
-// ─── Models ──────────────────────────────
-class _StaffImportResult {
+// ─────────────────────────────────────────
+//  MODELS
+// ─────────────────────────────────────────
+class _ImportResult {
   final int created;
   final List<String> errors;
-  final List<_StaffCredential> credentials;
-  const _StaffImportResult({
+  final List<_Credential> credentials;
+  const _ImportResult({
     required this.created,
     required this.errors,
     required this.credentials,
   });
 }
 
-class _StaffCredential {
-  final String name, role, email, password;
-  const _StaffCredential({
+class _Credential {
+  final String name, role, email, password, rfidTag;
+  const _Credential({
     required this.name,
     required this.role,
     required this.email,
     required this.password,
+    required this.rfidTag,
   });
 }

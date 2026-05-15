@@ -18,16 +18,17 @@ class AdminDashboardScreen extends ConsumerStatefulWidget {
 class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
   int _selectedIndex = 0;
 
-  static const _navItems = [
-    _NavItem(icon: Icons.home_rounded, label: 'Home'),
-    _NavItem(icon: Icons.people_rounded, label: 'Students'),
-    _NavItem(icon: Icons.more_horiz, label: 'More'),
-  ];
-
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-
+    final role = ref.watch(currentUserProvider).value?.role ?? UserRole.unknown;
+    final navItems = _navItemsFor(role);
+    // Clamp index in case role changed
+    if (_selectedIndex >= navItems.length) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => setState(() => _selectedIndex = 0),
+      );
+    }
     return Scaffold(
       backgroundColor:
           isDark ? AppColors.darkBackground : AppColors.lightBackground,
@@ -40,7 +41,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
           const _MoreMenu(),
         ],
       ),
-      bottomNavigationBar: _buildBottomNav(isDark),
+      bottomNavigationBar: _buildBottomNav(isDark, navItems),
     );
   }
 
@@ -107,7 +108,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
     );
   }
 
-  Widget _buildBottomNav(bool isDark) {
+  Widget _buildBottomNav(bool isDark, List<_NavItem> navItems) {
     return Container(
       decoration: BoxDecoration(
         color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
@@ -124,7 +125,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
         elevation: 0,
         selectedItemColor: AppColors.accent,
         items:
-            _navItems
+            navItems
                 .map(
                   (item) => BottomNavigationBarItem(
                     icon: Icon(item.icon),
@@ -134,6 +135,42 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                 .toList(),
       ),
     );
+  }
+
+  List<_NavItem> _navItemsFor(UserRole role) {
+    if (role == UserRole.adminRH) {
+      return const [
+        _NavItem(icon: Icons.home_rounded, label: 'Home'),
+        _NavItem(icon: Icons.more_horiz, label: 'More'),
+      ];
+    }
+    // superAdmin and adminScolarite keep the original 3 tabs
+    return const [
+      _NavItem(icon: Icons.home_rounded, label: 'Home'),
+      _NavItem(icon: Icons.people_rounded, label: 'Students'),
+      _NavItem(icon: Icons.more_horiz, label: 'More'),
+    ];
+  }
+
+  Widget _bodyFor(UserRole role) {
+    if (role == UserRole.adminRH) {
+      // adminRH: index 0 = Dashboard, index 1 = More (no Students tab)
+      switch (_selectedIndex) {
+        case 1:
+          return const _MoreMenu();
+        default:
+          return const _DashboardBody();
+      }
+    }
+    // superAdmin + adminScolarite: original 3-tab layout
+    switch (_selectedIndex) {
+      case 1:
+        return const _StudentsTab();
+      case 2:
+        return const _MoreMenu();
+      default:
+        return const _DashboardBody();
+    }
   }
 }
 
@@ -442,34 +479,50 @@ class _DashboardBody extends ConsumerWidget {
     final role = ref.watch(currentUserProvider).value?.role ?? UserRole.unknown;
 
     if (role == UserRole.superAdmin) {
-      return Row(
+      return Column(
         children: [
-          _QA(
-            label: 'Teacher\nPresence',
-            icon: Icons.how_to_reg_rounded,
-            color: AppColors.teacherColor,
-            onTap: () => context.push(AppRoutes.adminTeacherPresence),
+          Row(
+            children: [
+              _QA(
+                label: 'Teacher\nPresence',
+                icon: Icons.how_to_reg_rounded,
+                color: AppColors.teacherColor,
+                onTap: () => context.push(AppRoutes.adminTeacherPresence),
+              ),
+              const SizedBox(width: 10),
+              _QA(
+                label: 'Staff',
+                icon: Icons.badge_rounded,
+                color: AppColors.info,
+                onTap: () => context.push(AppRoutes.adminStaff),
+              ),
+              const SizedBox(width: 10),
+              _QA(
+                label: 'RFID Logs',
+                icon: Icons.nfc_rounded,
+                color: AppColors.accent,
+                onTap: () => context.push(AppRoutes.adminRfid),
+              ),
+              const SizedBox(width: 10),
+              _QA(
+                label: 'Flags',
+                icon: Icons.warning_amber_rounded,
+                color: AppColors.error,
+                onTap: () => context.push(AppRoutes.adminAiAlerts),
+              ),
+            ],
           ),
-          const SizedBox(width: 10),
-          _QA(
-            label: 'RFID Logs',
-            icon: Icons.nfc_rounded,
-            color: AppColors.accent,
-            onTap: () => context.push(AppRoutes.adminRfid),
-          ),
-          const SizedBox(width: 10),
-          _QA(
-            label: 'Flags',
-            icon: Icons.warning_amber_rounded,
-            color: AppColors.error,
-            onTap: () => context.push(AppRoutes.adminAiAlerts),
-          ),
-          const SizedBox(width: 10),
-          _QA(
-            label: 'Messages',
-            icon: Icons.message_rounded,
-            color: AppColors.secondary,
-            onTap: () => context.push(AppRoutes.adminmessage),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              _QA(
+                label: 'Messages',
+                icon: Icons.message_rounded,
+                color: AppColors.secondary,
+                onTap: () => context.push(AppRoutes.adminmessage),
+              ),
+              const Spacer(),
+            ],
           ),
         ],
       );
@@ -893,6 +946,12 @@ class _MoreMenu extends ConsumerWidget {
             icon: Icons.person_rounded,
             color: AppColors.teacherColor,
             route: AppRoutes.adminTeachers,
+          ),
+          _MoreItem(
+            label: 'Staff',
+            icon: Icons.badge_rounded,
+            color: AppColors.info,
+            route: AppRoutes.adminStaff,
           ),
           _MoreItem(
             label: 'Students',
