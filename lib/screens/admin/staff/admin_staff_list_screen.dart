@@ -330,6 +330,62 @@ class _EditStaffSheetState extends ConsumerState<_EditStaffSheet> {
     if (mounted) setState(() => _isSaving = false);
   }
 
+  Future<void> _delete() async {
+    // Confirm before deleting
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: const Text('Delete Staff Account'),
+            content: Text(
+              'Are you sure you want to delete ${widget.staff.name}?\n'
+              'This cannot be undone.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: TextButton.styleFrom(foregroundColor: AppColors.error),
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
+    );
+
+    if (confirmed != true) return;
+    setState(() => _isSaving = true);
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.staff.id)
+          .delete();
+
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${widget.staff.name} deleted'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -424,6 +480,15 @@ class _EditStaffSheetState extends ConsumerState<_EditStaffSheet> {
               isLoading: _isSaving,
               width: double.infinity,
               icon: Icons.save_rounded,
+            ),
+            const SizedBox(height: 10),
+            AppButton(
+              label: 'Delete Account',
+              onPressed: _isSaving ? () {} : _delete,
+              width: double.infinity,
+              icon: Icons.delete_rounded,
+              isOutlined: true,
+              color: AppColors.error,
             ),
           ],
         ),
