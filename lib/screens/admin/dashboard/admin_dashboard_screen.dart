@@ -29,13 +29,11 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
       case UserRole.adminScolarite:
         return const [
           _NavItem(icon: Icons.home_rounded, label: 'Home'),
-          _NavItem(icon: Icons.people_rounded, label: 'Students'),
           _NavItem(icon: Icons.more_horiz, label: 'More'),
         ];
       default: // superAdmin
         return const [
           _NavItem(icon: Icons.home_rounded, label: 'Home'),
-          _NavItem(icon: Icons.people_rounded, label: 'Students'),
           _NavItem(icon: Icons.more_horiz, label: 'More'),
         ];
     }
