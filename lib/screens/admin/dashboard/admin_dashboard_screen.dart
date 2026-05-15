@@ -295,36 +295,41 @@ class _SuperAdminDashboardBody extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 12),
-            Row(
-              children: [
-                _QA(
-                  label: 'Teacher\nPresence',
-                  icon: Icons.how_to_reg_rounded,
-                  color: AppColors.teacherColor,
-                  onTap: () => context.push(AppRoutes.adminTeacherPresence),
-                ),
-                const SizedBox(width: 10),
-                _QA(
-                  label: 'RFID Logs',
-                  icon: Icons.nfc_rounded,
-                  color: AppColors.accent,
-                  onTap: () => context.push(AppRoutes.adminRfid),
-                ),
-                const SizedBox(width: 10),
-                _QA(
-                  label: 'Flags',
-                  icon: Icons.warning_amber_rounded,
-                  color: AppColors.error,
-                  onTap: () => context.push(AppRoutes.adminAiAlerts),
-                ),
-                const SizedBox(width: 10),
-                _QA(
-                  label: 'Messages',
-                  icon: Icons.message_rounded,
-                  color: AppColors.secondary,
-                  onTap: () => context.push(AppRoutes.adminmessage),
-                ),
-              ],
+            SizedBox(
+              height: 90,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 0),
+                children: [
+                  _QA(
+                    label: 'Teacher\nPresence',
+                    icon: Icons.how_to_reg_rounded,
+                    color: AppColors.teacherColor,
+                    onTap: () => context.push(AppRoutes.adminTeacherPresence),
+                  ),
+                  const SizedBox(width: 10),
+                  _QA(
+                    label: 'RFID Logs',
+                    icon: Icons.nfc_rounded,
+                    color: AppColors.accent,
+                    onTap: () => context.push(AppRoutes.adminRfid),
+                  ),
+                  const SizedBox(width: 10),
+                  _QA(
+                    label: 'Flags',
+                    icon: Icons.warning_amber_rounded,
+                    color: AppColors.error,
+                    onTap: () => context.push(AppRoutes.adminAiAlerts),
+                  ),
+                  const SizedBox(width: 10),
+                  _QA(
+                    label: 'Messages',
+                    icon: Icons.message_rounded,
+                    color: AppColors.secondary,
+                    onTap: () => context.push(AppRoutes.adminmessage),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 24),
 
@@ -425,36 +430,40 @@ class _RhDashboardBody extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 12),
-            Row(
-              children: [
-                _QA(
-                  label: 'Teachers',
-                  icon: Icons.person_rounded,
-                  color: AppColors.teacherColor,
-                  onTap: () => context.push(AppRoutes.adminTeachers),
-                ),
-                const SizedBox(width: 10),
-                _QA(
-                  label: 'Presence',
-                  icon: Icons.how_to_reg_rounded,
-                  color: AppColors.success,
-                  onTap: () => context.push(AppRoutes.adminTeacherPresence),
-                ),
-                const SizedBox(width: 10),
-                _QA(
-                  label: 'Import',
-                  icon: Icons.upload_file_rounded,
-                  color: AppColors.info,
-                  onTap: () => context.push(AppRoutes.adminImport),
-                ),
-                const SizedBox(width: 10),
-                _QA(
-                  label: 'Messages',
-                  icon: Icons.message_rounded,
-                  color: AppColors.secondary,
-                  onTap: () => context.push(AppRoutes.adminmessage),
-                ),
-              ],
+            SizedBox(
+              height: 90,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  _QA(
+                    label: 'Teachers',
+                    icon: Icons.person_rounded,
+                    color: AppColors.teacherColor,
+                    onTap: () => context.push(AppRoutes.adminTeachers),
+                  ),
+                  const SizedBox(width: 10),
+                  _QA(
+                    label: 'Presence',
+                    icon: Icons.how_to_reg_rounded,
+                    color: AppColors.success,
+                    onTap: () => context.push(AppRoutes.adminTeacherPresence),
+                  ),
+                  const SizedBox(width: 10),
+                  _QA(
+                    label: 'Import',
+                    icon: Icons.upload_file_rounded,
+                    color: AppColors.info,
+                    onTap: () => context.push(AppRoutes.adminImport),
+                  ),
+                  const SizedBox(width: 10),
+                  _QA(
+                    label: 'Messages',
+                    icon: Icons.message_rounded,
+                    color: AppColors.secondary,
+                    onTap: () => context.push(AppRoutes.adminmessage),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 24),
 
@@ -573,36 +582,40 @@ class _ScolariteDashboardBody extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 12),
-            Row(
-              children: [
-                _QA(
-                  label: 'Students',
-                  icon: Icons.school_rounded,
-                  color: AppColors.studentColor,
-                  onTap: () => context.push(AppRoutes.adminStudents),
-                ),
-                const SizedBox(width: 10),
-                _QA(
-                  label: 'Timetable',
-                  icon: Icons.schedule_rounded,
-                  color: AppColors.info,
-                  onTap: () => context.push(AppRoutes.adminTimetable),
-                ),
-                const SizedBox(width: 10),
-                _QA(
-                  label: 'Import',
-                  icon: Icons.upload_file_rounded,
-                  color: AppColors.accent,
-                  onTap: () => context.push(AppRoutes.adminImport),
-                ),
-                const SizedBox(width: 10),
-                _QA(
-                  label: 'Messages',
-                  icon: Icons.message_rounded,
-                  color: AppColors.secondary,
-                  onTap: () => context.push(AppRoutes.adminmessage),
-                ),
-              ],
+            SizedBox(
+              height: 90,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  _QA(
+                    label: 'Students',
+                    icon: Icons.school_rounded,
+                    color: AppColors.studentColor,
+                    onTap: () => context.push(AppRoutes.adminStudents),
+                  ),
+                  const SizedBox(width: 10),
+                  _QA(
+                    label: 'Timetable',
+                    icon: Icons.schedule_rounded,
+                    color: AppColors.info,
+                    onTap: () => context.push(AppRoutes.adminTimetable),
+                  ),
+                  const SizedBox(width: 10),
+                  _QA(
+                    label: 'Import',
+                    icon: Icons.upload_file_rounded,
+                    color: AppColors.accent,
+                    onTap: () => context.push(AppRoutes.adminImport),
+                  ),
+                  const SizedBox(width: 10),
+                  _QA(
+                    label: 'Messages',
+                    icon: Icons.message_rounded,
+                    color: AppColors.secondary,
+                    onTap: () => context.push(AppRoutes.adminmessage),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 24),
 
@@ -1380,28 +1393,29 @@ class _QA extends StatelessWidget {
     required this.onTap,
   });
   @override
-  Widget build(BuildContext context) => Expanded(
-    child: GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: color.withValues(alpha: 0.2)),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: color, size: 22),
-            const SizedBox(height: 5),
-            Text(
-              label,
-              style: AppTypography.labelSmall.copyWith(color: color),
-              textAlign: TextAlign.center,
-              maxLines: 2,
-            ),
-          ],
-        ),
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: Container(
+      width: 80,
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: color, size: 22),
+          const SizedBox(height: 6),
+          Text(
+            label,
+            style: AppTypography.labelSmall.copyWith(color: color),
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
       ),
     ),
   );
