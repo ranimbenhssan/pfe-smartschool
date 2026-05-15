@@ -52,8 +52,6 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
       case UserRole.adminScolarite:
         switch (_selectedIndex) {
           case 1:
-            return const _StudentsTab();
-          case 2:
             return const _MoreMenu();
           default:
             return const _ScolariteDashboardBody();
@@ -61,8 +59,6 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
       default: // superAdmin
         switch (_selectedIndex) {
           case 1:
-            return const _StudentsTab();
-          case 2:
             return const _MoreMenu();
           default:
             return const _SuperAdminDashboardBody();
