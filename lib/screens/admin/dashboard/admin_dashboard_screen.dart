@@ -1338,41 +1338,55 @@ class _RecentMessages extends ConsumerWidget {
             messages.when(
               loading: () => const LoadingWidget(),
               error: (_, __) => const SizedBox.shrink(),
-              data:
-                  (list) =>
-                      list.isEmpty
-                          ? Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color:
-                                  isDark
-                                      ? AppColors.darkCard
-                                      : AppColors.lightCard,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color:
-                                    isDark
-                                        ? AppColors.darkBorder
-                                        : AppColors.lightBorder,
-                              ),
-                            ),
-                            child: Text(
-                              'No messages yet',
-                              style: AppTypography.bodySmall.copyWith(
-                                color:
-                                    isDark
-                                        ? AppColors.darkTextSecondary
-                                        : AppColors.lightTextSecondary,
-                              ),
-                            ),
-                          )
-                          : Column(
-                            children:
-                                list
-                                    .take(3)
-                                    .map((m) => MessagesTile(message: m))
-                                    .toList(),
-                          ),
+              data: (list) {
+                // superAdmin: hide attendance corrections and absence flag
+                // notifications sent to students — only show real messages
+                final filtered =
+                    list
+                        .where((m) {
+                          final t =
+                              m.rawMessageType.isNotEmpty
+                                  ? m.rawMessageType
+                                  : m.messageType.name;
+                          if (t == 'attendance') return false;
+                          if (t == 'absence_flag' &&
+                              m.recipientLabel != 'Admin')
+                            return false;
+                          if (t == 'password_reset') return false;
+                          return true;
+                        })
+                        .take(3)
+                        .toList();
+
+                if (filtered.isEmpty) {
+                  return Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: isDark ? AppColors.darkCard : AppColors.lightCard,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color:
+                            isDark
+                                ? AppColors.darkBorder
+                                : AppColors.lightBorder,
+                      ),
+                    ),
+                    child: Text(
+                      'No messages yet',
+                      style: AppTypography.bodySmall.copyWith(
+                        color:
+                            isDark
+                                ? AppColors.darkTextSecondary
+                                : AppColors.lightTextSecondary,
+                      ),
+                    ),
+                  );
+                }
+                return Column(
+                  children:
+                      filtered.map((m) => MessagesTile(message: m)).toList(),
+                );
+              },
             ),
           ],
         );
