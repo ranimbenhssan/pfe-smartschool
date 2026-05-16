@@ -144,7 +144,7 @@ class _SuperAdminImportScreenState
             .toLowerCase()
             .replaceAll(' ', '.')
             .replaceAll(RegExp(r'[^a-z.]'), '');
-        final email = '$emailBase@smartschool.com';
+        final email = '$emailBase@faccna.tn';
         final password = _generatePassword();
 
         // Check existing email
@@ -387,7 +387,7 @@ class _SuperAdminImportScreenState
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    '• Email auto-generated: firstname.lastname@smartschool.com\n'
+                    '• Email auto-generated: firstname.lastname@faccna.tn\n'
                     '• Password auto-generated (10 chars)\n'
                     '• Staff must change password on first login',
                     style: AppTypography.caption,

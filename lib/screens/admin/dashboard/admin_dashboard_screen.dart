@@ -220,34 +220,6 @@ class _SuperAdminDashboardBody extends ConsumerWidget {
             _HeroAttendanceCard(present: present, absent: absent, late: late),
             const SizedBox(height: 24),
 
-            // Temporary migration button - remove after running once.
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
-              onPressed: () async {
-                final snap =
-                    await FirebaseFirestore.instance.collection('users').get();
-
-                int updated = 0;
-                for (final doc in snap.docs) {
-                  final email = doc.data()['email']?.toString() ?? '';
-                  if (email.contains('@smartschool.com')) {
-                    final newEmail = email.replaceAll(
-                      '@smartschool.com',
-                      '@faccna.tn',
-                    );
-                    await doc.reference.update({'email': newEmail});
-                    updated++;
-                  }
-                }
-
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Updated $updated emails OK')),
-                );
-              },
-              child: const Text('Migrate emails @smartschool -> @faccna'),
-            ),
-            const SizedBox(height: 24),
-
             // Stats — all 4
             Text(
               'Overview',

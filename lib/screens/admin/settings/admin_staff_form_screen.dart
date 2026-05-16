@@ -151,7 +151,7 @@ class _AdminStaffFormScreenState extends ConsumerState<AdminStaffFormScreen> {
               // ── Email ────────────────────────────────────────────────────
               AppTextField(
                 label: 'Email',
-                hint: 'staff@smartschool.com',
+                hint: 'staff@faccna.tn',
                 controller: _emailCtrl,
                 keyboardType: TextInputType.emailAddress,
                 prefixIcon: const Icon(Icons.email_outlined, size: 18),

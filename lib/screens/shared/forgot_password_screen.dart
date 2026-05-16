@@ -157,7 +157,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
         const SizedBox(height: 32),
         AppTextField(
           label: 'School Email',
-          hint: 'your.name@smartschool.com',
+          hint: 'your.name@faccna.tn',
           controller: _emailCtrl,
           keyboardType: TextInputType.emailAddress,
           prefixIcon: const Icon(Icons.email_outlined, size: 18),

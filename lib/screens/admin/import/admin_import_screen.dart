@@ -65,7 +65,7 @@ class _AdminImportScreenState extends ConsumerState<AdminImportScreen> {
     try {
       final bytes = ExcelImportService().exportCredentials(credentials);
       final dir = await getTemporaryDirectory();
-      final path = '${dir.path}/smartschool_credentials.xlsx';
+      final path = '${dir.path}/Faccna_credentials.xlsx';
       await File(path).writeAsBytes(bytes);
       final res = await OpenFile.open(path);
       if (res.type != ResultType.done && mounted) {

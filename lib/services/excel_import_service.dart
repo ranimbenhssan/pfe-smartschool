@@ -45,10 +45,10 @@ class ImportedCredential {
 
 class ExcelImportService {
   final _db = FirebaseFirestore.instance;
-  static const _domain = 'smartschool.com';
+  static const _domain = 'faccna.tn';
 
   // ─────────────────────────────────────────────────────────────────────────
-  //  EMAIL — "Ranim Ben Hassan" → "ranim.ben.hassan@smartschool.com"
+  //  EMAIL — "Ranim Ben Hassan" → "ranim.ben.hassan@faccna.tn"
   // ─────────────────────────────────────────────────────────────────────────
   String _generateEmail(String fullName, Set<String> usedEmails) {
     final base = fullName
