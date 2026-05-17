@@ -458,23 +458,41 @@ class _TeacherNameRow extends ConsumerWidget {
 
     // If name already stored — use it directly
     if (teacherName.isNotEmpty) {
-      return _DetailRow('Teacher', teacherName, Icons.person_rounded);
+      return _DetailRow(
+        label: 'Teacher',
+        value: teacherName,
+        icon: Icons.person_rounded,
+      );
     }
 
     // Fallback: look up by teacherId from teachers collection
     if (teacherId.isEmpty) {
-      return _DetailRow('Teacher', '—', Icons.person_rounded);
+      return _DetailRow(
+        label: 'Teacher',
+        value: '—',
+        icon: Icons.person_rounded,
+      );
     }
 
     final teacherAsync = ref.watch(teacherProvider(teacherId));
     return teacherAsync.when(
-      loading: () => _DetailRow('Teacher', '...', Icons.person_rounded),
-      error: (_, __) => _DetailRow('Teacher', '—', Icons.person_rounded),
+      loading:
+          () => _DetailRow(
+            label: 'Teacher',
+            value: '...',
+            icon: Icons.person_rounded,
+          ),
+      error:
+          (_, __) => _DetailRow(
+            label: 'Teacher',
+            value: '—',
+            icon: Icons.person_rounded,
+          ),
       data:
           (t) => _DetailRow(
-            'Teacher',
-            t?.name.isNotEmpty == true ? t!.name : '—',
-            Icons.person_rounded,
+            label: 'Teacher',
+            value: t?.name.isNotEmpty == true ? t!.name : '—',
+            icon: Icons.person_rounded,
           ),
     );
   }
