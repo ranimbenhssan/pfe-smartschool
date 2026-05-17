@@ -195,6 +195,74 @@ class _AttendanceTab extends ConsumerWidget {
 
   const _AttendanceTab({required this.studentId});
 
+  void _showDetail(BuildContext context, AttendanceModel r, bool isDark) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder:
+          (_) => Container(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+            decoration: BoxDecoration(
+              color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(24),
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(
+                    color:
+                        isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                AttendanceBadge(status: r.status),
+                const SizedBox(height: 16),
+                _DRow('Date', r.date, Icons.calendar_today_rounded),
+                _DRow(
+                  'Subject',
+                  r.subject.isNotEmpty ? r.subject : '—',
+                  Icons.menu_book_rounded,
+                ),
+                _DRow(
+                  'Session',
+                  r.sessionName.isNotEmpty ? r.sessionName : '—',
+                  Icons.event_note_rounded,
+                ),
+                _DRow(
+                  'Teacher',
+                  r.teacherName.isNotEmpty ? r.teacherName : '—',
+                  Icons.person_rounded,
+                ),
+                _DRow(
+                  'Room',
+                  r.roomName.isNotEmpty ? r.roomName : '—',
+                  Icons.meeting_room_rounded,
+                ),
+                if (r.entryTime != null)
+                  _DRow(
+                    'Entry',
+                    DateFormat('HH:mm').format(r.entryTime!),
+                    Icons.login_rounded,
+                  ),
+                if (r.exitTime != null)
+                  _DRow(
+                    'Exit',
+                    DateFormat('HH:mm').format(r.exitTime!),
+                    Icons.logout_rounded,
+                  ),
+              ],
+            ),
+          ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -270,42 +338,63 @@ class _AttendanceTab extends ConsumerWidget {
 
               // ─── Attendance List ───
               ...list.map(
-                (record) => Container(
-                  padding: const EdgeInsets.all(14),
-                  margin: const EdgeInsets.only(bottom: 8),
-                  decoration: BoxDecoration(
-                    color: isDark ? AppColors.darkCard : AppColors.lightCard,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color:
-                          isDark ? AppColors.darkBorder : AppColors.lightBorder,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              record.date,
-                              style: AppTypography.labelLarge.copyWith(
-                                color:
-                                    isDark
-                                        ? AppColors.darkText
-                                        : AppColors.lightText,
-                              ),
-                            ),
-                            if (record.entryTime != null)
-                              Text(
-                                'Entry: ${DateFormat('HH:mm').format(record.entryTime!)}',
-                                style: AppTypography.caption,
-                              ),
-                          ],
-                        ),
+                (record) => GestureDetector(
+                  onTap: () => _showDetail(context, record, isDark),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(
+                      color: isDark ? AppColors.darkCard : AppColors.lightCard,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color:
+                            isDark
+                                ? AppColors.darkBorder
+                                : AppColors.lightBorder,
                       ),
-                      AttendanceBadge(status: record.status),
-                    ],
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                record.date,
+                                style: AppTypography.labelLarge.copyWith(
+                                  color:
+                                      isDark
+                                          ? AppColors.darkText
+                                          : AppColors.lightText,
+                                ),
+                              ),
+                              if (record.subject.isNotEmpty)
+                                Text(
+                                  record.subject,
+                                  style: AppTypography.caption.copyWith(
+                                    color: AppColors.accent,
+                                  ),
+                                ),
+                              if (record.entryTime != null)
+                                Text(
+                                  'Entry: ${DateFormat('HH:mm').format(record.entryTime!)}',
+                                  style: AppTypography.caption,
+                                ),
+                            ],
+                          ),
+                        ),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          size: 16,
+                          color:
+                              isDark
+                                  ? AppColors.darkTextHint
+                                  : AppColors.lightTextHint,
+                        ),
+                        const SizedBox(width: 6),
+                        AttendanceBadge(status: record.status),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -545,6 +634,42 @@ class _MiniStatCard extends StatelessWidget {
             style: AppTypography.headingMedium.copyWith(color: color),
           ),
           Text(label, style: AppTypography.caption),
+        ],
+      ),
+    );
+  }
+}
+
+class _DRow extends StatelessWidget {
+  final String label, value;
+  final IconData icon;
+  const _DRow(this.label, this.value, this.icon);
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: AppColors.accent),
+          const SizedBox(width: 10),
+          SizedBox(
+            width: 70,
+            child: Text(
+              label,
+              style: AppTypography.caption.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: AppTypography.bodySmall.copyWith(
+                color: isDark ? AppColors.darkText : AppColors.lightText,
+              ),
+            ),
+          ),
         ],
       ),
     );

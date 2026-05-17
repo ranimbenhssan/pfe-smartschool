@@ -160,6 +160,20 @@ final todayLateCountProvider = Provider<int>((ref) {
       .maybeWhen(data: (c) => c, orElse: () => 0);
 });
 
+final teacherTodayAttendanceProvider =
+    StreamProvider.family<List<AttendanceModel>, String>((ref, teacherId) {
+      final today = ref.watch(todayStringProvider);
+      return FirebaseFirestore.instance
+          .collection('attendance')
+          .where('teacherId', isEqualTo: teacherId)
+          .where('date', isEqualTo: today)
+          .snapshots()
+          .map(
+            (snap) =>
+                snap.docs.map((d) => AttendanceModel.fromFirestore(d)).toList(),
+          );
+    });
+
 // ─────────────────────────────────────────
 //  TEACHER — CLASS-SCOPED TODAY COUNTS
 //

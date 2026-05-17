@@ -147,6 +147,87 @@ class _AttendanceTab extends ConsumerWidget {
 
   const _AttendanceTab({required this.studentId});
 
+  void _showAttendanceDetail(
+    BuildContext context,
+    AttendanceModel record,
+    bool isDark,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder:
+          (_) => Container(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+            decoration: BoxDecoration(
+              color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(24),
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Handle
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color:
+                        isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                // Status header
+                AttendanceBadge(status: record.status),
+                const SizedBox(height: 16),
+                // Details
+                _DetailRow(
+                  label: 'Date',
+                  value: record.date,
+                  icon: Icons.calendar_today_rounded,
+                ),
+                _DetailRow(
+                  label: 'Subject',
+                  value: record.subject.isNotEmpty ? record.subject : '—',
+                  icon: Icons.menu_book_rounded,
+                ),
+                _DetailRow(
+                  label: 'Session',
+                  value:
+                      record.sessionName.isNotEmpty ? record.sessionName : '—',
+                  icon: Icons.event_note_rounded,
+                ),
+                _DetailRow(
+                  label: 'Teacher',
+                  value:
+                      record.teacherName.isNotEmpty ? record.teacherName : '—',
+                  icon: Icons.person_rounded,
+                ),
+                _DetailRow(
+                  label: 'Room',
+                  value: record.roomName.isNotEmpty ? record.roomName : '—',
+                  icon: Icons.meeting_room_rounded,
+                ),
+                if (record.entryTime != null)
+                  _DetailRow(
+                    label: 'Entry',
+                    value: DateFormat('HH:mm').format(record.entryTime!),
+                    icon: Icons.login_rounded,
+                  ),
+                if (record.exitTime != null)
+                  _DetailRow(
+                    label: 'Exit',
+                    value: DateFormat('HH:mm').format(record.exitTime!),
+                    icon: Icons.logout_rounded,
+                  ),
+              ],
+            ),
+          ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -194,42 +275,63 @@ class _AttendanceTab extends ConsumerWidget {
               ),
               const SizedBox(height: 16),
               ...list.map(
-                (record) => Container(
-                  padding: const EdgeInsets.all(14),
-                  margin: const EdgeInsets.only(bottom: 8),
-                  decoration: BoxDecoration(
-                    color: isDark ? AppColors.darkCard : AppColors.lightCard,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color:
-                          isDark ? AppColors.darkBorder : AppColors.lightBorder,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              record.date,
-                              style: AppTypography.labelLarge.copyWith(
-                                color:
-                                    isDark
-                                        ? AppColors.darkText
-                                        : AppColors.lightText,
-                              ),
-                            ),
-                            if (record.entryTime != null)
-                              Text(
-                                'Entry: ${DateFormat('HH:mm').format(record.entryTime!)}',
-                                style: AppTypography.caption,
-                              ),
-                          ],
-                        ),
+                (record) => GestureDetector(
+                  onTap: () => _showAttendanceDetail(context, record, isDark),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(
+                      color: isDark ? AppColors.darkCard : AppColors.lightCard,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color:
+                            isDark
+                                ? AppColors.darkBorder
+                                : AppColors.lightBorder,
                       ),
-                      AttendanceBadge(status: record.status),
-                    ],
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                record.date,
+                                style: AppTypography.labelLarge.copyWith(
+                                  color:
+                                      isDark
+                                          ? AppColors.darkText
+                                          : AppColors.lightText,
+                                ),
+                              ),
+                              if (record.subject.isNotEmpty)
+                                Text(
+                                  record.subject,
+                                  style: AppTypography.caption.copyWith(
+                                    color: AppColors.teacherColor,
+                                  ),
+                                ),
+                              if (record.entryTime != null)
+                                Text(
+                                  'Entry: ${DateFormat('HH:mm').format(record.entryTime!)}',
+                                  style: AppTypography.caption,
+                                ),
+                            ],
+                          ),
+                        ),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          size: 16,
+                          color:
+                              isDark
+                                  ? AppColors.darkTextHint
+                                  : AppColors.lightTextHint,
+                        ),
+                        const SizedBox(width: 6),
+                        AttendanceBadge(status: record.status),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -303,6 +405,46 @@ class _MiniStat extends StatelessWidget {
             Text(label, style: AppTypography.caption),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _DetailRow extends StatelessWidget {
+  final String label, value;
+  final IconData icon;
+  const _DetailRow({
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: AppColors.accent),
+          const SizedBox(width: 10),
+          SizedBox(
+            width: 70,
+            child: Text(
+              label,
+              style: AppTypography.caption.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: AppTypography.bodySmall.copyWith(
+                color: isDark ? AppColors.darkText : AppColors.lightText,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

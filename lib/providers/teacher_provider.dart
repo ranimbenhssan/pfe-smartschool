@@ -19,6 +19,43 @@ final teacherProvider = FutureProvider.family<TeacherModel?, String>((
 // ─── Teacher Search Query ─────────────────────────────────────────────────────
 final teacherSearchQueryProvider = StateProvider<String>((ref) => '');
 
+final teacherByUserIdProvider = StreamProvider.family<TeacherModel?, String>((
+  ref,
+  userId,
+) {
+  return FirebaseFirestore.instance
+      .collection('teachers')
+      .where('userId', isEqualTo: userId)
+      .limit(1)
+      .snapshots()
+      .map(
+        (snap) =>
+            snap.docs.isEmpty
+                ? null
+                : TeacherModel.fromFirestore(snap.docs.first),
+      );
+});
+
+final aiFlagsByClassIdsProvider =
+    StreamProvider.family<List<AiFlagModel>, List<String>>((ref, classIds) {
+      if (classIds.isEmpty) return Stream.value([]);
+
+      // Chunk into groups of 10 (Firestore whereIn limit)
+      // For most teachers 1-5 classes is typical so one query is enough
+      final limited = classIds.take(10).toList();
+
+      return FirebaseFirestore.instance
+          .collection('ai_flags')
+          .where('classId', whereIn: limited)
+          .where('resolved', isEqualTo: false)
+          .orderBy('detectedAt', descending: true)
+          .snapshots()
+          .map(
+            (snap) =>
+                snap.docs.map((d) => AiFlagModel.fromFirestore(d)).toList(),
+          );
+    });
+
 // ─── Filtered Teachers ────────────────────────────────────────────────────────
 final filteredTeachersProvider = Provider<AsyncValue<List<TeacherModel>>>((
   ref,

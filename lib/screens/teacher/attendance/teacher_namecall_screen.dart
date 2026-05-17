@@ -439,7 +439,9 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
 
     // ── Notify student ─────────────────────────────────────────────────────
     final studentDoc = await db.collection('students').doc(studentId).get();
-    final studentUserId = studentDoc.data()?['userId']?.toString() ?? '';
+    final studentUserId = (studentDoc.data()?['userId']?.toString() ?? '').isNotEmpty
+    ? studentDoc.data()!['userId'].toString()
+    : studentDoc.id;
     if (studentUserId.isNotEmpty) {
       await db.collection('notifications').add({
         'userId': studentUserId,

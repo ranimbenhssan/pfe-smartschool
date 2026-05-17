@@ -89,14 +89,13 @@ class _TeachermessageScreenState extends ConsumerState<TeachermessageScreen> {
                 ),
             data: (list) {
               final filtered =
-                  _query.isEmpty
-                      ? list
-                      : list.where((m) {
-                        final q = _query.toLowerCase();
-                        return m.title.toLowerCase().contains(q) ||
-                            m.message.toLowerCase().contains(q) ||
-                            m.senderName.toLowerCase().contains(q);
-                      }).toList();
+                  list.where((n) {
+                    final t =
+                        n.rawMessageType.isNotEmpty
+                            ? n.rawMessageType
+                            : n.messageType.name;
+                    return t != 'attendance' && t != 'absence_flag';
+                  }).toList();
 
               return Column(
                 children: [

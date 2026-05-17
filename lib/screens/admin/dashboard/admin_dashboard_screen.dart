@@ -91,12 +91,26 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
   PreferredSizeWidget _buildAppBar(bool isDark) {
     return AppBar(
       backgroundColor: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-      title: Text(
-        'SmartSchool',
-        style: AppTypography.headingMedium.copyWith(
-          color: isDark ? AppColors.darkText : AppColors.lightText,
-          fontFamily: AppTypography.displayFont,
-        ),
+      title: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.asset(
+              'assets/images/logo.png',
+              width: 32,
+              height: 32,
+              fit: BoxFit.cover,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            'Faccna',
+            style: AppTypography.headingMedium.copyWith(
+              color: isDark ? AppColors.darkText : AppColors.lightText,
+              fontFamily: AppTypography.displayFont,
+            ),
+          ),
+        ],
       ),
       actions: [
         Consumer(
