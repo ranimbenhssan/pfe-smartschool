@@ -50,8 +50,27 @@ final filteredStudentsProvider = StreamProvider<List<StudentModel>>((
         ),
   );
 });
+// ADD to lib/providers/student_provider.dart:
 
+/// Students in multiple classes — used by teacher to see only their students.
+/// Chunks into groups of 10 due to Firestore whereIn limit.
+final studentsByClassIdsProvider =
+    StreamProvider.family<List<StudentModel>, List<String>>((ref, classIds) {
+      if (classIds.isEmpty) return Stream.value([]);
+      final limited = classIds.take(10).toList();
+      return FirebaseFirestore.instance
+          .collection('students')
+          .where('classId', whereIn: limited)
+          .orderBy('name')
+          .snapshots()
+          .map(
+            (snap) =>
+                snap.docs.map((d) => StudentModel.fromFirestore(d)).toList(),
+          );
+    });
 // ─── Students by classId ───
+
+
 final studentsByClassIdProvider =
     StreamProvider.family<List<StudentModel>, String>((ref, classId) {
       if (classId.isEmpty) return Stream.value([]);
@@ -63,7 +82,7 @@ final studentsByClassIdProvider =
             (snap) =>
                 snap.docs.map((d) => StudentModel.fromFirestore(d)).toList(),
           );
-});
+    });
 
 // ─── Students in same class as current user ───
 // Students in same class as current user
