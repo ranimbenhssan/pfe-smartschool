@@ -209,7 +209,8 @@ class _MessageListState extends ConsumerState<_MessageList> {
                         itemBuilder: (context, index) {
                           final message = filtered[index];
                           return MessagesTile(
-                            message: message,
+                            message: list[index],
+                            showRecipient: true,
                             onTap: () async {
                               await ref
                                   .read(firestoreServiceProvider)

@@ -1324,6 +1324,7 @@ class _RecentMessages extends ConsumerWidget {
       error: (_, __) => const SizedBox.shrink(),
       data: (user) {
         if (user == null) return const SizedBox.shrink();
+        final role = user.role ?? UserRole.unknown;
         final messages = ref.watch(notificationsProvider(user.id));
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1393,7 +1394,14 @@ class _RecentMessages extends ConsumerWidget {
                 }
                 return Column(
                   children:
-                      filtered.map((m) => MessagesTile(message: m)).toList(),
+                      filtered
+                          .map(
+                            (m) => MessagesTile(
+                              message: m,
+                              showRecipient: role == UserRole.superAdmin,
+                            ),
+                          )
+                          .toList(),
                 );
               },
             ),

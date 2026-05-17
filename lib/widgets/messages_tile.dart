@@ -7,8 +7,14 @@ import '../navigation/app_routes.dart';
 class MessagesTile extends StatelessWidget {
   final NotificationModel message;
   final VoidCallback? onTap;
+  final bool showRecipient;
 
-  const MessagesTile({super.key, required this.message, this.onTap});
+  const MessagesTile({
+    super.key,
+    required this.message,
+    this.onTap,
+    this.showRecipient = false,
+  });
 
   Color _typeColor(MessageType type) {
     switch (type) {
@@ -169,6 +175,20 @@ class MessagesTile extends StatelessWidget {
                                   ? 'From Teacher'
                                   : 'Faccna',
                               style: AppTypography.caption,
+                            ),
+                          ],
+                          if (showRecipient &&
+                              message.recipientLabel.isNotEmpty) ...[
+                            const SizedBox(width: 6),
+                            Text('·', style: AppTypography.caption),
+                            const SizedBox(width: 6),
+                            Text(
+                              'To: ${message.recipientLabel}',
+                              style: AppTypography.caption.copyWith(
+                                color: AppColors.accent,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ],
