@@ -235,10 +235,9 @@ class _AttendanceTab extends ConsumerWidget {
                   r.sessionName.isNotEmpty ? r.sessionName : '—',
                   Icons.event_note_rounded,
                 ),
-                _DRow(
-                  'Teacher',
-                  r.teacherName.isNotEmpty ? r.teacherName : '—',
-                  Icons.person_rounded,
+                _TeacherNameRow(
+                  teacherId: r.teacherId,
+                  teacherName: r.teacherName,
                 ),
                 _DRow(
                   'Room',
@@ -672,6 +671,38 @@ class _DRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _TeacherNameRow extends ConsumerWidget {
+  final String teacherId, teacherName;
+  const _TeacherNameRow({required this.teacherId, required this.teacherName});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // If name already stored — use it directly
+    if (teacherName.isNotEmpty) {
+      return _DRow('Teacher', teacherName, Icons.person_rounded);
+    }
+
+    // Fallback: look up by teacherId from teachers collection
+    if (teacherId.isEmpty) {
+      return _DRow('Teacher', '—', Icons.person_rounded);
+    }
+
+    final teacherAsync = ref.watch(teacherProvider(teacherId));
+    return teacherAsync.when(
+      loading: () => _DRow('Teacher', '...', Icons.person_rounded),
+      error: (_, __) => _DRow('Teacher', '—', Icons.person_rounded),
+      data:
+          (t) => _DRow(
+            'Teacher',
+            t?.name.isNotEmpty == true ? t!.name : '—',
+            Icons.person_rounded,
+          ),
     );
   }
 }

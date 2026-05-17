@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../theme/theme.dart';
 import '../../../widgets/widgets.dart';
 import '../../../providers/providers.dart';
+import '../../../providers/student_provider.dart';
 import '../../../navigation/app_routes.dart';
 
 class TeacherStudentsScreen extends ConsumerWidget {
