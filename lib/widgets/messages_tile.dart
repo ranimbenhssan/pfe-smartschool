@@ -3,6 +3,8 @@ import '../models/models.dart';
 import '../theme/theme.dart';
 import 'package:go_router/go_router.dart';
 import '../navigation/app_routes.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class MessagesTile extends StatelessWidget {
   final NotificationModel message;
@@ -177,18 +179,13 @@ class MessagesTile extends StatelessWidget {
                               style: AppTypography.caption,
                             ),
                           ],
-                          if (showRecipient &&
-                              message.recipientLabel.isNotEmpty) ...[
+                          if (showRecipient) ...[
                             const SizedBox(width: 6),
                             Text('·', style: AppTypography.caption),
                             const SizedBox(width: 6),
-                            Text(
-                              'To: ${message.recipientLabel}',
-                              style: AppTypography.caption.copyWith(
-                                color: AppColors.accent,
-                                fontWeight: FontWeight.w500,
-                              ),
-                              overflow: TextOverflow.ellipsis,
+                            _RecipientLabel(
+                              userId: message.userId,
+                              recipientLabel: message.recipientLabel,
                             ),
                           ],
                         ],
@@ -315,3 +312,54 @@ class MessagesTile extends StatelessWidget {
     return '${dt.day}/${dt.month}/${dt.year}';
   }
 }
+
+class _RecipientLabel extends ConsumerWidget {
+  final String userId;
+  final String recipientLabel;
+  const _RecipientLabel({required this.userId, required this.recipientLabel});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // If a label is already stored (e.g. "Class 3IOT1TP1", "Whole School")
+    // use it directly
+    if (recipientLabel.isNotEmpty && recipientLabel != 'sent') {
+      return Text(
+        'To: $recipientLabel',
+        style: AppTypography.caption.copyWith(
+          color: AppColors.accent,
+          fontWeight: FontWeight.w500,
+        ),
+        overflow: TextOverflow.ellipsis,
+      );
+    }
+
+    // Otherwise look up the recipient's name from users collection
+    if (userId.isEmpty) return const SizedBox.shrink();
+
+    final userAsync = ref.watch(_userNameProvider(userId));
+    return userAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+      data:
+          (name) => Text(
+            'To: ${name.isNotEmpty ? name : '—'}',
+            style: AppTypography.caption.copyWith(
+              color: AppColors.accent,
+              fontWeight: FontWeight.w500,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+    );
+  }
+}
+
+// Lightweight provider — only fetches name field
+final _userNameProvider = FutureProvider.family<String, String>((
+  ref,
+  userId,
+) async {
+  if (userId.isEmpty) return '';
+  final doc =
+      await FirebaseFirestore.instance.collection('users').doc(userId).get();
+  return doc.data()?['name']?.toString() ?? '';
+});

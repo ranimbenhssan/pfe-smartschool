@@ -34,7 +34,26 @@ final notificationsProvider = StreamProvider.family<
         .orderBy('createdAt', descending: true)
         .limit(200)
         .snapshots()
-        .map((snap) => snap.docs.map(NotificationModel.fromFirestore).toList());
+        .map((snap) {
+          final all = snap.docs.map(NotificationModel.fromFirestore).toList();
+          return all.where((n) {
+            final t =
+                n.rawMessageType.isNotEmpty
+                    ? n.rawMessageType
+                    : n.messageType.name;
+            // Hide attendance corrections
+            if (t == 'attendance') return false;
+            // Hide student personal absence flag — keep only admin copy
+            if (t == 'absence_flag' && n.recipientLabel != 'Admin')
+              return false;
+            // Hide password_reset from teachers/students
+            if (t == 'password_reset' &&
+                (n.senderRole == 'teacher' || n.senderRole == 'student')) {
+              return false;
+            }
+            return true;
+          }).toList();
+        });
   }
 
   return FirebaseFirestore.instance
