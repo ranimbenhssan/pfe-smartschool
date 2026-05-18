@@ -41,18 +41,11 @@ final notificationsProvider = StreamProvider.family<
                 n.rawMessageType.isNotEmpty
                     ? n.rawMessageType
                     : n.messageType.name;
-            // For superAdmin: keep real messages and admin-only absence flags.
-            // Hide: attendance corrections, student-only absence flags,
-            //       and password_reset requests from teachers/students.
+            // Keep real messages; filter student-only/system notifications.
             if (t == 'attendance') return false;
-            if (t == 'absence_flag' && n.recipientLabel != 'Admin') {
-              return false;
-            }
+            if (t == 'absence_flag') return n.recipientLabel == 'Admin';
             if (t == 'password_reset') {
-              final senderRole = n.senderRole.toLowerCase();
-              if (senderRole == 'teacher' || senderRole == 'student') {
-                return false;
-              }
+              return !(n.senderRole == 'teacher' || n.senderRole == 'student');
             }
             return true;
           }).toList();
