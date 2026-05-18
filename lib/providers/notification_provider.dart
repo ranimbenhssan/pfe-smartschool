@@ -44,8 +44,9 @@ final notificationsProvider = StreamProvider.family<
             // Hide attendance corrections
             if (t == 'attendance') return false;
             // Hide student personal absence flag — keep only admin copy
-            if (t == 'absence_flag' && n.recipientLabel != 'Admin')
+            if (t == 'absence_flag' && n.recipientLabel != 'Admin') {
               return false;
+            }
             // Hide password_reset from teachers/students
             if (t == 'password_reset' &&
                 (n.senderRole == 'teacher' || n.senderRole == 'student')) {
