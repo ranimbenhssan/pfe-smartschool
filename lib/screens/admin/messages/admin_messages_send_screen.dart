@@ -100,14 +100,26 @@ class _AdminmessageendScreenState extends ConsumerState<AdminmessageendScreen> {
           break;
 
         case 'teacher':
+          final teachers = ref.read(teachersProvider).value ?? [];
           for (final teacherId in _selectedTeacherIds) {
-            await sendOne(teacherId);
+            final teacher =
+                teachers.where((t) => t.id == teacherId).firstOrNull;
+            await sendOne(
+              teacherId,
+              recipientLabel: teacher?.name ?? teacherId,
+            );
           }
           break;
 
         case 'mixed':
+          final teachers = ref.read(teachersProvider).value ?? [];
           for (final teacherId in _selectedTeacherIds) {
-            await sendOne(teacherId);
+            final teacher =
+                teachers.where((t) => t.id == teacherId).firstOrNull;
+            await sendOne(
+              teacherId,
+              recipientLabel: teacher?.name ?? teacherId,
+            );
           }
           for (final classId in _selectedClassIds) {
             final cls = await ref

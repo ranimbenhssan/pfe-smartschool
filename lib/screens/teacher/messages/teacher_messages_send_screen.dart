@@ -46,16 +46,18 @@ class _TeachermessageendScreenState
     final service = ref.read(notificationServiceProvider);
     final attMaps = attachments.map((a) => a.toMap()).toList();
 
-    Future<void> sendToUser(String userId) => service.sendToUser(
-      userId,
-      title,
-      message,
-      type: messageType.name,
-      senderId: currentUser.id,
-      senderName: currentUser.name,
-      senderRole: 'teacher',
-      attachments: attMaps,
-    );
+    Future<void> sendToUser(String userId, String recipientName) =>
+        service.sendToUser(
+          userId,
+          title,
+          message,
+          type: messageType.name,
+          senderId: currentUser.id,
+          senderName: currentUser.name,
+          senderRole: 'teacher',
+          attachments: attMaps,
+          recipientLabel: recipientName,
+        );
 
     try {
       if (_targetType == 'class') {
@@ -64,19 +66,23 @@ class _TeachermessageendScreenState
               .read(firestoreServiceProvider)
               .getStudentsByClassOnce(classId);
           for (final s in students) {
-            if (s.userId.isNotEmpty) await sendToUser(s.userId);
+            if (s.userId.isNotEmpty) await sendToUser(s.userId, s.name);
           }
         }
       } else if (_targetType == 'teacher') {
+        final teachers = ref.read(teachersProvider).value ?? [];
         for (final id in _selectedTeacherIds) {
-          await sendToUser(id);
+          final teacher = teachers.where((t) => t.id == id).firstOrNull;
+          await sendToUser(id, teacher?.name ?? id);
         }
       } else if (_targetType == 'student') {
         for (final studentId in _selectedStudentIds) {
           final s = await ref
               .read(firestoreServiceProvider)
               .getStudent(studentId);
-          if (s != null && s.userId.isNotEmpty) await sendToUser(s.userId);
+          if (s != null && s.userId.isNotEmpty) {
+            await sendToUser(s.userId, s.name);
+          }
         }
       } else {
         // mixed — class + teacher
@@ -85,11 +91,13 @@ class _TeachermessageendScreenState
               .read(firestoreServiceProvider)
               .getStudentsByClassOnce(classId);
           for (final s in students) {
-            if (s.userId.isNotEmpty) await sendToUser(s.userId);
+            if (s.userId.isNotEmpty) await sendToUser(s.userId, s.name);
           }
         }
+        final teachers = ref.read(teachersProvider).value ?? [];
         for (final id in _selectedTeacherIds) {
-          await sendToUser(id);
+          final teacher = teachers.where((t) => t.id == id).firstOrNull;
+          await sendToUser(id, teacher?.name ?? id);
         }
       }
 

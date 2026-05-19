@@ -44,21 +44,25 @@ class _StudentmessageendScreenState
     final attMaps = attachments.map((a) => a.toMap()).toList();
     final service = ref.read(notificationServiceProvider);
 
-    Future<void> sendToUser(String userId) => service.sendToUser(
-      userId,
-      title,
-      message,
-      type: messageType.name,
-      senderId: currentUser.id,
-      senderName: currentUser.name,
-      senderRole: 'student',
-      attachments: attMaps,
-    );
+    Future<void> sendToUser(String userId, String recipientName) =>
+        service.sendToUser(
+          userId,
+          title,
+          message,
+          type: messageType.name,
+          senderId: currentUser.id,
+          senderName: currentUser.name,
+          senderRole: 'student',
+          attachments: attMaps,
+          recipientLabel: recipientName,
+        );
 
     try {
       if (_targetType == 'teacher' || _targetType == 'mixed') {
+        final teachers = ref.read(teachersProvider).value ?? [];
         for (final id in _selectedTeacherIds) {
-          await sendToUser(id);
+          final teacher = teachers.where((t) => t.id == id).firstOrNull;
+          await sendToUser(id, teacher?.name ?? id);
         }
       }
 
@@ -68,7 +72,7 @@ class _StudentmessageendScreenState
               .read(firestoreServiceProvider)
               .getStudent(studentId);
           if (student != null && student.userId.isNotEmpty) {
-            await sendToUser(student.userId);
+            await sendToUser(student.userId, student.name);
           }
         }
       }
