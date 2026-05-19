@@ -630,32 +630,35 @@ class FirestoreService {
 
   // Get timetable by class
   Stream<List<TimetableModel>> getTimetableByClass(String classId) {
-    return _firestore
-        .collection('timetable')
-        .where('classId', isEqualTo: classId)
-        .snapshots()
-        .map((snap) {
-          final list =
-              snap.docs
-                  .map((doc) => TimetableModel.fromFirestore(doc))
-                  .toList();
-          // Sort client-side — avoids requiring a composite index
-          const order = [
-            'Monday',
-            'Tuesday',
-            'Wednesday',
-            'Thursday',
-            'Friday',
-            'Saturday',
-            'Sunday',
-          ];
-          list.sort(
-            (a, b) => order
-                .indexOf(a.dayOfWeek)
-                .compareTo(order.indexOf(b.dayOfWeek)),
-          );
-          return list;
-        });
+    // Try both classId (Firestore doc ID) and className (display name)
+    // in case students were imported with class name as classId
+    return _firestore.collection('timetable').snapshots().map((snap) {
+      final list =
+          snap.docs
+              .map((doc) => TimetableModel.fromFirestore(doc))
+              .where(
+                (t) =>
+                    t.classId == classId ||
+                    t.classId == classId.trim() ||
+                    t.className == classId ||
+                    t.className == classId.trim(),
+              )
+              .toList();
+      const order = [
+        'Monday',
+        'Tuesday',
+        'Wednesday',
+        'Thursday',
+        'Friday',
+        'Saturday',
+        'Sunday',
+      ];
+      list.sort(
+        (a, b) =>
+            order.indexOf(a.dayOfWeek).compareTo(order.indexOf(b.dayOfWeek)),
+      );
+      return list;
+    });
   }
 
   // Get timetable by teacher
@@ -663,7 +666,6 @@ class FirestoreService {
     return _firestore
         .collection('timetable')
         .where('teacherId', isEqualTo: teacherId)
-        .orderBy('dayOfWeek')
         .snapshots()
         .map(
           (snap) =>
