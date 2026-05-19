@@ -17,8 +17,16 @@ class AdminTimetableScreen extends ConsumerStatefulWidget {
 }
 
 class _AdminTimetableScreenState extends ConsumerState<AdminTimetableScreen> {
+  final _searchCtrl = TextEditingController();
   String? _selectedClassId;
   String? _selectedClassName;
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -33,68 +41,157 @@ class _AdminTimetableScreenState extends ConsumerState<AdminTimetableScreen> {
         backgroundColor:
             isDark ? AppColors.darkSurface : AppColors.lightSurface,
         actions: [
-          // Add entry button — only visible when a class is selected
           if (_selectedClassId != null)
             IconButton(
               icon: const Icon(Icons.add_rounded),
               tooltip: 'Add entry',
-              onPressed:
-                  () => context.push(
-                    AppRoutes.adminTimetableForm,
-                    extra: {'classId': _selectedClassId},
-                  ),
+              onPressed: () => context.push(AppRoutes.adminTimetableForm),
             ),
         ],
       ),
       body: Column(
         children: [
-          // ── Class selector ─────────────────────────────────────────────
+          // ── Search bar ──────────────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-            child: classes.when(
-              loading: () => const LoadingWidget(),
-              error: (e, _) => Text('Error: $e'),
-              data:
-                  (list) => DropdownButtonFormField<String>(
-                    decoration: InputDecoration(
-                      labelText: 'Select Class',
-                      prefixIcon: const Icon(Icons.class_rounded, size: 20),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      filled: true,
-                      fillColor:
-                          isDark ? AppColors.darkCard : AppColors.lightCard,
-                    ),
-                    value: _selectedClassId,
-                    hint: const Text('Choose a class to view or edit'),
-                    items:
-                        list
-                            .map(
-                              (c) => DropdownMenuItem(
-                                value: c.id,
-                                onTap: () => _selectedClassName = c.displayName,
-                                child: Text(c.displayName),
-                              ),
-                            )
-                            .toList(),
-                    onChanged: (val) => setState(() => _selectedClassId = val),
-                  ),
+            child: TextField(
+              controller: _searchCtrl,
+              onChanged:
+                  (v) => setState(() {
+                    _query = v.toLowerCase();
+                    // Clear selected class when user types again
+                    if (_selectedClassId != null && v != _selectedClassName) {
+                      _selectedClassId = null;
+                      _selectedClassName = null;
+                    }
+                  }),
+              decoration: InputDecoration(
+                hintText: 'Search class (e.g. 3 IOT 1 TP 1)...',
+                prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                suffixIcon:
+                    _searchCtrl.text.isNotEmpty
+                        ? IconButton(
+                          icon: const Icon(Icons.clear_rounded, size: 18),
+                          onPressed: () {
+                            _searchCtrl.clear();
+                            setState(() {
+                              _query = '';
+                              _selectedClassId = null;
+                              _selectedClassName = null;
+                            });
+                          },
+                        )
+                        : null,
+                filled: true,
+                fillColor: isDark ? AppColors.darkCard : AppColors.lightCard,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
+              ),
             ),
           ),
 
+          // ── Suggestions list ────────────────────────────────────────────
+          if (_query.isNotEmpty && _selectedClassId == null)
+            classes.when(
+              loading: () => const SizedBox.shrink(),
+              error: (_, __) => const SizedBox.shrink(),
+              data: (list) {
+                final suggestions =
+                    list
+                        .where(
+                          (c) =>
+                              c.displayName.toLowerCase().contains(_query) ||
+                              c.name.toLowerCase().contains(_query),
+                        )
+                        .toList();
+
+                if (suggestions.isEmpty)
+                  return Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      'No classes found for "$_query"',
+                      style: AppTypography.caption,
+                    ),
+                  );
+
+                return Container(
+                  margin: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                  constraints: const BoxConstraints(maxHeight: 220),
+                  decoration: BoxDecoration(
+                    color: isDark ? AppColors.darkCard : AppColors.lightCard,
+                    borderRadius: const BorderRadius.vertical(
+                      bottom: Radius.circular(12),
+                    ),
+                    border: Border.all(
+                      color:
+                          isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.08),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: suggestions.length,
+                    separatorBuilder:
+                        (_, __) => Divider(
+                          height: 1,
+                          color:
+                              isDark
+                                  ? AppColors.darkBorder
+                                  : AppColors.lightBorder,
+                        ),
+                    itemBuilder: (ctx, i) {
+                      final cls = suggestions[i];
+                      return ListTile(
+                        dense: true,
+                        leading: const Icon(
+                          Icons.class_rounded,
+                          size: 18,
+                          color: AppColors.accent,
+                        ),
+                        title: Text(
+                          cls.displayName,
+                          style: AppTypography.labelMedium,
+                        ),
+                        onTap: () {
+                          _searchCtrl.text = cls.displayName;
+                          setState(() {
+                            _query = '';
+                            _selectedClassId = cls.id;
+                            _selectedClassName = cls.displayName;
+                          });
+                          FocusScope.of(context).unfocus();
+                        },
+                      );
+                    },
+                  ),
+                );
+              },
+            ),
+
           const SizedBox(height: 8),
 
-          // ── Timetable grid / empty state ───────────────────────────────
+          // ── Timetable content ───────────────────────────────────────────
           Expanded(
             child:
                 _selectedClassId == null
                     ? const Center(
                       child: EmptyState(
-                        title: 'Select a Class',
+                        title: 'Search for a Class',
                         message:
-                            'Choose a class above to view and edit its timetable.\n'
-                            'To import timetables from Excel, use Bulk Import.',
+                            'Type a class name above to view its timetable.\n'
+                            'Use Bulk Import to import from Excel.',
                         icon: Icons.calendar_today_rounded,
                       ),
                     )
@@ -112,15 +209,11 @@ class _AdminTimetableScreenState extends ConsumerState<AdminTimetableScreen> {
 
 // ─────────────────────────────────────────
 //  TIMETABLE EDITOR
-//  Lists all entries for the selected class.
-//  Tap an entry → edit form.
-//  Long-press or swipe → delete.
 // ─────────────────────────────────────────
 class _TimetableEditor extends ConsumerWidget {
   final String classId;
   final String className;
   final bool isDark;
-
   const _TimetableEditor({
     required this.classId,
     required this.className,
@@ -140,6 +233,7 @@ class _TimetableEditor extends ConsumerWidget {
             icon: Icons.error_outline_rounded,
           ),
       data: (allEntries) {
+        // Match by classId OR className — handles import mismatches
         final entries =
             allEntries
                 .where(
@@ -150,19 +244,19 @@ class _TimetableEditor extends ConsumerWidget {
                 )
                 .toList()
               ..sort((a, b) {
-                // Sort by day then start time
                 const days = [
                   'Monday',
                   'Tuesday',
                   'Wednesday',
                   'Thursday',
                   'Friday',
+                  'Saturday',
+                  'Sunday',
                 ];
-                final dCmp = days
+                final d = days
                     .indexOf(a.dayOfWeek)
                     .compareTo(days.indexOf(b.dayOfWeek));
-                if (dCmp != 0) return dCmp;
-                return a.startTime.compareTo(b.startTime);
+                return d != 0 ? d : a.startTime.compareTo(b.startTime);
               });
 
         if (entries.isEmpty) {
@@ -170,15 +264,17 @@ class _TimetableEditor extends ConsumerWidget {
             title: 'No Entries',
             message:
                 'No timetable entries for $className.\n'
-                'Import from Bulk Import or tap + to add manually.',
+                'Tap + to add manually or use Bulk Import.',
             icon: Icons.event_note_rounded,
           );
         }
 
-        // Group by Week type for display
         final weekA = entries.where((e) => e.weekType == 'A').toList();
         final weekB = entries.where((e) => e.weekType == 'B').toList();
-        final both = entries.where((e) => e.weekType == '').toList();
+        final both =
+            entries
+                .where((e) => e.weekType != 'A' && e.weekType != 'B')
+                .toList();
 
         return SingleChildScrollView(
           padding: const EdgeInsets.all(16),
@@ -220,7 +316,6 @@ class _TimetableEditor extends ConsumerWidget {
               ),
               const SizedBox(height: 16),
 
-              // Week A
               if (weekA.isNotEmpty) ...[
                 _WeekHeader('Week A', AppColors.teacherColor),
                 const SizedBox(height: 6),
@@ -239,7 +334,6 @@ class _TimetableEditor extends ConsumerWidget {
                 const SizedBox(height: 12),
               ],
 
-              // Week B
               if (weekB.isNotEmpty) ...[
                 _WeekHeader('Week B', AppColors.studentColor),
                 const SizedBox(height: 6),
@@ -258,7 +352,6 @@ class _TimetableEditor extends ConsumerWidget {
                 const SizedBox(height: 12),
               ],
 
-              // Both weeks
               if (both.isNotEmpty) ...[
                 _WeekHeader('Both Weeks (A & B)', AppColors.info),
                 const SizedBox(height: 6),
@@ -303,10 +396,8 @@ class _TimetableEditor extends ConsumerWidget {
               ),
               TextButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                child: const Text(
-                  'Delete',
-                  style: TextStyle(color: Colors.red),
-                ),
+                style: TextButton.styleFrom(foregroundColor: AppColors.error),
+                child: const Text('Delete'),
               ),
             ],
           ),
@@ -318,43 +409,35 @@ class _TimetableEditor extends ConsumerWidget {
 }
 
 // ─────────────────────────────────────────
-//  WEEK HEADER
-// ─────────────────────────────────────────
 class _WeekHeader extends StatelessWidget {
   final String label;
   final Color color;
   const _WeekHeader(this.label, this.color);
-
   @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: color.withValues(alpha: 0.3)),
-          ),
-          child: Text(
-            label,
-            style: AppTypography.labelSmall.copyWith(color: color),
-          ),
+  Widget build(BuildContext context) => Row(
+    children: [
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
         ),
-      ],
-    );
-  }
+        child: Text(
+          label,
+          style: AppTypography.labelSmall.copyWith(color: color),
+        ),
+      ),
+    ],
+  );
 }
 
-// ─────────────────────────────────────────
-//  ENTRY TILE  (edit / delete)
 // ─────────────────────────────────────────
 class _EntryTile extends StatelessWidget {
   final TimetableModel entry;
   final bool isDark;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
-
   const _EntryTile({
     required this.entry,
     required this.isDark,
@@ -376,7 +459,7 @@ class _EntryTile extends StatelessWidget {
       child: ListTile(
         dense: true,
         leading: Container(
-          width: 42,
+          width: 44,
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
           decoration: BoxDecoration(
             color: AppColors.accent.withValues(alpha: 0.08),
@@ -386,7 +469,9 @@ class _EntryTile extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                entry.dayOfWeek.substring(0, 3),
+                entry.dayOfWeek.length >= 3
+                    ? entry.dayOfWeek.substring(0, 3)
+                    : entry.dayOfWeek,
                 style: AppTypography.caption.copyWith(
                   color: AppColors.accent,
                   fontWeight: FontWeight.bold,

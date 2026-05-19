@@ -33,6 +33,7 @@ class _AdminTimetableFormScreenState
   TimeOfDay _startTime = const TimeOfDay(hour: 8, minute: 0);
   TimeOfDay _endTime = const TimeOfDay(hour: 9, minute: 0);
   String _weekType = ''; // '' = both, 'A' = Week A, 'B' = Week B
+  DateTime? _rattrapageDate;
   bool _isLoading = false;
   bool _isEditing = false;
 
@@ -113,7 +114,10 @@ class _AdminTimetableFormScreenState
         startTime: _fmt(_startTime),
         endTime: _fmt(_endTime),
         weekType: _weekType, // ← saved here
-        createdAt: DateTime.now(),
+        createdAt:
+            _weekType == 'rattrapage' && _rattrapageDate != null
+                ? _rattrapageDate!
+                : DateTime.now(),
       );
 
       if (_isEditing) {
@@ -353,7 +357,7 @@ class _AdminTimetableFormScreenState
               const SizedBox(height: 16),
 
               // ── Week type ──────────────────────────────────────────
-              _label(isDark, 'Week Type'),
+              _label(isDark, 'Option Type'),
               const SizedBox(height: 8),
               Row(
                 children: [
@@ -361,6 +365,7 @@ class _AdminTimetableFormScreenState
                     ('Both A & B', ''),
                     ('Week A only', 'A'),
                     ('Week B only', 'B'),
+                    ('Rattrapage', 'rattrapage'),
                   ])
                     Expanded(
                       child: GestureDetector(
@@ -400,6 +405,58 @@ class _AdminTimetableFormScreenState
                     ),
                 ],
               ),
+              const SizedBox(height: 32),
+
+              // ── Rattrapage date picker ─────────────────────────────────
+              if (_weekType == 'rattrapage') ...[
+                const SizedBox(height: 16),
+                _label(isDark, 'Rattrapage Date'),
+                const SizedBox(height: 8),
+                GestureDetector(
+                  onTap: () async {
+                    final date = await showDatePicker(
+                      context: context,
+                      initialDate: _rattrapageDate ?? DateTime.now(),
+                      firstDate: DateTime(2024),
+                      lastDate: DateTime(2030),
+                    );
+                    if (date != null) setState(() => _rattrapageDate = date);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: isDark ? AppColors.darkCard : AppColors.lightCard,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: AppColors.warning.withValues(alpha: 0.5),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.calendar_today_rounded,
+                          color: AppColors.warning,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          _rattrapageDate != null
+                              ? '${_rattrapageDate!.day}/${_rattrapageDate!.month}/${_rattrapageDate!.year}'
+                              : 'Pick a date for this session',
+                          style: AppTypography.labelMedium.copyWith(
+                            color:
+                                _rattrapageDate != null
+                                    ? isDark
+                                        ? AppColors.darkText
+                                        : AppColors.lightText
+                                    : AppColors.warning,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 32),
 
               // ── Save ───────────────────────────────────────────────
