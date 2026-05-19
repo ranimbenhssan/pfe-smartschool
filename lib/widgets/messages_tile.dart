@@ -184,8 +184,14 @@ class MessagesTile extends StatelessWidget {
                             Text('·', style: AppTypography.caption),
                             const SizedBox(width: 6),
                             _RecipientLabel(
-                              userId: message.userId,
-                              recipientLabel: message.recipientLabel,
+                              userId:
+                                  message.originalRecipientId.isNotEmpty
+                                      ? message.originalRecipientId
+                                      : message.userId,
+                              recipientLabel:
+                                  message.originalRecipient.isNotEmpty
+                                      ? message.originalRecipient
+                                      : message.recipientLabel,
                             ),
                           ],
                         ],

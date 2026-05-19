@@ -315,6 +315,7 @@ class NotificationService {
         'userId': superAdminId,
         'isCopy': true,
         'originalRecipient': originalRecipient,
+        'originalRecipientId': recipientUserId ?? '',
         'createdAt': FieldValue.serverTimestamp(),
       });
     } catch (e) {

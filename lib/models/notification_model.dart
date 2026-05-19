@@ -49,6 +49,8 @@ class NotificationModel {
   final String rawMessageType; // raw Firestore string e.g. 'attendance'
   final List<AttachmentModel> attachments;
   final String recipientLabel;
+  final String originalRecipient;
+  final String originalRecipientId;
   final String replyToId;
   final String replyToTitle;
   final bool isRead;
@@ -66,6 +68,8 @@ class NotificationModel {
     this.rawMessageType = '',
     required this.attachments,
     required this.recipientLabel,
+    this.originalRecipient = '',
+    this.originalRecipientId = '',
     this.replyToId = '',
     this.replyToTitle = '',
     required this.isRead,
@@ -102,6 +106,8 @@ class NotificationModel {
       rawMessageType: raw['messageType']?.toString() ?? '',
       attachments: parseAttachments(),
       recipientLabel: raw['recipientLabel']?.toString() ?? '',
+      originalRecipient: raw['originalRecipient']?.toString() ?? '',
+      originalRecipientId: raw['originalRecipientId']?.toString() ?? '',
       replyToId: raw['replyToId']?.toString() ?? '',
       replyToTitle: raw['replyToTitle']?.toString() ?? '',
       isRead: raw['isRead'] as bool? ?? false,
@@ -119,6 +125,8 @@ class NotificationModel {
     'messageType': messageType.name,
     'attachments': attachments.map((a) => a.toMap()).toList(),
     'recipientLabel': recipientLabel,
+    'originalRecipient': originalRecipient,
+    'originalRecipientId': originalRecipientId,
     'replyToId': replyToId,
     'replyToTitle': replyToTitle,
     'isRead': isRead,
