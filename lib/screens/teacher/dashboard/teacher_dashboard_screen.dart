@@ -29,8 +29,6 @@ class _TeacherDashboardScreenState
 
   final List<_NavItem> _navItems = const [
     _NavItem(icon: Icons.dashboard_rounded, label: 'Dashboard'),
-    _NavItem(icon: Icons.sensors_rounded, label: 'IoT'),
-    _NavItem(icon: Icons.people_rounded, label: 'Students'),
     _NavItem(icon: Icons.menu_rounded, label: 'More'),
   ];
 
@@ -46,8 +44,6 @@ class _TeacherDashboardScreenState
         index: _selectedIndex,
         children: const [
           _DashboardBody(),
-          _IotQuickView(),
-          _StudentsQuickView(),
           _MoreMenu(),
         ],
       ),
