@@ -86,6 +86,9 @@ class NotificationDetailscreen extends ConsumerWidget {
   }
 
   String _getRecipientLabel() {
+    if (message.originalRecipient.isNotEmpty) {
+      return message.originalRecipient;
+    }
     // Use stored recipientLabel if meaningful
     final label = message.recipientLabel;
     if (label.isNotEmpty &&
@@ -185,7 +188,7 @@ class NotificationDetailscreen extends ConsumerWidget {
                 Text(_fmt(message.createdAt), style: AppTypography.caption),
               ],
             ),
-            if (message.recipientLabel.isNotEmpty) ...[
+            if (_getRecipientLabel().isNotEmpty) ...[
               const SizedBox(height: 4),
               Row(
                 children: [
