@@ -12,7 +12,7 @@ List<_MergedEntry> _mergeEntries(List<TimetableModel> entries) {
   final map = <String, _MergedEntry>{};
   for (final e in entries) {
     final key =
-        '${e.teacherId}|${e.subject}|${e.dayOfWeek}|${e.startTime}|${e.endTime}|${e.weekType}';
+        '${e.teacherId}|${e.subject}|${e.effectiveDayOfWeek}|${e.startTime}|${e.endTime}|${e.weekType}';
     if (map.containsKey(key)) {
       map[key]!.addClass(e.className);
     } else {
@@ -76,6 +76,12 @@ class _TeacherTimetableScreenState
   );
 
   DateTime _mondayOf(DateTime d) => d.subtract(Duration(days: d.weekday - 1));
+
+  bool _isSameWeek(DateTime a, DateTime b) {
+    final ma = _mondayOf(DateTime(a.year, a.month, a.day));
+    final mb = _mondayOf(DateTime(b.year, b.month, b.day));
+    return ma.year == mb.year && ma.month == mb.month && ma.day == mb.day;
+  }
 
   String _fmtDate(DateTime d) =>
       '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
@@ -225,13 +231,15 @@ class _TimetableContent extends ConsumerWidget {
             icon: Icons.error_outline_rounded,
           ),
       data: (allEntries) {
-        // Filter to displayed week type
+        // Filter to displayed week type and include rattrapage for this week
         final entries =
-            weekType.isEmpty
-                ? allEntries
-                : allEntries
-                    .where((e) => e.weekType.isEmpty || e.weekType == weekType)
-                    .toList();
+            allEntries.where((e) {
+              if (e.isRattrapage) {
+                return _isSameWeek(e.createdAt, selectedDate);
+              }
+              if (weekType.isEmpty) return true;
+              return e.weekType.isEmpty || e.weekType == weekType;
+            }).toList();
 
         if (entries.isEmpty) {
           return EmptyState(
@@ -245,7 +253,12 @@ class _TimetableContent extends ConsumerWidget {
         }
 
         return isDayView
-            ? _DayListView(entries: entries, dayName: dayName, isDark: isDark)
+            ? _DayListView(
+              entries: entries,
+              dayName: dayName,
+              selectedDate: selectedDate,
+              isDark: isDark,
+            )
             : _WeekGridView(
               entries: entries,
               weekStart: weekStart,
@@ -532,18 +545,23 @@ class _DayPicker extends StatelessWidget {
 class _DayListView extends StatelessWidget {
   final List<TimetableModel> entries;
   final String dayName;
+  final DateTime selectedDate;
   final bool isDark;
 
   const _DayListView({
     required this.entries,
     required this.dayName,
+    required this.selectedDate,
     required this.isDark,
   });
 
   @override
   Widget build(BuildContext context) {
     final dayEntries = _mergeEntries(
-      entries.where((e) => e.dayOfWeek == dayName).toList(),
+      entries
+          .where((e) => e.effectiveDayOfWeek == dayName)
+          .where((e) => e.occursOnDate(selectedDate))
+          .toList(),
     );
 
     if (dayEntries.isEmpty) {
@@ -718,7 +736,9 @@ class _WeekGridView extends StatelessWidget {
                       final col = de.key;
                       final dayName = de.value;
                       final daySlots =
-                          entries.where((e) => e.dayOfWeek == dayName).toList();
+                          entries
+                              .where((e) => e.effectiveDayOfWeek == dayName)
+                              .toList();
                       final merged = _mergeEntries(daySlots);
                       return merged.map((m) {
                         final top = _ty(m.startTime);

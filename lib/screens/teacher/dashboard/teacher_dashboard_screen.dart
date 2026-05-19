@@ -428,6 +428,12 @@ class _TimetableSeancesSection extends ConsumerWidget {
         curr.compareTo(seance.endTime) <= 0;
   }
 
+  bool _matchesWeekType(TimetableModel entry, String weekType) {
+    if (entry.isRattrapage) return true;
+    if (weekType.isEmpty) return true;
+    return entry.weekType.isEmpty || entry.weekType == weekType;
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final today = ref.watch(todayStringProvider);
@@ -441,6 +447,7 @@ class _TimetableSeancesSection extends ConsumerWidget {
     final tomorrowName = _weekdays[tomorrow.weekday];
 
     final displayDay = showTomorrow ? tomorrowName : dayName;
+    final targetDate = showTomorrow ? tomorrow : now;
     final displayLabel =
         showTomorrow
             ? 'Timetable tomorrow ${tomorrow.day}.${tomorrow.month.toString().padLeft(2, '0')}.'
@@ -459,13 +466,9 @@ class _TimetableSeancesSection extends ConsumerWidget {
         final weekType = ref.watch(currentWeekTypeProvider);
         final dayEntries =
             allEntries
-                .where((e) => e.dayOfWeek == displayDay)
-                .where(
-                  (e) =>
-                      weekType.isEmpty ||
-                      e.weekType.isEmpty ||
-                      e.weekType == weekType,
-                )
+                .where((e) => e.effectiveDayOfWeek == displayDay)
+                .where((e) => e.occursOnDate(targetDate))
+                .where((e) => _matchesWeekType(e, weekType))
                 .toList();
 
         final seances = _groupIntoSeances(dayEntries);

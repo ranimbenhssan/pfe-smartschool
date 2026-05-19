@@ -74,27 +74,31 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
     final weekType = ref.read(weekTypeForDateProvider(_selectedDate));
 
     // Step 1: Find all timetable entries matching this teacher+subject+day
-    final snap =
-        await FirebaseFirestore.instance
-            .collection('timetable')
-            .where('teacherId', isEqualTo: teacherId)
-            .where('subject', isEqualTo: slot.subject)
-            .where('dayOfWeek', isEqualTo: slot.dayOfWeek)
-            .where('startTime', isEqualTo: slot.startTime)
-            .where('endTime', isEqualTo: slot.endTime)
-            .get();
+    var query = FirebaseFirestore.instance
+        .collection('timetable')
+        .where('teacherId', isEqualTo: teacherId)
+        .where('subject', isEqualTo: slot.subject)
+        .where('startTime', isEqualTo: slot.startTime)
+        .where('endTime', isEqualTo: slot.endTime);
+    if (!slot.isRattrapage) {
+      query = query.where('dayOfWeek', isEqualTo: slot.dayOfWeek);
+    }
+    final snap = await query.get();
 
     // Filter by week type
     final matchingEntries =
-        snap.docs
-            .map(TimetableModel.fromFirestore)
-            .where(
-              (t) =>
-                  weekType.isEmpty ||
-                  t.weekType.isEmpty ||
-                  t.weekType == weekType,
-            )
-            .toList();
+        snap.docs.map(TimetableModel.fromFirestore).where((t) {
+          if (t.isRattrapage) {
+            return t.occursOnDate(_selectedDate) &&
+                t.effectiveDayOfWeek == slot.effectiveDayOfWeek;
+          }
+          if (!slot.isRattrapage &&
+              t.effectiveDayOfWeek != slot.effectiveDayOfWeek) {
+            return false;
+          }
+          if (weekType.isEmpty) return true;
+          return t.weekType.isEmpty || t.weekType == weekType;
+        }).toList();
 
     final classIds = matchingEntries.map((t) => t.classId).toSet().toList();
 
@@ -439,9 +443,10 @@ class _TeacherNamecallScreenState extends ConsumerState<TeacherNamecallScreen> {
 
     // ── Notify student ─────────────────────────────────────────────────────
     final studentDoc = await db.collection('students').doc(studentId).get();
-    final studentUserId = (studentDoc.data()?['userId']?.toString() ?? '').isNotEmpty
-    ? studentDoc.data()!['userId'].toString()
-    : studentDoc.id;
+    final studentUserId =
+        (studentDoc.data()?['userId']?.toString() ?? '').isNotEmpty
+            ? studentDoc.data()!['userId'].toString()
+            : studentDoc.id;
     if (studentUserId.isNotEmpty) {
       await db.collection('notifications').add({
         'userId': studentUserId,
