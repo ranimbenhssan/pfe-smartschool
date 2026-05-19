@@ -186,6 +186,7 @@ class MessagesTile extends StatelessWidget {
                             _RecipientLabel(
                               userId: message.userId,
                               recipientLabel: message.recipientLabel,
+                              senderId: message.senderId,
                             ),
                           ],
                         ],
@@ -316,11 +317,16 @@ class MessagesTile extends StatelessWidget {
 class _RecipientLabel extends ConsumerWidget {
   final String userId;
   final String recipientLabel;
-  const _RecipientLabel({required this.userId, required this.recipientLabel});
+  final String senderId; // ADD THIS
+  const _RecipientLabel({
+    required this.userId,
+    required this.recipientLabel,
+    required this.senderId,
+  }); // ADD THIS
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Use stored label if it's meaningful
+    // Use stored label if meaningful
     if (recipientLabel.isNotEmpty &&
         recipientLabel.toLowerCase() != 'sent' &&
         recipientLabel != '—' &&
@@ -335,8 +341,8 @@ class _RecipientLabel extends ConsumerWidget {
       );
     }
 
-    // No useful label — look up recipient name by userId
-    if (userId.isEmpty) return const SizedBox.shrink();
+    // userId lookup — only if userId != senderId (avoid showing sender as recipient)
+    if (userId.isEmpty || userId == senderId) return const SizedBox.shrink();
 
     final nameAsync = ref.watch(_recipientNameProvider(userId));
     return nameAsync.when(

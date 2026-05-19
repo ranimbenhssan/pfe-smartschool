@@ -85,6 +85,28 @@ class NotificationDetailscreen extends ConsumerWidget {
         'at ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
   }
 
+  String _getRecipientLabel() {
+    // Use stored recipientLabel if meaningful
+    final label = message.recipientLabel;
+    if (label.isNotEmpty &&
+        label.toLowerCase() != 'sent' &&
+        label != '—' &&
+        label != '-') {
+      return label;
+    }
+    // Fallback by role
+    switch (message.senderRole) {
+      case 'admin':
+        return 'Whole School';
+      case 'teacher':
+        return 'Class students';
+      case 'student':
+        return 'Selected recipients';
+      default:
+        return 'You';
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -174,7 +196,7 @@ class NotificationDetailscreen extends ConsumerWidget {
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    'To: ${message.recipientLabel}',
+                    'To: ${_getRecipientLabel()}',
                     style: AppTypography.caption,
                   ),
                 ],
