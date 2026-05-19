@@ -60,6 +60,7 @@ class TimetableModel {
       roomId: s('roomId'),
       roomName: s('roomName'),
       createdAt: (raw['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      weekType: raw['weekType']?.toString() ?? '',
     );
   }
 
