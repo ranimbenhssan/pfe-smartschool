@@ -677,7 +677,6 @@ class FirestoreService {
   Stream<List<TimetableModel>> getFullTimetable() {
     return _firestore
         .collection('timetable')
-        .orderBy('dayOfWeek')
         .snapshots()
         .map(
           (snap) =>

@@ -141,7 +141,14 @@ class _TimetableEditor extends ConsumerWidget {
           ),
       data: (allEntries) {
         final entries =
-            allEntries.where((e) => e.classId == classId).toList()
+            allEntries
+                .where(
+                  (e) =>
+                      e.classId == classId ||
+                      e.classId == className ||
+                      e.className == className,
+                )
+                .toList()
               ..sort((a, b) {
                 // Sort by day then start time
                 const days = [
