@@ -61,6 +61,12 @@ class _StudentTimetableScreenState
 
   DateTime _mondayOf(DateTime d) => d.subtract(Duration(days: d.weekday - 1));
 
+  bool _isSameWeek(DateTime a, DateTime b) {
+    final ma = _mondayOf(DateTime(a.year, a.month, a.day));
+    final mb = _mondayOf(DateTime(b.year, b.month, b.day));
+    return ma.year == mb.year && ma.month == mb.month && ma.day == mb.day;
+  }
+
   String _fmtDate(DateTime d) =>
       '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
 
@@ -167,15 +173,17 @@ class _StudentTimetableScreenState
                           // Filter to the week type for the selected date.
                           // weekType == '' means no semester configured → show all entries.
                           final entries =
-                              weekType.isEmpty
-                                  ? allEntries
-                                  : allEntries
-                                      .where(
-                                        (e) =>
-                                            e.weekType.isEmpty ||
-                                            e.weekType == weekType,
-                                      )
-                                      .toList();
+                              allEntries.where((e) {
+                                if (e.isRattrapage) {
+                                  return _isSameWeek(
+                                    e.createdAt,
+                                    _selectedDate,
+                                  );
+                                }
+                                if (weekType.isEmpty) return true;
+                                return e.weekType.isEmpty ||
+                                    e.weekType == weekType;
+                              }).toList();
 
                           if (entries.isEmpty) {
                             return EmptyState(
@@ -510,7 +518,10 @@ class _DayListView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dayEntries =
-        entries.where((e) => e.dayOfWeek == dayName).toList()
+        entries
+            .where((e) => e.effectiveDayOfWeek == dayName)
+            .where((e) => e.occursOnDate(selectedDate))
+            .toList()
           ..sort((a, b) => a.startTime.compareTo(b.startTime));
 
     final int total = dayEntries.length < 6 ? 6 : dayEntries.length;
@@ -832,112 +843,115 @@ class _WeekGridView extends StatelessWidget {
                     ..._days.asMap().entries.expand((de) {
                       final col = de.key;
                       final day = de.value;
-                      return entries.where((e) => e.dayOfWeek == day).map((e) {
-                        final top = _ty(e.startTime);
-                        final h = (_ty(e.endTime) - top).clamp(
-                          24.0,
-                          double.infinity,
-                        );
-                        final left = _tW + col * _cW + 2;
-                        final color = _colorForSubject(e.subject);
-                        final room =
-                            e.roomName.isNotEmpty ? e.roomName : e.roomId;
-                        final isRatt = e.subject.toLowerCase().contains(
-                          'rattrap',
-                        );
-                        return Positioned(
-                          top: top,
-                          left: left,
-                          width: _cW - 4,
-                          height: h,
-                          child: GestureDetector(
-                            onTap:
-                                () => onDayTap(
-                                  weekStart.add(Duration(days: col)),
-                                ),
-                            child: Container(
-                              padding: const EdgeInsets.all(5),
-                              decoration: BoxDecoration(
-                                color: color.withValues(
-                                  alpha: isDark ? 0.75 : 0.85,
-                                ),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      e.subject,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 9.5,
-                                        fontWeight: FontWeight.w700,
-                                        height: 1.2,
-                                      ),
-                                      maxLines: 4,
-                                      overflow: TextOverflow.ellipsis,
+                      return entries
+                          .where((e) => e.effectiveDayOfWeek == day)
+                          .map((e) {
+                            final top = _ty(e.startTime);
+                            final h = (_ty(e.endTime) - top).clamp(
+                              24.0,
+                              double.infinity,
+                            );
+                            final left = _tW + col * _cW + 2;
+                            final color = _colorForSubject(e.subject);
+                            final room =
+                                e.roomName.isNotEmpty ? e.roomName : e.roomId;
+                            final isRatt = e.subject.toLowerCase().contains(
+                              'rattrap',
+                            );
+                            return Positioned(
+                              top: top,
+                              left: left,
+                              width: _cW - 4,
+                              height: h,
+                              child: GestureDetector(
+                                onTap:
+                                    () => onDayTap(
+                                      weekStart.add(Duration(days: col)),
                                     ),
+                                child: Container(
+                                  padding: const EdgeInsets.all(5),
+                                  decoration: BoxDecoration(
+                                    color: color.withValues(
+                                      alpha: isDark ? 0.75 : 0.85,
+                                    ),
+                                    borderRadius: BorderRadius.circular(8),
                                   ),
-                                  if (e.teacherName.isNotEmpty && h > 52)
-                                    Text(
-                                      e.teacherName,
-                                      style: TextStyle(
-                                        color: Colors.white.withValues(
-                                          alpha: 0.7,
-                                        ),
-                                        fontSize: 7.5,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  const SizedBox(height: 2),
-                                  Row(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      if (room.isNotEmpty)
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 4,
-                                            vertical: 1,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: Colors.black26,
-                                            borderRadius: BorderRadius.circular(
-                                              4,
-                                            ),
-                                          ),
-                                          child: Text(
-                                            room,
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 7.5,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ),
-                                      const Spacer(),
-                                      if (isRatt)
-                                        Container(
-                                          width: 12,
-                                          height: 12,
-                                          decoration: BoxDecoration(
-                                            color: AppColors.warning,
-                                            shape: BoxShape.circle,
-                                          ),
-                                          child: const Icon(
-                                            Icons.notifications_rounded,
-                                            size: 8,
+                                      Expanded(
+                                        child: Text(
+                                          e.subject,
+                                          style: const TextStyle(
                                             color: Colors.white,
+                                            fontSize: 9.5,
+                                            fontWeight: FontWeight.w700,
+                                            height: 1.2,
                                           ),
+                                          maxLines: 4,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
+                                      ),
+                                      if (e.teacherName.isNotEmpty && h > 52)
+                                        Text(
+                                          e.teacherName,
+                                          style: TextStyle(
+                                            color: Colors.white.withValues(
+                                              alpha: 0.7,
+                                            ),
+                                            fontSize: 7.5,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      const SizedBox(height: 2),
+                                      Row(
+                                        children: [
+                                          if (room.isNotEmpty)
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 4,
+                                                    vertical: 1,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: Colors.black26,
+                                                borderRadius:
+                                                    BorderRadius.circular(4),
+                                              ),
+                                              child: Text(
+                                                room,
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 7.5,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ),
+                                          const Spacer(),
+                                          if (isRatt)
+                                            Container(
+                                              width: 12,
+                                              height: 12,
+                                              decoration: BoxDecoration(
+                                                color: AppColors.warning,
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: const Icon(
+                                                Icons.notifications_rounded,
+                                                size: 8,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                        ],
+                                      ),
                                     ],
                                   ),
-                                ],
+                                ),
                               ),
-                            ),
-                          ),
-                        );
-                      });
+                            );
+                          });
                     }),
                   ],
                 ),

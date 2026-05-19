@@ -87,4 +87,29 @@ class TimetableModel {
   // Whether this entry matches the given week type
   bool matchesWeek(String currentWeekType) =>
       weekType.isEmpty || weekType == currentWeekType;
+
+  bool get isRattrapage => weekType.toLowerCase() == 'rattrapage';
+
+  // For rattrapage entries, only show on the exact date stored in createdAt.
+  bool occursOnDate(DateTime date) {
+    if (!isRattrapage) return true;
+    return createdAt.year == date.year &&
+        createdAt.month == date.month &&
+        createdAt.day == date.day;
+  }
+
+  String get effectiveDayOfWeek {
+    if (!isRattrapage) return dayOfWeek;
+    const days = [
+      '',
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
+    ];
+    return days[createdAt.weekday];
+  }
 }

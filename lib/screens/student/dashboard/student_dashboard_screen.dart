@@ -489,6 +489,12 @@ class _StudentTimetableSeances extends ConsumerWidget {
     return curr.compareTo(s.startTime) >= 0 && curr.compareTo(s.endTime) <= 0;
   }
 
+  bool _matchesWeekType(TimetableModel entry, String weekType) {
+    if (entry.isRattrapage) return true;
+    if (weekType.isEmpty) return true;
+    return entry.weekType.isEmpty || entry.weekType == weekType;
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final students = ref.watch(studentsProvider);
@@ -524,15 +530,12 @@ class _StudentTimetableSeances extends ConsumerWidget {
           error: (_, __) => const SizedBox.shrink(),
           data: (allEntries) {
             final weekType = ref.watch(currentWeekTypeProvider);
+            final targetDate = showTomorrow ? tomorrow : now;
             final dayEntries =
                 allEntries
-                    .where((e) => e.dayOfWeek == displayDay)
-                    .where(
-                      (e) =>
-                          weekType.isEmpty ||
-                          e.weekType.isEmpty ||
-                          e.weekType == weekType,
-                    )
+                    .where((e) => e.effectiveDayOfWeek == displayDay)
+                    .where((e) => e.occursOnDate(targetDate))
+                    .where((e) => _matchesWeekType(e, weekType))
                     .toList();
 
             final seances = _groupIntoSeances(dayEntries);
