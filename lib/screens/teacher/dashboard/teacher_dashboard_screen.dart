@@ -643,7 +643,9 @@ class _SeanceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     // Active card: teacher-color tinted. Inactive: card background.
     final bgColor =
-        isActive ? const Color(0xFF87CEEB) : const Color(0xFF87CEEB);
+        isActive
+            ? const Color.fromARGB(255, 46, 153, 195)
+            : const Color.fromARGB(255, 46, 153, 195);
 
     final borderColor =
         isActive ? const Color(0xFFA0E6FF) : const Color(0xFFA0E6FF);
