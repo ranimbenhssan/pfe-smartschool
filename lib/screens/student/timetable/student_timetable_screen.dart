@@ -44,6 +44,7 @@ class _StudentTimetableScreenState
     extends ConsumerState<StudentTimetableScreen> {
   bool _isDayView = true;
   DateTime _selectedDate = DateTime.now();
+  String? _cachedClassId;
 
   void _prevDay() => setState(
     () => _selectedDate = _selectedDate.subtract(const Duration(days: 1)),
@@ -110,21 +111,24 @@ class _StudentTimetableScreenState
     final weekLabel = weekType.isEmpty ? '–' : 'Week $weekType';
 
     // Resolve student → classId
-    final classId = currentUser.when(
+    final resolvedClassId = currentUser.when(
       data: (user) {
-        if (user == null) return '';
+        if (user == null) return null;
         final studentAsync = ref.watch(studentByUserIdProvider(user.id));
-        return studentAsync.value?.classId ?? '';
+        return studentAsync.value?.classId;
       },
-      loading: () => '',
-      error: (_, __) => '',
+      loading: () => null,
+      error: (_, __) => null,
     );
 
-    final timetableAsync = ref.watch(
-      classId.isEmpty
-          ? timetableByClassProvider('__empty__')
-          : timetableByClassProvider(classId),
-    );
+    // Cache it — once we have a real classId, keep it
+    if (resolvedClassId != null && resolvedClassId.isNotEmpty) {
+      _cachedClassId = resolvedClassId;
+    }
+    final classId = _cachedClassId ?? '';
+
+    final timetableAsync =
+        classId.isEmpty ? null : ref.watch(timetableByClassProvider(classId));
 
     return Scaffold(
       backgroundColor:
@@ -149,7 +153,7 @@ class _StudentTimetableScreenState
             // ── Content ─────────────────────────────────────────────────────────
             Expanded(
               child:
-                  classId.isEmpty
+                  (timetableAsync == null)
                       ? const LoadingWidget()
                       : timetableAsync.when(
                         loading: () => const LoadingWidget(),
