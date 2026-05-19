@@ -357,16 +357,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '${AppRoutes.adminTimetableEdit}/:id',
         name: 'admin-timetable-edit',
-        builder:
-            (context, state) =>
-                AdminTimetableFormScreen(entryId: state.pathParameters['id']),
+        builder: (context, state) {
+          final id = state.pathParameters['id'];
+          return AdminTimetableFormScreen(entryId: id);
+        },
       ),
 
       GoRoute(
         path: AppRoutes.adminTimetableForm,
-        builder:
-            (context, state) =>
-                AdminTimetableFormScreen(entryId: state.extra as String?),
+        builder: (context, state) {
+          final extra = state.extra;
+          final entryId = extra is String ? extra : null;
+          return AdminTimetableFormScreen(entryId: entryId);
+        },
       ),
       GoRoute(
         path: AppRoutes.adminImport,
