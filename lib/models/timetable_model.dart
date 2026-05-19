@@ -39,19 +39,26 @@ class TimetableModel {
 
   factory TimetableModel.fromFirestore(DocumentSnapshot doc) {
     final raw = doc.data() as Map<String, dynamic>;
+
+    // Safe string extractor — returns '' if value is Map/List/null
+    String s(String key) {
+      final v = raw[key];
+      if (v == null || v is Map || v is List) return '';
+      return v.toString().trim();
+    }
+
     return TimetableModel(
       id: doc.id,
-      classId: raw['classId']?.toString() ?? '',
-      className: raw['className']?.toString() ?? '',
-      teacherId: raw['teacherId']?.toString() ?? '',
-      teacherName: raw['teacherName']?.toString() ?? '',
-      subject: raw['subject']?.toString() ?? '',
-      dayOfWeek: raw['dayOfWeek']?.toString() ?? raw['day']?.toString() ?? '',
-      startTime: raw['startTime']?.toString() ?? '',
-      endTime: raw['endTime']?.toString() ?? '',
-      roomId: raw['roomId']?.toString() ?? '',
-      roomName: raw['roomName']?.toString() ?? '',
-      weekType: raw['weekType']?.toString() ?? '', // backward compat
+      classId: s('classId'),
+      className: s('className'),
+      teacherId: s('teacherId'),
+      teacherName: s('teacherName'),
+      subject: s('subject'),
+      dayOfWeek: s('dayOfWeek').isNotEmpty ? s('dayOfWeek') : s('day'),
+      startTime: s('startTime'),
+      endTime: s('endTime'),
+      roomId: s('roomId'),
+      roomName: s('roomName'),
       createdAt: (raw['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
   }

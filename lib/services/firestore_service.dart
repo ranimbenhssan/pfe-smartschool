@@ -633,14 +633,29 @@ class FirestoreService {
     return _firestore
         .collection('timetable')
         .where('classId', isEqualTo: classId)
-        .orderBy('dayOfWeek')
         .snapshots()
-        .map(
-          (snap) =>
+        .map((snap) {
+          final list =
               snap.docs
                   .map((doc) => TimetableModel.fromFirestore(doc))
-                  .toList(),
-        );
+                  .toList();
+          // Sort client-side — avoids requiring a composite index
+          const order = [
+            'Monday',
+            'Tuesday',
+            'Wednesday',
+            'Thursday',
+            'Friday',
+            'Saturday',
+            'Sunday',
+          ];
+          list.sort(
+            (a, b) => order
+                .indexOf(a.dayOfWeek)
+                .compareTo(order.indexOf(b.dayOfWeek)),
+          );
+          return list;
+        });
   }
 
   // Get timetable by teacher
