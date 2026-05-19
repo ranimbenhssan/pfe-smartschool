@@ -36,8 +36,8 @@ final notificationsProvider = StreamProvider.family<
         .snapshots()
         .map((snap) {
           final all = snap.docs.map(NotificationModel.fromFirestore).toList();
-          final seen = <String>{};
-          return all.where((n) {
+          final chosen = <String, NotificationModel>{};
+          for (final n in all) {
             final t =
                 n.rawMessageType.isNotEmpty
                     ? n.rawMessageType
@@ -45,18 +45,17 @@ final notificationsProvider = StreamProvider.family<
 
             // ── Filter unwanted types ─────────────────────────────────
             // Hide attendance corrections
-            if (t == 'attendance') return false;
+            if (t == 'attendance') continue;
             // Hide student personal absence flag — keep only admin copy
-            if (t == 'absence_flag' && n.recipientLabel != 'Admin')
-              return false;
+            if (t == 'absence_flag' && n.recipientLabel != 'Admin') continue;
             // Hide ALL password_reset — superAdmin doesn't need these
-            if (t == 'password_reset') return false;
+            if (t == 'password_reset') continue;
 
             // ── Direct user-to-user messages ─────────────────────────
             // Keep only those with both senderId and recipientId.
             if (n.originalRecipientId.isNotEmpty) {
               if (n.senderId.isEmpty || n.originalRecipientId.isEmpty) {
-                return false;
+                continue;
               }
             }
 
@@ -65,10 +64,19 @@ final notificationsProvider = StreamProvider.family<
             // same title+message. Use title+createdAt as dedup key.
             final dedupeKey =
                 '${n.title}__${n.createdAt.millisecondsSinceEpoch ~/ 5000}';
-            if (!seen.add(dedupeKey)) return false;
+            final existing = chosen[dedupeKey];
+            if (existing == null) {
+              chosen[dedupeKey] = n;
+            } else if (existing.originalRecipientId.isEmpty &&
+                n.originalRecipientId.isNotEmpty) {
+              chosen[dedupeKey] = n;
+            }
+          }
 
-            return true;
-          }).toList();
+          final list =
+              chosen.values.toList()
+                ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return list;
         });
   }
 
