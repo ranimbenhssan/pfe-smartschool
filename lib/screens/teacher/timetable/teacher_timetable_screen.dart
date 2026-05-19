@@ -48,6 +48,13 @@ class _MergedEntry {
 const _days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 const _dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 
+bool _isSameWeek(DateTime a, DateTime b) {
+  DateTime mondayOf(DateTime d) => d.subtract(Duration(days: d.weekday - 1));
+  final ma = mondayOf(DateTime(a.year, a.month, a.day));
+  final mb = mondayOf(DateTime(b.year, b.month, b.day));
+  return ma.year == mb.year && ma.month == mb.month && ma.day == mb.day;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 class TeacherTimetableScreen extends ConsumerStatefulWidget {
   const TeacherTimetableScreen({super.key});
@@ -76,12 +83,6 @@ class _TeacherTimetableScreenState
   );
 
   DateTime _mondayOf(DateTime d) => d.subtract(Duration(days: d.weekday - 1));
-
-  bool _isSameWeek(DateTime a, DateTime b) {
-    final ma = _mondayOf(DateTime(a.year, a.month, a.day));
-    final mb = _mondayOf(DateTime(b.year, b.month, b.day));
-    return ma.year == mb.year && ma.month == mb.month && ma.day == mb.day;
-  }
 
   String _fmtDate(DateTime d) =>
       '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
