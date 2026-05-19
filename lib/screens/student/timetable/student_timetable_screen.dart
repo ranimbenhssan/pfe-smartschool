@@ -110,20 +110,21 @@ class _StudentTimetableScreenState
     final weekLabel = weekType.isEmpty ? '–' : 'Week $weekType';
 
     // Resolve student → classId
-    final student = currentUser.when(
-      data:
-          (user) =>
-              user == null
-                  ? null
-                  : students.value
-                      ?.where((s) => s.userId == user.id)
-                      .firstOrNull,
-      loading: () => null,
-      error: (_, __) => null,
+    final classId = currentUser.when(
+      data: (user) {
+        if (user == null) return '';
+        final studentAsync = ref.watch(studentByUserIdProvider(user.id));
+        return studentAsync.value?.classId ?? '';
+      },
+      loading: () => '',
+      error: (_, __) => '',
     );
-    final classId = student?.classId ?? '';
 
-    final timetableAsync = ref.watch(timetableByClassProvider(classId));
+    final timetableAsync = ref.watch(
+      classId.isEmpty
+          ? timetableByClassProvider('__empty__')
+          : timetableByClassProvider(classId),
+    );
 
     return Scaffold(
       backgroundColor:
@@ -147,59 +148,62 @@ class _StudentTimetableScreenState
 
             // ── Content ─────────────────────────────────────────────────────────
             Expanded(
-              child: timetableAsync.when(
-                loading: () => const LoadingWidget(),
-                error:
-                    (e, _) => EmptyState(
-                      title: 'Error',
-                      message: e.toString(),
-                      icon: Icons.error_outline_rounded,
-                    ),
-                data: (allEntries) {
-                  // Filter to the week type for the selected date.
-                  // weekType == '' means no semester configured → show all entries.
-                  final entries =
-                      weekType.isEmpty
-                          ? allEntries
-                          : allEntries
-                              .where(
-                                (e) =>
-                                    e.weekType.isEmpty ||
-                                    e.weekType == weekType,
+              child:
+                  classId.isEmpty
+                      ? const LoadingWidget()
+                      : timetableAsync.when(
+                        loading: () => const LoadingWidget(),
+                        error:
+                            (e, _) => EmptyState(
+                              title: 'Error',
+                              message: e.toString(),
+                              icon: Icons.error_outline_rounded,
+                            ),
+                        data: (allEntries) {
+                          // Filter to the week type for the selected date.
+                          // weekType == '' means no semester configured → show all entries.
+                          final entries =
+                              weekType.isEmpty
+                                  ? allEntries
+                                  : allEntries
+                                      .where(
+                                        (e) =>
+                                            e.weekType.isEmpty ||
+                                            e.weekType == weekType,
+                                      )
+                                      .toList();
+
+                          if (entries.isEmpty) {
+                            return EmptyState(
+                              title: 'No Timetable',
+                              message:
+                                  weekType.isEmpty
+                                      ? 'No timetable entries found.'
+                                      : 'No schedule for $weekLabel.',
+                              icon: Icons.calendar_today_rounded,
+                            );
+                          }
+
+                          return _isDayView
+                              ? _DayListView(
+                                entries: entries,
+                                selectedDate: _selectedDate,
+                                isDark: isDark,
+                                dayName: _dayName(_selectedDate),
                               )
-                              .toList();
-
-                  if (entries.isEmpty) {
-                    return EmptyState(
-                      title: 'No Timetable',
-                      message:
-                          weekType.isEmpty
-                              ? 'No timetable entries found.'
-                              : 'No schedule for $weekLabel.',
-                      icon: Icons.calendar_today_rounded,
-                    );
-                  }
-
-                  return _isDayView
-                      ? _DayListView(
-                        entries: entries,
-                        selectedDate: _selectedDate,
-                        isDark: isDark,
-                        dayName: _dayName(_selectedDate),
-                      )
-                      : _WeekGridView(
-                        entries: entries,
-                        weekStart: _mondayOf(_selectedDate),
-                        selectedDate: _selectedDate,
-                        isDark: isDark,
-                        onDayTap:
-                            (d) => setState(() {
-                              _selectedDate = d;
-                              _isDayView = true;
-                            }),
-                      );
-                },
-              ),
+                              : _WeekGridView(
+                                entries: entries,
+                                weekStart: _mondayOf(_selectedDate),
+                                selectedDate: _selectedDate,
+                                isDark: isDark,
+                                onDayTap:
+                                    (d) => setState(() {
+                                      _selectedDate = d;
+                                      _isDayView = true;
+                                    }),
+                              );
+                        },
+                      ),
             ),
           ],
         ),

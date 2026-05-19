@@ -12,6 +12,23 @@ final studentsProvider = StreamProvider<List<StudentModel>>((ref) {
       );
 });
 
+final studentByUserIdProvider = StreamProvider.family<StudentModel?, String>((
+  ref,
+  userId,
+) {
+  if (userId.isEmpty) return Stream.value(null);
+  return FirebaseFirestore.instance
+      .collection('students')
+      .where('userId', isEqualTo: userId)
+      .limit(1)
+      .snapshots()
+      .map(
+        (snap) =>
+            snap.docs.isEmpty
+                ? null
+                : StudentModel.fromFirestore(snap.docs.first),
+      );
+});
 // ─── Single student ───
 final studentProvider = StreamProvider.family<StudentModel?, String>((
   ref,
@@ -69,7 +86,6 @@ final studentsByClassIdsProvider =
           );
     });
 // ─── Students by classId ───
-
 
 final studentsByClassIdProvider =
     StreamProvider.family<List<StudentModel>, String>((ref, classId) {
