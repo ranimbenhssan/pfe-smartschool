@@ -52,6 +52,14 @@ final notificationsProvider = StreamProvider.family<
             // Hide ALL password_reset — superAdmin doesn't need these
             if (t == 'password_reset') return false;
 
+            // ── Direct user-to-user messages ─────────────────────────
+            // Keep only those with both senderId and recipientId.
+            if (n.originalRecipientId.isNotEmpty) {
+              if (n.senderId.isEmpty || n.originalRecipientId.isEmpty) {
+                return false;
+              }
+            }
+
             // ── Deduplicate broadcast messages ───────────────────────
             // sendToAll/sendToClass creates one doc per recipient with the
             // same title+message. Use title+createdAt as dedup key.
