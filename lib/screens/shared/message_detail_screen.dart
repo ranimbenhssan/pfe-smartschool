@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
 import 'package:open_file/open_file.dart';
 import 'package:path_provider/path_provider.dart';
@@ -85,18 +86,19 @@ class NotificationDetailscreen extends ConsumerWidget {
         'at ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
   }
 
-  String _getRecipientLabel() {
-    if (message.originalRecipient.isNotEmpty) {
-      return message.originalRecipient;
-    }
-    // Use stored recipientLabel if meaningful
-    final label = message.recipientLabel;
-    if (label.isNotEmpty &&
+  bool _isMeaningfulLabel(String label) {
+    return label.isNotEmpty &&
         label.toLowerCase() != 'sent' &&
         label != '—' &&
-        label != '-') {
-      return label;
-    }
+        label != '-';
+  }
+
+  String _getRecipientLabel() {
+    // Use stored recipientLabel if meaningful
+    final original = message.originalRecipient;
+    if (_isMeaningfulLabel(original)) return original;
+    final label = message.recipientLabel;
+    if (_isMeaningfulLabel(label)) return label;
     // Fallback by role
     switch (message.senderRole) {
       case 'admin':
@@ -198,9 +200,9 @@ class NotificationDetailscreen extends ConsumerWidget {
                     color: Colors.grey,
                   ),
                   const SizedBox(width: 4),
-                  Text(
-                    'To: ${_getRecipientLabel()}',
-                    style: AppTypography.caption,
+                  _RecipientNameOrLabel(
+                    label: _getRecipientLabel(),
+                    recipientId: message.originalRecipientId,
                   ),
                 ],
               ),
@@ -271,6 +273,57 @@ class NotificationDetailscreen extends ConsumerWidget {
     );
   }
 }
+
+class _RecipientNameOrLabel extends ConsumerWidget {
+  final String label;
+  final String recipientId;
+
+  const _RecipientNameOrLabel({required this.label, required this.recipientId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (label.isNotEmpty && label != 'Selected recipients') {
+      return Text('To: $label', style: AppTypography.caption);
+    }
+
+    if (recipientId.isEmpty) {
+      return Text('To: $label', style: AppTypography.caption);
+    }
+
+    final nameAsync = ref.watch(_recipientNameProvider(recipientId));
+    return nameAsync.when(
+      loading: () => Text('To: $label', style: AppTypography.caption),
+      error: (_, __) => Text('To: $label', style: AppTypography.caption),
+      data:
+          (name) => Text(
+            'To: ${name.isNotEmpty ? name : label}',
+            style: AppTypography.caption,
+          ),
+    );
+  }
+}
+
+// Looks up name from users first, then students, then teachers
+final _recipientNameProvider = FutureProvider.family<String, String>((
+  ref,
+  userId,
+) async {
+  if (userId.isEmpty) return '';
+
+  final userDoc =
+      await FirebaseFirestore.instance.collection('users').doc(userId).get();
+  final userName = userDoc.data()?['name']?.toString() ?? '';
+  if (userName.isNotEmpty) return userName;
+
+  final studentDoc =
+      await FirebaseFirestore.instance.collection('students').doc(userId).get();
+  final studentName = studentDoc.data()?['name']?.toString() ?? '';
+  if (studentName.isNotEmpty) return studentName;
+
+  final teacherDoc =
+      await FirebaseFirestore.instance.collection('teachers').doc(userId).get();
+  return teacherDoc.data()?['name']?.toString() ?? '';
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  ATTACHMENT TILE
