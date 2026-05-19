@@ -630,8 +630,8 @@ class FirestoreService {
 
   // Get timetable by class
   Stream<List<TimetableModel>> getTimetableByClass(String classId) {
-    // Try both classId (Firestore doc ID) and className (display name)
-    // in case students were imported with class name as classId
+    // Fetch ALL timetable docs and filter client-side
+    // This handles classId mismatches (auto-ID vs class name)
     return _firestore.collection('timetable').snapshots().map((snap) {
       final list =
           snap.docs
@@ -639,9 +639,9 @@ class FirestoreService {
               .where(
                 (t) =>
                     t.classId == classId ||
-                    t.classId == classId.trim() ||
+                    t.classId.trim() == classId.trim() ||
                     t.className == classId ||
-                    t.className == classId.trim(),
+                    t.className.trim() == classId.trim(),
               )
               .toList();
       const order = [
