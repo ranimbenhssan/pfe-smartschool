@@ -553,7 +553,7 @@ class _StudentTimetableSeances extends ConsumerWidget {
                               color:
                                   isDark
                                       ? AppColors.darkText
-                                      : AppColors.lightText,
+                                      : const Color.fromARGB(255, 6, 60, 142),
                             ),
                           ),
                           if (seances.isNotEmpty)
