@@ -36,17 +36,29 @@ final notificationsProvider = StreamProvider.family<
         .snapshots()
         .map((snap) {
           final all = snap.docs.map(NotificationModel.fromFirestore).toList();
+          final seen = <String>{};
           return all.where((n) {
             final t =
                 n.rawMessageType.isNotEmpty
                     ? n.rawMessageType
                     : n.messageType.name;
-            // Keep real messages; filter student-only/system notifications.
+
+            // ── Filter unwanted types ─────────────────────────────────
+            // Hide attendance corrections
             if (t == 'attendance') return false;
-            if (t == 'absence_flag') return n.recipientLabel == 'Admin';
-            if (t == 'password_reset') {
-              return !(n.senderRole == 'teacher' || n.senderRole == 'student');
-            }
+            // Hide student personal absence flag — keep only admin copy
+            if (t == 'absence_flag' && n.recipientLabel != 'Admin')
+              return false;
+            // Hide ALL password_reset — superAdmin doesn't need these
+            if (t == 'password_reset') return false;
+
+            // ── Deduplicate broadcast messages ───────────────────────
+            // sendToAll/sendToClass creates one doc per recipient with the
+            // same title+message. Use title+createdAt as dedup key.
+            final dedupeKey =
+                '${n.title}__${n.createdAt.millisecondsSinceEpoch ~/ 5000}';
+            if (!seen.add(dedupeKey)) return false;
+
             return true;
           }).toList();
         });
