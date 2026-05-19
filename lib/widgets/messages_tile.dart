@@ -323,43 +323,67 @@ class _RecipientLabel extends ConsumerWidget {
     // If a label is already stored (e.g. "Class 3IOT1TP1", "Whole School")
     // use it directly
     if (recipientLabel.isNotEmpty && recipientLabel != 'sent') {
-      return Text(
-        'To: $recipientLabel',
-        style: AppTypography.caption.copyWith(
-          color: AppColors.accent,
-          fontWeight: FontWeight.w500,
-        ),
-        overflow: TextOverflow.ellipsis,
-      );
-    }
-
-    // Otherwise look up the recipient's name from users collection
-    if (userId.isEmpty) return const SizedBox.shrink();
-
-    final userAsync = ref.watch(_userNameProvider(userId));
-    return userAsync.when(
-      loading: () => const SizedBox.shrink(),
-      error: (_, __) => const SizedBox.shrink(),
-      data:
-          (name) => Text(
-            'To: ${name.isNotEmpty ? name : '—'}',
-            style: AppTypography.caption.copyWith(
-              color: AppColors.accent,
-              fontWeight: FontWeight.w500,
-            ),
-            overflow: TextOverflow.ellipsis,
+      // Use stored label if it's meaningful
+      if (recipientLabel.isNotEmpty &&
+          recipientLabel.toLowerCase() != 'sent' &&
+          recipientLabel != '—' &&
+          recipientLabel != '-') {
+        return Text(
+          'To: $recipientLabel',
+          style: AppTypography.caption.copyWith(
+            color: AppColors.accent,
+            fontWeight: FontWeight.w500,
           ),
-    );
-  }
-}
+          overflow: TextOverflow.ellipsis,
+        );
+      }
 
+      // No useful label — look up recipient name by userId
+      if (userId.isEmpty) return const SizedBox.shrink();
+
+      final nameAsync = ref.watch(_recipientNameProvider(userId));
+      return nameAsync.when(
+        loading: () => const SizedBox.shrink(),
+        error: (_, __) => const SizedBox.shrink(),
+        data:
+            (name) => name.isEmpty
+                ? const SizedBox.shrink()
+                : Text(
+                  'To: $name',
+                  style: AppTypography.caption.copyWith(
+                    color: AppColors.accent,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+      );
 // Lightweight provider — only fetches name field
 final _userNameProvider = FutureProvider.family<String, String>((
   ref,
-  userId,
-) async {
-  if (userId.isEmpty) return '';
-  final doc =
-      await FirebaseFirestore.instance.collection('users').doc(userId).get();
-  return doc.data()?['name']?.toString() ?? '';
-});
+  // Looks up name from users first, then students, then teachers
+  final _recipientNameProvider = FutureProvider.family<String, String>(
+    (ref, userId) async {
+      if (userId.isEmpty) return '';
+
+      // Try users collection first (covers all roles)
+      final userDoc =
+          await FirebaseFirestore.instance.collection('users').doc(userId).get();
+      final userName = userDoc.data()?['name']?.toString() ?? '';
+      if (userName.isNotEmpty) return userName;
+
+      // Fallback: students collection
+      final studentDoc = await FirebaseFirestore.instance
+          .collection('students')
+          .doc(userId)
+          .get();
+      final studentName = studentDoc.data()?['name']?.toString() ?? '';
+      if (studentName.isNotEmpty) return studentName;
+
+      // Fallback: teachers collection
+      final teacherDoc = await FirebaseFirestore.instance
+          .collection('teachers')
+          .doc(userId)
+          .get();
+      return teacherDoc.data()?['name']?.toString() ?? '';
+    },
+  );

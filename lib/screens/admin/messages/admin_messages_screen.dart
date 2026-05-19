@@ -210,7 +210,7 @@ class _MessageListState extends ConsumerState<_MessageList> {
                           final message = filtered[index];
                           return MessagesTile(
                             message: list[index],
-                            showRecipient: true,
+                            showRecipient: role == UserRole.superAdmin,
                             onTap: () async {
                               await ref
                                   .read(firestoreServiceProvider)

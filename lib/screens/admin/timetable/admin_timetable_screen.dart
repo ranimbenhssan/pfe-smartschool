@@ -34,6 +34,7 @@ class _AdminTimetableScreenState extends ConsumerState<AdminTimetableScreen> {
     final classes = ref.watch(classesProvider);
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor:
           isDark ? AppColors.darkBackground : AppColors.lightBackground,
       appBar: AppBar(
@@ -49,158 +50,144 @@ class _AdminTimetableScreenState extends ConsumerState<AdminTimetableScreen> {
             ),
         ],
       ),
-      body: Column(
+      body: Stack(
         children: [
-          // ── Search bar ──────────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-            child: TextField(
-              controller: _searchCtrl,
-              onChanged:
-                  (v) => setState(() {
-                    _query = v.toLowerCase();
-                    // Clear selected class when user types again
-                    if (_selectedClassId != null && v != _selectedClassName) {
-                      _selectedClassId = null;
-                      _selectedClassName = null;
-                    }
-                  }),
-              decoration: InputDecoration(
-                hintText: 'Search class (e.g. 3 IOT 1 TP 1)...',
-                prefixIcon: const Icon(Icons.search_rounded, size: 20),
-                suffixIcon:
-                    _searchCtrl.text.isNotEmpty
-                        ? IconButton(
-                          icon: const Icon(Icons.clear_rounded, size: 18),
-                          onPressed: () {
-                            _searchCtrl.clear();
-                            setState(() {
-                              _query = '';
-                              _selectedClassId = null;
-                              _selectedClassName = null;
-                            });
-                          },
-                        )
-                        : null,
-                filled: true,
-                fillColor: isDark ? AppColors.darkCard : AppColors.lightCard,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 14,
+          // Main content
+          Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                child: TextField(
+                  controller: _searchCtrl,
+                  onChanged:
+                      (v) => setState(() {
+                        _query = v.toLowerCase();
+                        if (_selectedClassId != null &&
+                            v != _selectedClassName) {
+                          _selectedClassId = null;
+                          _selectedClassName = null;
+                        }
+                      }),
+                  decoration: InputDecoration(
+                    hintText: 'Search class (e.g. 3 IOT 1 TP 1)...',
+                    prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                    suffixIcon:
+                        _searchCtrl.text.isNotEmpty
+                            ? IconButton(
+                              icon: const Icon(Icons.clear_rounded, size: 18),
+                              onPressed: () {
+                                _searchCtrl.clear();
+                                setState(() {
+                                  _query = '';
+                                  _selectedClassId = null;
+                                  _selectedClassName = null;
+                                });
+                              },
+                            )
+                            : null,
+                    filled: true,
+                    fillColor:
+                        isDark ? AppColors.darkCard : AppColors.lightCard,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                  ),
                 ),
               ),
-            ),
+              const SizedBox(height: 8),
+              Expanded(
+                child:
+                    _selectedClassId == null
+                        ? const Center(
+                          child: EmptyState(
+                            title: 'Search for a Class',
+                            message:
+                                'Type a class name above to view its timetable.\n'
+                                'Use Bulk Import to import from Excel.',
+                            icon: Icons.calendar_today_rounded,
+                          ),
+                        )
+                        : _TimetableEditor(
+                          classId: _selectedClassId!,
+                          className: _selectedClassName ?? '',
+                          isDark: isDark,
+                        ),
+              ),
+            ],
           ),
 
-          // ── Suggestions list ────────────────────────────────────────────
+          // Suggestions overlay — floats above content, no overflow
           if (_query.isNotEmpty && _selectedClassId == null)
-            classes.when(
-              loading: () => const SizedBox.shrink(),
-              error: (_, __) => const SizedBox.shrink(),
-              data: (list) {
-                final suggestions =
-                    list
-                        .where(
-                          (c) =>
-                              c.displayName.toLowerCase().contains(_query) ||
-                              c.name.toLowerCase().contains(_query),
-                        )
-                        .toList();
-
-                if (suggestions.isEmpty)
-                  return Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Text(
-                      'No classes found for "$_query"',
-                      style: AppTypography.caption,
+            Positioned(
+              top: 70,
+              left: 16,
+              right: 16,
+              child: classes.when(
+                loading: () => const SizedBox.shrink(),
+                error: (_, __) => const SizedBox.shrink(),
+                data: (list) {
+                  final suggestions =
+                      list
+                          .where(
+                            (c) =>
+                                c.displayName.toLowerCase().contains(_query) ||
+                                c.name.toLowerCase().contains(_query),
+                          )
+                          .toList();
+                  if (suggestions.isEmpty) return const SizedBox.shrink();
+                  return Material(
+                    elevation: 8,
+                    borderRadius: BorderRadius.circular(12),
+                    color: isDark ? AppColors.darkCard : AppColors.lightCard,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 220),
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        padding: EdgeInsets.zero,
+                        itemCount: suggestions.length,
+                        separatorBuilder:
+                            (_, __) => Divider(
+                              height: 1,
+                              color:
+                                  isDark
+                                      ? AppColors.darkBorder
+                                      : AppColors.lightBorder,
+                            ),
+                        itemBuilder: (ctx, i) {
+                          final cls = suggestions[i];
+                          return ListTile(
+                            dense: true,
+                            leading: const Icon(
+                              Icons.class_rounded,
+                              size: 18,
+                              color: AppColors.accent,
+                            ),
+                            title: Text(
+                              cls.displayName,
+                              style: AppTypography.labelMedium,
+                            ),
+                            onTap: () {
+                              _searchCtrl.text = cls.displayName;
+                              setState(() {
+                                _query = '';
+                                _selectedClassId = cls.id;
+                                _selectedClassName = cls.displayName;
+                              });
+                              FocusScope.of(context).unfocus();
+                            },
+                          );
+                        },
+                      ),
                     ),
                   );
-
-                return Container(
-                  margin: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-                  constraints: const BoxConstraints(maxHeight: 220),
-                  decoration: BoxDecoration(
-                    color: isDark ? AppColors.darkCard : AppColors.lightCard,
-                    borderRadius: const BorderRadius.vertical(
-                      bottom: Radius.circular(12),
-                    ),
-                    border: Border.all(
-                      color:
-                          isDark ? AppColors.darkBorder : AppColors.lightBorder,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.08),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: ListView.separated(
-                    shrinkWrap: true,
-                    itemCount: suggestions.length,
-                    separatorBuilder:
-                        (_, __) => Divider(
-                          height: 1,
-                          color:
-                              isDark
-                                  ? AppColors.darkBorder
-                                  : AppColors.lightBorder,
-                        ),
-                    itemBuilder: (ctx, i) {
-                      final cls = suggestions[i];
-                      return ListTile(
-                        dense: true,
-                        leading: const Icon(
-                          Icons.class_rounded,
-                          size: 18,
-                          color: AppColors.accent,
-                        ),
-                        title: Text(
-                          cls.displayName,
-                          style: AppTypography.labelMedium,
-                        ),
-                        onTap: () {
-                          _searchCtrl.text = cls.displayName;
-                          setState(() {
-                            _query = '';
-                            _selectedClassId = cls.id;
-                            _selectedClassName = cls.displayName;
-                          });
-                          FocusScope.of(context).unfocus();
-                        },
-                      );
-                    },
-                  ),
-                );
-              },
+                },
+              ),
             ),
-
-          const SizedBox(height: 8),
-
-          // ── Timetable content ───────────────────────────────────────────
-          Expanded(
-            child:
-                _selectedClassId == null
-                    ? const Center(
-                      child: EmptyState(
-                        title: 'Search for a Class',
-                        message:
-                            'Type a class name above to view its timetable.\n'
-                            'Use Bulk Import to import from Excel.',
-                        icon: Icons.calendar_today_rounded,
-                      ),
-                    )
-                    : _TimetableEditor(
-                      classId: _selectedClassId!,
-                      className: _selectedClassName ?? '',
-                      isDark: isDark,
-                    ),
-          ),
         ],
       ),
     );
