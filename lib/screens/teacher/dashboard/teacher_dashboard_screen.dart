@@ -757,59 +757,6 @@ class _SeanceCard extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────
-//  IOT QUICK VIEW
-// ─────────────────────────────────────────
-class _IotQuickView extends ConsumerWidget {
-  const _IotQuickView();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.sensors_rounded, size: 56, color: AppColors.accent),
-          const SizedBox(height: 16),
-          Text('IoT Monitor', style: AppTypography.headingMedium),
-          const SizedBox(height: 8),
-          AppButton(
-            label: 'Open IoT Dashboard',
-            onPressed: () => context.push(AppRoutes.teacherIot),
-            icon: Icons.sensors_rounded,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────
-//  STUDENTS QUICK VIEW
-// ─────────────────────────────────────────
-class _StudentsQuickView extends ConsumerWidget {
-  const _StudentsQuickView();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.people_rounded, size: 56, color: AppColors.success),
-          const SizedBox(height: 16),
-          Text('My Students', style: AppTypography.headingMedium),
-          const SizedBox(height: 8),
-          AppButton(
-            label: 'View Students',
-            onPressed: () => context.push(AppRoutes.teacherStudents),
-            icon: Icons.people_rounded,
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 // ─────────────────────────────────────────
 //  MORE MENU
