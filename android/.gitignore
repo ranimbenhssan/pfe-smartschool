@@ -12,3 +12,10 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+# Private signing configurations
+**/android/key.properties
+*.jks
+*.keystore
+
+# Flutter release build artifacts
+/build/
