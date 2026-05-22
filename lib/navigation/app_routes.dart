@@ -47,6 +47,7 @@ class AppRoutes {
   static const String adminTeacherSheet = '/admin/teacher-sheet';
   static const String adminStaffImport = '/admin/staff-import';
   static const String adminStaff = '/admin/staff';
+  static const String adminRooms = '/admin/rooms';
 
   // ─── Teacher ───
   static const String teacherDashboard = '/teacher/dashboard';
@@ -73,8 +74,8 @@ class AppRoutes {
   static const String studentTimetableDetail = '/student/timetable/detail';
   static const String studentIot = '/student/iot';
   static const String studentIotHistory = '/student/iot/history';
+  static const String studentAiAlerts = '/student/ai-alerts';
   static const String studentmessage = '/student/message';
-  static const adminRooms = '/admin/rooms';
   static const teachermessageend = '/teacher/message/send';
   static const studentmessageend = '/student/message/send';
   static const adminTimetableForm = '/admin/timetable/form';

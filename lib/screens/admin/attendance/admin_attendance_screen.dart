@@ -7,6 +7,7 @@ import '../../../widgets/widgets.dart';
 import '../../../providers/providers.dart';
 import '../../../navigation/app_routes.dart';
 import '../../../models/models.dart';
+import '../../../providers/attendance_provider.dart';
 
 class AdminAttendanceScreen extends ConsumerStatefulWidget {
   const AdminAttendanceScreen({super.key});
@@ -38,8 +39,8 @@ class _AdminAttendanceScreenState extends ConsumerState<AdminAttendanceScreen> {
     final rate = total > 0 ? ((presentCount / total) * 100).toInt() : 0;
 
     // ── All-time cumulative ───────────────────────────────────────────────
-    final allTimeAbsent = ref.watch(allTimeAbsentCountProvider); // int
-    final allTimeLate = ref.watch(allTimeLateCountProvider); // int
+    final allTimeAbsent = ref.watch(allTimeAbsentCountIntProvider); // int
+    final allTimeLate = ref.watch(allTimeLateCountIntProvider); // int
     final allTimeAsync = ref.watch(allTimeAttendanceProvider);
     final allTimeTotal = allTimeAsync.when(
       data: (l) => l.length,

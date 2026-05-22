@@ -236,17 +236,31 @@ class _AttendanceList extends ConsumerWidget {
                           ),
                           child: Row(
                             children: [
-                              CircleAvatar(
-                                radius: 20,
-                                backgroundColor: color.withValues(alpha: 0.12),
+                              Container(
+                                width: 36,
+                                height: 36,
+                                decoration: BoxDecoration(
+                                  color: (att.status == AttendanceStatus.present
+                                          ? AppColors.present
+                                          : att.status == AttendanceStatus.late
+                                          ? AppColors.late
+                                          : AppColors.absent)
+                                      .withValues(alpha: 0.1),
+                                  shape: BoxShape.circle,
+                                ),
                                 child: Icon(
                                   att.status == AttendanceStatus.present
                                       ? Icons.check_circle_rounded
                                       : att.status == AttendanceStatus.late
                                       ? Icons.watch_later_rounded
                                       : Icons.cancel_rounded,
-                                  color: color,
-                                  size: 20,
+                                  color:
+                                      att.status == AttendanceStatus.present
+                                          ? AppColors.present
+                                          : att.status == AttendanceStatus.late
+                                          ? AppColors.late
+                                          : AppColors.absent,
+                                  size: 18,
                                 ),
                               ),
                               const SizedBox(width: 12),

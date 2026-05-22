@@ -38,6 +38,7 @@ import '../screens/admin/settings/admin_password_requests_screen.dart';
 import '../screens/admin/iot_monitor/admin_teacher_presence_screen.dart';
 import '../screens/admin/iot_monitor/admin_teacher_sheet_screen.dart';
 import '../screens/admin/staff/admin_staff_list_screen.dart';
+import '../screens/admin/rooms/admin_rooms_screen.dart';
 
 import 'package:pfe_smartschool/screens/admin/settings/admin_settings_screen.dart';
 import '../screens/teacher/dashboard/teacher_dashboard_screen.dart';
@@ -60,6 +61,7 @@ import '../screens/student/attendance/student_attendance_stats_screen.dart';
 import '../screens/student/timetable/student_timetable_screen.dart';
 import '../screens/student/iot_monitor/student_iot_screen.dart';
 import '../screens/student/iot_monitor/student_iot_history_screen.dart';
+import '../screens/student/ai_alerts/student_ai_alerts_screen.dart';
 import '../screens/admin/rooms/admin_rooms_screen.dart';
 import '../screens/student/messages/student_messages_send_screen.dart';
 import '../screens/student/messages/student_messages_screen.dart';
@@ -396,6 +398,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'admin-settings-ai',
         builder: (context, state) => const AdminSettingsAiScreen(),
       ),
+      GoRoute(
+        path: AppRoutes.adminRooms,
+        builder: (_, __) => const AdminRoomsScreen(),
+      ),
 
       // ─── Teacher ───
       // ─── REPLACE the entire Teacher routes section in lib/navigation/app_router.dart
@@ -534,6 +540,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.studentIotHistory,
         name: 'student-iot-history',
         builder: (context, state) => const StudentIotHistoryScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.studentAiAlerts,
+        name: 'student-ai-alerts',
+        builder: (context, state) => const StudentAiAlertsScreen(),
       ),
       GoRoute(
         path: AppRoutes.studentmessageend,

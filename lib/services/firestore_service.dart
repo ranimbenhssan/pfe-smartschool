@@ -329,12 +329,15 @@ class FirestoreService {
         .collection('attendance')
         .where('date', isEqualTo: date)
         .snapshots()
-        .map(
-          (snap) =>
+        .map((snap) {
+          final list =
               snap.docs
                   .map((doc) => AttendanceModel.fromFirestore(doc))
-                  .toList(),
-        );
+                  .toList();
+          // Sort client-side — no composite index needed.
+          list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return list;
+        });
   }
 
   /// Records for a specific date + class (admin attendance-by-class screen)
@@ -349,12 +352,15 @@ class FirestoreService {
         .where('date', isEqualTo: date)
         .where('classId', isEqualTo: classId)
         .snapshots()
-        .map(
-          (snap) =>
+        .map((snap) {
+          final list =
               snap.docs
                   .map((doc) => AttendanceModel.fromFirestore(doc))
-                  .toList(),
-        );
+                  .toList();
+          // Sort client-side — no composite index needed.
+          list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return list;
+        });
   }
 
   /// Present count for a date (sum of class counters).
@@ -389,14 +395,16 @@ class FirestoreService {
           'createdAt',
           isGreaterThanOrEqualTo: Timestamp.fromDate(thirtyDaysAgo),
         )
-        .orderBy('createdAt', descending: true)
         .snapshots()
-        .map(
-          (snap) =>
+        .map((snap) {
+          final list =
               snap.docs
                   .map((doc) => AttendanceModel.fromFirestore(doc))
-                  .toList(),
-        );
+                  .toList();
+          // Sort client-side — no composite index needed.
+          list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return list;
+        });
   }
 
   /// All absence/late records for a class (teacher stats / admin reports)
@@ -405,14 +413,16 @@ class FirestoreService {
         .collection('attendance')
         .where('classId', isEqualTo: classId)
         .where('status', whereIn: ['absent', 'late'])
-        .orderBy('createdAt', descending: true)
         .snapshots()
-        .map(
-          (snap) =>
+        .map((snap) {
+          final list =
               snap.docs
                   .map((doc) => AttendanceModel.fromFirestore(doc))
-                  .toList(),
-        );
+                  .toList();
+          // Sort client-side — no composite index needed.
+          list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return list;
+        });
   }
 
   Future<void> updateAttendance(

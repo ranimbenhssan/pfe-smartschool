@@ -21,7 +21,7 @@ class _AdminRoomDetailScreenState extends ConsumerState<AdminRoomDetailScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 1, vsync: this);
   }
 
   @override
@@ -30,11 +30,15 @@ class _AdminRoomDetailScreenState extends ConsumerState<AdminRoomDetailScreen>
     super.dispose();
   }
 
+  String _fmt(DateTime dt) =>
+      '${dt.day}/${dt.month}/${dt.year} '
+      '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final room = ref.watch(roomProvider(widget.roomId));
-    final sensorData = ref.watch(latestSensorDataProvider(widget.roomId));
+    final rtdbData = ref.watch(rtdbTemperatureProvider);
 
     return Scaffold(
       backgroundColor:
@@ -51,87 +55,51 @@ class _AdminRoomDetailScreenState extends ConsumerState<AdminRoomDetailScreen>
           controller: _tabController,
           indicatorColor: AppColors.accent,
           labelColor: AppColors.accent,
-          tabs: const [Tab(text: 'Live Readings'), Tab(text: 'History')],
+          tabs: const [Tab(text: 'Live Readings')],
         ),
       ),
       body: TabBarView(
         controller: _tabController,
         children: [
-          // ─── Live Tab ───
-          sensorData.when(
+          rtdbData.when(
             loading: () => const LoadingWidget(),
             error:
-                (e, _) => EmptyState(
-                  title: 'Error',
-                  message: e.toString(),
-                  icon: Icons.error_outline_rounded,
+                (_, __) => const EmptyState(
+                  title: 'Sensor Offline',
+                  message: 'Could not reach the sensor.',
+                  icon: Icons.sensors_off_rounded,
                 ),
             data:
-                (data) =>
-                    data == null
+                (d) =>
+                    d == null
                         ? const EmptyState(
-                          title: 'No Data',
-                          message: 'No sensor readings available',
-                          icon: Icons.sensors_off_rounded,
+                          title: 'No Sensor Data',
+                          message: 'Sensor has not reported yet.',
+                          icon: Icons.sensors_rounded,
                         )
                         : SingleChildScrollView(
                           padding: const EdgeInsets.all(16),
                           child: Column(
                             children: [
-                              // Comfort Score
-                              Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.all(20),
-                                decoration: BoxDecoration(
-                                  gradient: AppColors.primaryGradient,
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                child: Column(
-                                  children: [
-                                    Text(
-                                      '${data.comfortScore.toInt()}%',
-                                      style: AppTypography.displayLarge
-                                          .copyWith(
-                                            color:
-                                                data.comfortScore >= 70
-                                                    ? AppColors.success
-                                                    : data.comfortScore >= 40
-                                                    ? AppColors.warning
-                                                    : AppColors.error,
-                                            fontSize: 48,
-                                          ),
-                                    ),
-                                    Text(
-                                      'Comfort Score',
-                                      style: AppTypography.bodySmall.copyWith(
-                                        color: Colors.white60,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      data.comfortRecommendation,
-                                      style: AppTypography.caption.copyWith(
-                                        color: Colors.white60,
-                                      ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ],
-                                ),
+                              // ── Last updated ──
+                              Text(
+                                'Last updated: ${_fmt(d.updatedAt)}',
+                                style: AppTypography.caption,
                               ),
                               const SizedBox(height: 16),
 
-                              // Sensor Gauges Grid
+                              // ── Sensor Gauges ──
                               GridView.count(
-                                crossAxisCount: 2,
+                                crossAxisCount: 1,
                                 shrinkWrap: true,
                                 physics: const NeverScrollableScrollPhysics(),
                                 mainAxisSpacing: 12,
                                 crossAxisSpacing: 12,
-                                childAspectRatio: 1.2,
+                                childAspectRatio: 1.4,
                                 children: [
                                   SensorGauge(
                                     label: 'Temperature',
-                                    value: data.temperature,
+                                    value: d.temperature,
                                     min: 0,
                                     max: 50,
                                     unit: '°C',
@@ -140,30 +108,12 @@ class _AdminRoomDetailScreenState extends ConsumerState<AdminRoomDetailScreen>
                                   ),
                                   SensorGauge(
                                     label: 'Humidity',
-                                    value: data.humidity,
+                                    value: d.humidity,
                                     min: 0,
                                     max: 100,
                                     unit: '%',
                                     icon: Icons.water_drop_rounded,
                                     color: AppColors.info,
-                                  ),
-                                  SensorGauge(
-                                    label: 'Light',
-                                    value: data.lightLevel,
-                                    min: 0,
-                                    max: 1000,
-                                    unit: 'lx',
-                                    icon: Icons.light_mode_rounded,
-                                    color: AppColors.warning,
-                                  ),
-                                  SensorGauge(
-                                    label: 'Noise',
-                                    value: data.noiseLevel,
-                                    min: 0,
-                                    max: 100,
-                                    unit: 'dB',
-                                    icon: Icons.volume_up_rounded,
-                                    color: AppColors.success,
                                   ),
                                 ],
                               ),
@@ -171,9 +121,6 @@ class _AdminRoomDetailScreenState extends ConsumerState<AdminRoomDetailScreen>
                           ),
                         ),
           ),
-
-          // ─── History Tab ───
-          _HistoryTab(roomId: widget.roomId),
         ],
       ),
     );

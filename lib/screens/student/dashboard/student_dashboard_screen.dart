@@ -21,9 +21,7 @@ class _StudentDashboardScreenState
 
   static const _navItems = [
     _NavItem(icon: Icons.home_rounded, label: 'Home'),
-    _NavItem(icon: Icons.how_to_reg_rounded, label: 'Attendance'),
-    _NavItem(icon: Icons.calendar_today_rounded, label: 'Timetable'),
-    _NavItem(icon: Icons.message_rounded, label: 'Messages'),
+    _NavItem(icon: Icons.more_horiz, label: 'More'),
   ];
 
   @override
@@ -34,15 +32,10 @@ class _StudentDashboardScreenState
       backgroundColor:
           isDark ? AppColors.darkBackground : AppColors.lightBackground,
       appBar: _buildAppBar(isDark),
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: const [
-          _DashboardBody(),
-          _DashboardBody(), // placeholder — nav handled by onTap
-          _DashboardBody(),
-          _DashboardBody(),
-        ],
-      ),
+      body:
+          _selectedIndex == 0
+              ? const _DashboardBody()
+              : const _StudentMoreMenu(),
       bottomNavigationBar: _buildBottomNav(isDark),
     );
   }
@@ -134,17 +127,6 @@ class _StudentDashboardScreenState
         currentIndex: _selectedIndex,
         onTap: (index) {
           setState(() => _selectedIndex = index);
-          switch (index) {
-            case 1:
-              context.push(AppRoutes.studentAttendance);
-              break;
-            case 2:
-              context.push(AppRoutes.studentTimetable);
-              break;
-            case 3:
-              context.push(AppRoutes.studentmessage);
-              break;
-          }
         },
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -164,6 +146,111 @@ class _StudentDashboardScreenState
       ),
     );
   }
+}
+
+class _StudentMoreMenu extends ConsumerWidget {
+  const _StudentMoreMenu();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final items = [
+      _MoreItem(
+        label: 'Attendance',
+        icon: Icons.how_to_reg_rounded,
+        color: AppColors.studentColor,
+        route: AppRoutes.studentAttendance,
+      ),
+      _MoreItem(
+        label: 'Timetable',
+        icon: Icons.calendar_today_rounded,
+        color: AppColors.info,
+        route: AppRoutes.studentTimetable,
+      ),
+      _MoreItem(
+        label: 'Environment',
+        icon: Icons.sensors_rounded,
+        color: AppColors.success,
+        route: AppRoutes.studentIot,
+      ),
+      _MoreItem(
+        label: 'Messages',
+        icon: Icons.message_rounded,
+        color: AppColors.accent,
+        route: AppRoutes.studentmessage,
+      ),
+      _MoreItem(
+        label: 'My Absence Flags',
+        icon: Icons.warning_amber_rounded,
+        color: AppColors.error,
+        route: AppRoutes.studentAiAlerts,
+      ),
+    ];
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: items.length,
+      itemBuilder: (context, i) {
+        final item = items[i];
+        return GestureDetector(
+          onTap: () => context.push(item.route),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            margin: const EdgeInsets.only(bottom: 10),
+            decoration: BoxDecoration(
+              color: isDark ? AppColors.darkCard : AppColors.lightCard,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: item.color.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(item.icon, color: item.color, size: 20),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    item.label,
+                    style: AppTypography.labelLarge.copyWith(
+                      color: isDark ? AppColors.darkText : AppColors.lightText,
+                    ),
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color:
+                      isDark ? AppColors.darkTextHint : AppColors.lightTextHint,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _MoreItem {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final String route;
+
+  const _MoreItem({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.route,
+  });
 }
 
 // ─────────────────────────────────────────
@@ -709,7 +796,9 @@ class _SeanceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bgColor =
-        isActive ? const Color.fromARGB(255, 46, 153, 195) : const Color.fromARGB(255, 46, 153, 195);
+        isActive
+            ? const Color.fromARGB(255, 46, 153, 195)
+            : const Color.fromARGB(255, 46, 153, 195);
 
     final borderColor =
         isActive ? const Color(0xFFA0E6FF) : const Color(0xFFA0E6FF);

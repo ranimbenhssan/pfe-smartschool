@@ -58,13 +58,6 @@ class AdminSettingsScreen extends ConsumerWidget {
             _SettingsCard(
               isDark: isDark,
               children: [
-                _NavigationTile(
-                  isDark: isDark,
-                  icon: Icons.nfc_rounded,
-                  label: 'RFID Devices',
-                  color: AppColors.info,
-                  onTap: () => context.push(AppRoutes.adminSettingsRfid),
-                ),
                 const Divider(height: 1),
                 _NavigationTile(
                   isDark: isDark,
@@ -77,8 +70,8 @@ class AdminSettingsScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 20),
 
-            // ─── AI Config ───
-            _SectionHeader(isDark: isDark, title: 'AI Configuration'),
+            // ─── Flag Config ───
+            _SectionHeader(isDark: isDark, title: 'Flag Configuration'),
             const SizedBox(height: 8),
             _SettingsCard(
               isDark: isDark,

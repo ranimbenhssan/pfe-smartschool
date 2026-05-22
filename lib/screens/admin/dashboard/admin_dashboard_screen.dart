@@ -803,6 +803,12 @@ class _MoreMenu extends ConsumerWidget {
             route: AppRoutes.adminClasses,
           ),
           _MoreItem(
+            label: 'Rooms',
+            icon: Icons.meeting_room_rounded,
+            color: AppColors.success,
+            route: AppRoutes.adminRooms,
+          ),
+          _MoreItem(
             label: 'Timetable',
             icon: Icons.schedule_rounded,
             color: AppColors.info,
@@ -929,6 +935,12 @@ class _MoreMenu extends ConsumerWidget {
             icon: Icons.class_rounded,
             color: AppColors.accent,
             route: AppRoutes.adminClasses,
+          ),
+          _MoreItem(
+            label: 'Rooms',
+            icon: Icons.meeting_room_rounded,
+            color: AppColors.success,
+            route: AppRoutes.adminRooms,
           ),
           _MoreItem(
             label: 'Timetable',

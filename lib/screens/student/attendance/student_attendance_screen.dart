@@ -55,6 +55,13 @@ class StudentAttendanceScreen extends ConsumerWidget {
             data: (student) {
               if (student == null) return const SizedBox.shrink();
 
+              final presentCount =
+                  ref.watch(allTimePresentCountProvider(student.id)).value ?? 0;
+              final absentCount =
+                  ref.watch(allTimeAbsentCountProvider(student.id)).value ?? 0;
+              final lateCount =
+                  ref.watch(allTimeLateCountProvider(student.id)).value ?? 0;
+
               return attendanceAsync.when(
                 loading: () => const LoadingWidget(),
                 error:
@@ -77,12 +84,9 @@ class StudentAttendanceScreen extends ConsumerWidget {
                           .where((a) => a.status == AttendanceStatus.late)
                           .toList();
 
-                  // ─── presenceCount from student doc (counter, no docs) ───
-                  final presenceCount = student.presenceCount;
-
-                  final total = presenceCount + absenceList.length;
+                  final total = presentCount + absentCount + lateCount;
                   final rate =
-                      total > 0 ? ((presenceCount / total) * 100).toInt() : 0;
+                      total > 0 ? ((presentCount / total) * 100).toInt() : 0;
 
                   return SingleChildScrollView(
                     padding: const EdgeInsets.all(20),
@@ -92,7 +96,7 @@ class StudentAttendanceScreen extends ConsumerWidget {
                         // ─── Today status card ───
                         _TodayStatusCard(
                           record: todayRecord,
-                          presenceCount: presenceCount,
+                          presenceCount: presentCount,
                           isDark: isDark,
                         ),
                         const SizedBox(height: 20),
@@ -150,7 +154,7 @@ class StudentAttendanceScreen extends ConsumerWidget {
                             Expanded(
                               child: _CountCard(
                                 label: 'Present',
-                                count: presenceCount,
+                                count: presentCount,
                                 color: AppColors.present,
                                 icon: Icons.check_circle_rounded,
                               ),
@@ -160,7 +164,7 @@ class StudentAttendanceScreen extends ConsumerWidget {
                             Expanded(
                               child: _DrillDownCard(
                                 label: 'Absent',
-                                count: absent.length,
+                                count: absentCount,
                                 color: AppColors.absent,
                                 icon: Icons.cancel_rounded,
                                 onTap:
@@ -178,7 +182,7 @@ class StudentAttendanceScreen extends ConsumerWidget {
                             Expanded(
                               child: _DrillDownCard(
                                 label: 'Late',
-                                count: late.length,
+                                count: lateCount,
                                 color: AppColors.late,
                                 icon: Icons.watch_later_rounded,
                                 onTap:

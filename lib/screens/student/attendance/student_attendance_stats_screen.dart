@@ -376,15 +376,9 @@ class _AttendanceDetailCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: _FieldTile(
-                          icon: Icons.person_rounded,
-                          label: 'Teacher',
-                          value:
-                              record.teacherName.isNotEmpty
-                                  ? record.teacherName
-                                  : '—',
-                          color: AppColors.teacherColor,
-                          isDark: isDark,
+                        child: _TeacherDetailItem(
+                          teacherName: record.teacherName,
+                          teacherId: record.teacherId,
                         ),
                       ),
                     ],
@@ -599,6 +593,70 @@ class _FilterChip extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _TeacherDetailItem extends ConsumerWidget {
+  final String teacherName;
+  final String teacherId;
+
+  const _TeacherDetailItem({
+    required this.teacherName,
+    required this.teacherId,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Use stored name if available.
+    if (teacherName.isNotEmpty) {
+      return _FieldTile(
+        icon: Icons.person_rounded,
+        label: 'Teacher',
+        value: teacherName,
+        color: AppColors.teacherColor,
+        isDark: Theme.of(context).brightness == Brightness.dark,
+      );
+    }
+
+    // Fallback: look up by teacherId.
+    if (teacherId.isEmpty) {
+      return _FieldTile(
+        icon: Icons.person_rounded,
+        label: 'Teacher',
+        value: '—',
+        color: AppColors.teacherColor,
+        isDark: Theme.of(context).brightness == Brightness.dark,
+      );
+    }
+
+    final teacherAsync = ref.watch(teacherProvider(teacherId));
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return teacherAsync.when(
+      loading:
+          () => _FieldTile(
+            icon: Icons.person_rounded,
+            label: 'Teacher',
+            value: '...',
+            color: AppColors.teacherColor,
+            isDark: isDark,
+          ),
+      error:
+          (_, __) => _FieldTile(
+            icon: Icons.person_rounded,
+            label: 'Teacher',
+            value: '—',
+            color: AppColors.teacherColor,
+            isDark: isDark,
+          ),
+      data:
+          (t) => _FieldTile(
+            icon: Icons.person_rounded,
+            label: 'Teacher',
+            value: t?.name.isNotEmpty == true ? t!.name : '—',
+            color: AppColors.teacherColor,
+            isDark: isDark,
+          ),
     );
   }
 }

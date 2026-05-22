@@ -7,6 +7,7 @@ import '../../../widgets/widgets.dart';
 import '../../../providers/providers.dart';
 import '../../../navigation/app_routes.dart';
 import '../../../models/models.dart';
+import '../../../providers/attendance_provider.dart';
 
 class AdminAttendanceByDateScreen extends ConsumerWidget {
   const AdminAttendanceByDateScreen({super.key});
@@ -19,10 +20,6 @@ class AdminAttendanceByDateScreen extends ConsumerWidget {
 
     // ── Absent/Late docs from attendance collection ─────────────────────
     final attendance = ref.watch(attendanceByDateProvider(dateString));
-
-    // ── Present count from attendance_counts collection ─────────────────
-    // This is the fix: present records live in attendance_counts, not attendance
-    final presentCount = ref.watch(presentCountByDateProvider(dateString));
 
     return Scaffold(
       backgroundColor:
@@ -90,82 +87,6 @@ class AdminAttendanceByDateScreen extends ConsumerWidget {
             ),
           ),
 
-          // ─── Stats row ────────────────────────────────────────────────
-          // Present from attendance_counts; absent/late from attendance
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: attendance.when(
-              loading: () => const SizedBox.shrink(),
-              error: (_, __) => const SizedBox.shrink(),
-              data: (list) {
-                final absent =
-                    list
-                        .where((a) => a.status == AttendanceStatus.absent)
-                        .length;
-                final late =
-                    list.where((a) => a.status == AttendanceStatus.late).length;
-                final present = presentCount.when(
-                  data: (c) => c,
-                  loading: () => 0,
-                  error: (_, __) => 0,
-                );
-                final total = present + absent + late;
-                final rate = total > 0 ? ((present / total) * 100).toInt() : 0;
-
-                return Column(
-                  children: [
-                    // ── Four-chip stats row ──
-                    Row(
-                      children: [
-                        _MiniStat(
-                          label: 'Present',
-                          value: present,
-                          color: AppColors.present,
-                        ),
-                        const SizedBox(width: 8),
-                        _MiniStat(
-                          label: 'Absent',
-                          value: absent,
-                          color: AppColors.absent,
-                        ),
-                        const SizedBox(width: 8),
-                        _MiniStat(
-                          label: 'Late',
-                          value: late,
-                          color: AppColors.late,
-                        ),
-                        const SizedBox(width: 8),
-                        _MiniStat(
-                          label: 'Rate',
-                          value: rate,
-                          color: AppColors.info,
-                          suffix: '%',
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    // ── Attendance rate progress bar ──
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: LinearProgressIndicator(
-                        value: total > 0 ? present / total : 0,
-                        backgroundColor: AppColors.present.withValues(
-                          alpha: 0.1,
-                        ),
-                        valueColor: const AlwaysStoppedAnimation<Color>(
-                          AppColors.present,
-                        ),
-                        minHeight: 6,
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
-          const SizedBox(height: 12),
-
-          // ─── Absent / Late record list ────────────────────────────────
           Expanded(
             child: attendance.when(
               loading: () => const LoadingWidget(),
@@ -175,34 +96,107 @@ class AdminAttendanceByDateScreen extends ConsumerWidget {
                     message: e.toString(),
                     icon: Icons.error_outline_rounded,
                   ),
-              data:
-                  (list) =>
-                      list.isEmpty
-                          ? EmptyState(
-                            title: 'No Absence Records',
-                            message:
-                                'No absent or late records for ${DateFormat('d MMM').format(selectedDate)}',
-                            icon: Icons.event_available_rounded,
-                          )
-                          : ListView.builder(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 4,
-                            ),
-                            itemCount: list.length,
-                            itemBuilder: (context, index) {
-                              final record = list[index];
-                              return _RecordCard(
-                                record: record,
-                                isDark: isDark,
-                                onTap:
-                                    () => context.push(
-                                      AppRoutes.adminAttendanceEdit,
-                                      extra: record,
-                                    ),
-                              );
-                            },
+              data: (list) {
+                final present =
+                    list
+                        .where((a) => a.status == AttendanceStatus.present)
+                        .length;
+                final absent =
+                    list
+                        .where((a) => a.status == AttendanceStatus.absent)
+                        .length;
+                final late =
+                    list.where((a) => a.status == AttendanceStatus.late).length;
+                final total = present + absent + late;
+                final rate = total > 0 ? ((present / total) * 100).toInt() : 0;
+
+                return Column(
+                  children: [
+                    // ── Stats row ──────────────────────────────────────
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              _MiniStat(
+                                label: 'Present',
+                                value: present,
+                                color: AppColors.present,
+                              ),
+                              const SizedBox(width: 8),
+                              _MiniStat(
+                                label: 'Absent',
+                                value: absent,
+                                color: AppColors.absent,
+                              ),
+                              const SizedBox(width: 8),
+                              _MiniStat(
+                                label: 'Late',
+                                value: late,
+                                color: AppColors.late,
+                              ),
+                              const SizedBox(width: 8),
+                              _MiniStat(
+                                label: 'Rate',
+                                value: rate,
+                                color: AppColors.info,
+                                suffix: '%',
+                              ),
+                            ],
                           ),
+                          const SizedBox(height: 8),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: LinearProgressIndicator(
+                              value: total > 0 ? present / total : 0,
+                              backgroundColor: AppColors.present.withValues(
+                                alpha: 0.1,
+                              ),
+                              valueColor: const AlwaysStoppedAnimation<Color>(
+                                AppColors.present,
+                              ),
+                              minHeight: 6,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // ── Absent / Late record list ──────────────────────
+                    Expanded(
+                      child:
+                          list.isEmpty
+                              ? EmptyState(
+                                title: 'No Absence Records',
+                                message:
+                                    'No absent or late records for ${DateFormat('d MMM').format(selectedDate)}',
+                                icon: Icons.event_available_rounded,
+                              )
+                              : ListView.builder(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 4,
+                                ),
+                                itemCount: list.length,
+                                itemBuilder: (context, index) {
+                                  final record = list[index];
+                                  return _RecordCard(
+                                    record: record,
+                                    isDark: isDark,
+                                    onTap:
+                                        () => context.push(
+                                          AppRoutes.adminAttendanceEdit,
+                                          extra: record,
+                                        ),
+                                  );
+                                },
+                              ),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         ],
@@ -280,22 +274,41 @@ class _RecordCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: isDark ? AppColors.darkCard : AppColors.lightCard,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: sc.withValues(alpha: 0.3)),
+          border: Border.all(
+            color:
+                record.status == AttendanceStatus.present
+                    ? AppColors.present.withValues(alpha: 0.3)
+                    : record.status == AttendanceStatus.late
+                    ? AppColors.late.withValues(alpha: 0.3)
+                    : AppColors.absent.withValues(alpha: 0.3),
+          ),
         ),
         child: Row(
           children: [
             Container(
-              width: 38,
-              height: 38,
+              width: 36,
+              height: 36,
               decoration: BoxDecoration(
-                color: sc.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(10),
+                color: (record.status == AttendanceStatus.present
+                        ? AppColors.present
+                        : record.status == AttendanceStatus.late
+                        ? AppColors.late
+                        : AppColors.absent)
+                    .withValues(alpha: 0.1),
+                shape: BoxShape.circle,
               ),
               child: Icon(
-                record.status == AttendanceStatus.late
+                record.status == AttendanceStatus.present
+                    ? Icons.check_circle_rounded
+                    : record.status == AttendanceStatus.late
                     ? Icons.watch_later_rounded
                     : Icons.cancel_rounded,
-                color: sc,
+                color:
+                    record.status == AttendanceStatus.present
+                        ? AppColors.present
+                        : record.status == AttendanceStatus.late
+                        ? AppColors.late
+                        : AppColors.absent,
                 size: 18,
               ),
             ),

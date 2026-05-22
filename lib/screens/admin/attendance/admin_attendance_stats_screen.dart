@@ -21,8 +21,8 @@ class AdminAttendanceStatsScreen extends ConsumerWidget {
         totalToday > 0 ? ((presentToday / totalToday) * 100).toInt() : 0;
 
     // ── All-time ──────────────────────────────────────────────────────────
-    final allTimeAbsent = ref.watch(allTimeAbsentCountProvider); // int
-    final allTimeLate = ref.watch(allTimeLateCountProvider); // int
+    final allTimeAbsent = ref.watch(allTimeAbsentCountIntProvider); // int
+    final allTimeLate = ref.watch(allTimeLateCountIntProvider); // int
     final allTimeAsync = ref.watch(allTimeAttendanceProvider);
     final allTimeTotal = allTimeAsync.when(
       data: (l) => l.length,

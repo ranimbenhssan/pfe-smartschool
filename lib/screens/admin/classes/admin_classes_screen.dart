@@ -281,19 +281,6 @@ class _ClassCard extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 3),
-                  Text(
-                    cls.teacherName.isEmpty
-                        ? 'No teacher assigned'
-                        : cls.teacherName,
-                    style: AppTypography.caption.copyWith(
-                      color:
-                          cls.teacherName.isEmpty
-                              ? isDark
-                                  ? AppColors.darkTextHint
-                                  : AppColors.lightTextHint
-                              : AppColors.teacherColor,
-                    ),
-                  ),
                 ],
               ),
             ),
