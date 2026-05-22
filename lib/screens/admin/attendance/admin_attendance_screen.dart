@@ -36,7 +36,8 @@ class _AdminAttendanceScreenState extends ConsumerState<AdminAttendanceScreen> {
     final absentCount = ref.watch(todayAbsentCountProvider); // int
     final lateCount = ref.watch(todayLateCountProvider); // int
     final total = presentCount + absentCount + lateCount;
-    final rate = total > 0 ? ((presentCount / total) * 100).toInt() : 0;
+    final rate =
+        total > 0 ? ((presentCount + lateCount) / total * 100).toInt() : 0;
 
     // ── All-time cumulative ───────────────────────────────────────────────
     final allTimeAbsent = ref.watch(allTimeAbsentCountIntProvider); // int
@@ -176,7 +177,8 @@ class _AdminAttendanceScreenState extends ConsumerState<AdminAttendanceScreen> {
                     ClipRRect(
                       borderRadius: BorderRadius.circular(4),
                       child: LinearProgressIndicator(
-                        value: total > 0 ? presentCount / total : 0,
+                        value:
+                            total > 0 ? (presentCount + lateCount) / total : 0,
                         backgroundColor: Colors.white12,
                         valueColor: const AlwaysStoppedAnimation<Color>(
                           AppColors.success,
